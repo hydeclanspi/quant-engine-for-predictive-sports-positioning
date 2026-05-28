@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { X } from 'lucide-react'
 import { issueMockUnlockToken, unlockWithToken } from '../lib/displayMode'
 
@@ -96,7 +97,13 @@ export default function UnlockModal({ open, onClose, onUnlock }) {
     if (event.target === event.currentTarget) onClose?.()
   }
 
-  return (
+  // Render via portal directly into document.body so the modal
+  // escapes any ancestor that creates a containing block for
+  // fixed-positioned descendants (backdrop-filter on .mn-bar
+  // is a notable trigger).
+  if (typeof document === 'undefined') return null
+
+  return createPortal(
     <div
       className="unlock-modal-backdrop"
       onClick={handleBackdropClick}
@@ -152,6 +159,7 @@ export default function UnlockModal({ open, onClose, onUnlock }) {
           )}
         </button>
       </form>
-    </div>
+    </div>,
+    document.body,
   )
 }
