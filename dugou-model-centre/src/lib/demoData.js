@@ -47,6 +47,8 @@ const TEAMS = [
   { id: 'burnley',     name: '伯恩利',       abbr: 'bur', strength: 0.34 },
   { id: 'sheffield',   name: '谢菲尔德联',   abbr: 'shu', strength: 0.32 },
   { id: 'luton',       name: '卢顿',         abbr: 'lut', strength: 0.30 },
+  // ── EFL Championship promotion candidates (used in cup ties) ──
+  { id: 'leeds',       name: '利兹联',       abbr: 'lee', strength: 0.42 },
 
   // ── European elites ──
   { id: 'realmadrid',  name: '皇马',         abbr: 'rma', strength: 0.84 },
@@ -495,6 +497,25 @@ const MARQUEE_FIXTURES = {
     tysHome: 'H', tysAway: 'L', fid: 0.5, fseHome: 0.70, fseAway: 0.60,
     note: '欧冠淘汰赛 · 安联球场主场加成',
   },
+  // Additional pending-only fixtures (next gameweek extras)
+  milanInter: {
+    home: 'AC米兰', away: '国际米兰', entry: '主胜', odds: 2.90,
+    conf: 0.48, mode: '半彩票半保险',
+    tysHome: 'M', tysAway: 'H', fid: 0.5, fseHome: 0.62, fseAway: 0.68,
+    note: '米兰德比 · 经典对抗 · 平局倾向较高',
+  },
+  manutdEverton: {
+    home: '曼联', away: '埃弗顿', entry: '主胜', odds: 1.65,
+    conf: 0.70, mode: '常规-稳',
+    tysHome: 'H', tysAway: 'S', fid: 0.6, fseHome: 0.60, fseAway: 0.46,
+    note: '老特拉福德主场 · 升降级压力下的稳态投注',
+  },
+  leedsNottingham: {
+    home: '利兹联', away: '诺丁汉森林', entry: '主胜', odds: 2.05,
+    conf: 0.58, mode: '常规',
+    tysHome: 'M', tysAway: 'M', fid: 0.4, fseHome: 0.54, fseAway: 0.52,
+    note: '埃兰路主场 · 双方近期状态相近 · 信息深度偏低',
+  },
 }
 
 const makeMarqueeMatch = (idSuffix, fields, outcome) => {
@@ -651,6 +672,10 @@ const buildPendingPresets = () => {
     actual_rating: 0,
     rep: null,
     remarks: fields.note,
+    // Tag this investment as a demo-seed pending so HistoryPage in
+    // preview mode can filter it out — these matches are meant to
+    // surface in Portfolio + Settle, not pre-populate History.
+    __demo_seed_pending: true,
     matches: [makeMarqueeMatch(`${id}_m1`, fields, pendingOutcome)],
   })
 
@@ -659,6 +684,9 @@ const buildPendingPresets = () => {
     buildSingle('demo_inv_pending_mcich', pendingFields(MARQUEE_FIXTURES.mancityChelsea), 14),
     buildSingle('demo_inv_pending_barrm', pendingFields(MARQUEE_FIXTURES.barcaReal), 8),
     buildSingle('demo_inv_pending_baypsg', pendingFields(MARQUEE_FIXTURES.bayernPsg), 12),
+    buildSingle('demo_inv_pending_milint', pendingFields(MARQUEE_FIXTURES.milanInter), 6),
+    buildSingle('demo_inv_pending_muneve', pendingFields(MARQUEE_FIXTURES.manutdEverton), 16),
+    buildSingle('demo_inv_pending_leenfo', pendingFields(MARQUEE_FIXTURES.leedsNottingham), 9),
   ]
 }
 

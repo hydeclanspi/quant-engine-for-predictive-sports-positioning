@@ -6,6 +6,7 @@ import { handleNoteShortcut } from '../lib/noteFormatting'
 import { normalizeEntryName } from '../lib/entryParsing'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
 import { useLabels } from '../lib/labels'
+import { isPreviewMode } from '../lib/displayMode'
 
 const formatDate = (isoString) => {
   const date = new Date(isoString)
@@ -213,6 +214,13 @@ export default function SettlePage() {
 
   useEffect(() => {
     if (pendingCombos.length === 0 || settledHistoryLookup.size === 0) return
+    // In preview mode the demo bundle intentionally pairs each pending
+    // marquee single with a settled bundle containing the same teams.
+    // The history-auto-fill engine would happily pull last week's
+    // results / post_note into the new pending row, defeating the
+    // demo's "fresh, blank, ready-to-record" framing. Skip the
+    // entire auto-fill pass for preview.
+    if (isPreviewMode()) return
 
     let changed = false
     const nextForms = { ...forms }

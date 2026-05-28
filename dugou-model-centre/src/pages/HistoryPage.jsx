@@ -500,7 +500,7 @@ export default function HistoryPage() {
   // is present in the dataset.
   const previewInitialExpansion = useMemo(() => {
     if (!isPreviewMode()) return { combo: {}, solo: {} }
-    const investments = getInvestments()
+    const investments = getInvestments().filter((inv) => !inv.__demo_seed_pending)
     if (!investments || investments.length === 0) return { combo: {}, solo: {} }
     const sorted = [...investments].sort(
       (a, b) => new Date(b.created_at) - new Date(a.created_at),
@@ -518,7 +518,17 @@ export default function HistoryPage() {
   const [notePopup, setNotePopup] = useState(null)
 
   const filters = ['全部', '待结算', '已中', '未中', 'Solo', 'Combo', '已归档']
-  const rawInvestments = useMemo(() => getInvestments(), [refreshKey])
+  // In preview mode, hide demo-seed pending investments from History.
+  // These exist only to seed Portfolio candidates + Settle queue; they
+  // shouldn't appear in History until the visitor explicitly settles
+  // them or adopts a combo from Portfolio.
+  const rawInvestments = useMemo(() => {
+    const all = getInvestments()
+    if (isPreviewMode()) {
+      return all.filter((inv) => !inv.__demo_seed_pending)
+    }
+    return all
+  }, [refreshKey])
   const rawRows = useMemo(() => rawInvestments.map(buildRow), [rawInvestments])
   const dataRows = useMemo(() => buildDataRows(rawInvestments), [rawInvestments])
   const leagueOptions = useMemo(() => {

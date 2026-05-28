@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { getMetricsSnapshot } from '../lib/analytics'
 import TimeRangePicker from '../components/TimeRangePicker'
-import { useLabels } from '../lib/labels'
+import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 
 const PERIOD_LABELS = {
@@ -188,6 +188,7 @@ const PaginatedMatchTable = ({ rows }) => {
 }
 
 const MetricDetailHistoryTable = ({ rows, columns, pageSize = 10 }) => {
+  const maskText = usePreviewTextMask()
   const [page, setPage] = useState(1)
   const totalPages = Math.max(1, Math.ceil(rows.length / pageSize))
   const currentPage = Math.min(page, totalPages)
@@ -209,7 +210,7 @@ const MetricDetailHistoryTable = ({ rows, columns, pageSize = 10 }) => {
           <tr className="text-left text-stone-500">
             {columns.map((col) => (
               <th key={col.key} className={`py-2.5 px-3 text-xs font-medium ${col.align === 'right' ? 'text-right' : ''}`}>
-                {col.label}
+                {maskText(col.label)}
               </th>
             ))}
           </tr>
@@ -260,6 +261,7 @@ export default function MetricsPage({ openModal }) {
   const navigate = useNavigate()
   const labels = useLabels()
   const maskMode = useModeLabelMap()
+  const maskText = usePreviewTextMask()
   const [timePeriod, setTimePeriod] = useState('all')
   const [matrixTab, setMatrixTab] = useState('mode')
   const snapshot = useMemo(() => getMetricsSnapshot(timePeriod), [timePeriod])
@@ -713,7 +715,7 @@ export default function MetricsPage({ openModal }) {
     const rows = getMetricDetailRows(metric.id)
     const history = getMetricHistoryDetail(metric.id)
     openModal({
-      title: `${metric.label} · 详细数据`,
+      title: `${maskText(metric.label)} · 详细数据`,
       content: (
         <div className="space-y-4">
           <div className="rounded-2xl border border-stone-100 bg-gradient-to-br from-stone-50 via-white to-stone-50 p-5">
@@ -724,7 +726,7 @@ export default function MetricsPage({ openModal }) {
               </div>
               <GlassCardIcon IconComp={metric.IconComp} tone={metric.tone} className="h-9 w-9" iconSize={18} />
             </div>
-            <p className="text-sm text-stone-500">{metric.description}</p>
+            <p className="text-sm text-stone-500">{maskText(metric.description)}</p>
           </div>
 
           <div className="rounded-2xl border border-stone-100 bg-white p-4">
@@ -746,7 +748,7 @@ export default function MetricsPage({ openModal }) {
             <div className="flex items-center justify-between gap-3 mb-3">
               <div>
                 <p className="text-[11px] uppercase tracking-[0.14em] text-stone-400">Historical Ledger</p>
-                <h4 className="text-sm font-semibold text-stone-700 mt-0.5">{history.title}</h4>
+                <h4 className="text-sm font-semibold text-stone-700 mt-0.5">{maskText(history.title)}</h4>
               </div>
               <span className="text-[11px] text-stone-400">记录数：{history.rows.length}</span>
             </div>
@@ -756,7 +758,7 @@ export default function MetricsPage({ openModal }) {
               columns={history.columns}
               pageSize={10}
             />
-            {history.note && <p className="text-[11px] text-stone-400 mt-2">{history.note}</p>}
+            {history.note && <p className="text-[11px] text-stone-400 mt-2">{maskText(history.note)}</p>}
           </div>
         </div>
       ),
@@ -852,7 +854,7 @@ export default function MetricsPage({ openModal }) {
             className="glow-card group bg-white rounded-2xl p-5 border border-stone-100 cursor-pointer transition-all hover:-translate-y-0.5 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]"
           >
             <div className="flex items-center justify-between mb-3">
-              <span className="text-stone-400 text-xs uppercase tracking-wide">{metric.label}</span>
+              <span className="text-stone-400 text-xs uppercase tracking-wide">{maskText(metric.label)}</span>
               <GlassCardIcon IconComp={metric.IconComp} tone={metric.tone} />
             </div>
             <span
@@ -1122,7 +1124,7 @@ export default function MetricsPage({ openModal }) {
             ].map((item) => (
               <div key={item.label} className="p-3 rounded-xl bg-stone-50 border border-stone-100">
                 <div className="flex items-center justify-between">
-                  <span className="text-stone-600">{item.label}</span>
+                  <span className="text-stone-600">{maskText(item.label)}</span>
                   <span className={`font-semibold ${getCorrelationColor(item.value)}`}>{signed(item.value, 2)}</span>
                 </div>
                 <p className="text-[11px] text-stone-400 mt-1">
