@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode } from '../lib/localData'
 import C15DiamondCutV1Logo from './C15DiamondCutV1Logo'
+import PreviewModeToggle from './PreviewModeToggle'
 
 /* ──────────────────────────────────────────────────
    Modern Navigation — Vercel/Linear design language
@@ -195,6 +196,9 @@ export default function ModernTopBar() {
 
       {/* ── Page context ── */}
       <span className="mn-page-title">{pageTitle}</span>
+
+      {/* ── Preview / Full mode toggle ── */}
+      <PreviewModeToggle />
 
       {/* ── Separator ── */}
       <div className="h-4 w-px bg-gradient-to-b from-transparent via-neutral-200 to-transparent mx-2 flex-shrink-0" />
