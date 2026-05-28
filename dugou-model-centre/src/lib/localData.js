@@ -18,6 +18,8 @@ import {
 import { getPrimaryEntryMarket, normalizeEntries } from './entryParsing'
 import { calcAtomicEquivalentOdds } from './atomicParlay'
 import genesisBundle from '../data/genesisBundle.json'
+import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
+import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
 
 const STORAGE_KEYS = {
   investments: 'dugou.investments.v1',
@@ -270,6 +272,7 @@ export const getTeamDirectoryProfiles = (profiles = getTeamProfiles()) => {
 
 const readJSON = (key, fallback) => {
   if (!isBrowser) return fallback
+  if (isPreviewMode()) return previewRead(key, fallback)
   try {
     const raw = window.localStorage.getItem(key)
     return raw ? JSON.parse(raw) : fallback
@@ -280,6 +283,14 @@ const readJSON = (key, fallback) => {
 
 const writeJSON = (key, value) => {
   if (!isBrowser) return
+  // Preview mode: writes are redirected to an in-memory store so the
+  // public-facing demo never persists to the owner's localStorage or
+  // syncs to the cloud snapshot bucket.
+  if (isPreviewMode()) {
+    previewWrite(key, value)
+    window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key, preview: true } }))
+    return
+  }
   window.localStorage.setItem(key, JSON.stringify(value))
   window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key } }))
   if (
@@ -295,9 +306,34 @@ const writeJSON = (key, value) => {
   }
 }
 
+// ── Display-mode change handling ──
+// When the visitor unlocks (preview → full) or relocks (full → preview)
+// we drop the in-memory demo store and fan out a data-changed event so
+// every analytics memo / UI subscriber re-fetches against the new
+// effective data source.
+if (typeof window !== 'undefined') {
+  const DISPLAY_MODE_HANDLER_KEY = '__dugouDisplayModeHandler__'
+  if (typeof window[DISPLAY_MODE_HANDLER_KEY] === 'function') {
+    window.removeEventListener(DISPLAY_MODE_CHANGE_EVENT, window[DISPLAY_MODE_HANDLER_KEY])
+  }
+  const handler = () => {
+    resetPreviewStore()
+    window.dispatchEvent(
+      new CustomEvent('dugou:data-changed', { detail: { key: '__display_mode__' } }),
+    )
+  }
+  window[DISPLAY_MODE_HANDLER_KEY] = handler
+  window.addEventListener(DISPLAY_MODE_CHANGE_EVENT, handler)
+}
+
 // ── Time Machine data override layer ──
 const getTimeMachineDataOverride = (key) => {
   if (!isBrowser) return null
+  // In preview mode the Time Machine layer is bypassed entirely —
+  // the readJSON preview interception below already routes every
+  // storage read to the in-memory demo store. Letting TM run here
+  // would otherwise leak real owner snapshots into the demo.
+  if (isPreviewMode()) return null
   const session = getTimeMachineSession()
   if (!session || !session.bundle) return null
 
@@ -316,9 +352,14 @@ const getTimeMachineDataOverride = (key) => {
 }
 
 // 只读检查
-export const isInTimeMachineMode = () => isInTimeMachineSession()
+// In preview mode we forcibly mask Time Machine state so the demo
+// surface never advertises a TM session the visitor cannot actually
+// inspect. The underlying TM session storage is left intact and will
+// reappear once FULL mode is unlocked again.
+export const isInTimeMachineMode = () => (isPreviewMode() ? false : isInTimeMachineSession())
 
 export const getTimeMachineSessionInfo = () => {
+  if (isPreviewMode()) return null
   const session = getTimeMachineSession()
   if (!session) return null
   return {
@@ -1108,6 +1149,7 @@ export const importDataBundle = (bundle, mode = 'replace') => {
 }
 
 export const restoreGenesisData = () => {
+  if (isPreviewMode()) return false
   const ok = applyDataBundle(genesisBundle, 'replace')
   if (ok && isBrowser) {
     window.localStorage.setItem(GENESIS_APPLIED_KEY, '1')
@@ -1124,6 +1166,11 @@ export const setCloudSyncEnabled = (enabled) =>
   })
 
 export const bootstrapCloudSnapshotOnLoad = async () => {
+  // In preview mode we never reach out to Supabase — the demo bundle
+  // is fully self-contained and reaching the cloud would either leak
+  // real owner snapshots into the demo or churn cloud bandwidth for
+  // anonymous visitors.
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked', applied: false }
   cloudBootstrapInProgress = true
   const status = getCloudSyncState()
   if (!status.hasEnv) {
@@ -1138,11 +1185,13 @@ export const bootstrapCloudSnapshotOnLoad = async () => {
 }
 
 export const runCloudSyncNow = async () => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
   const snapshot = exportDataBundle()
   return syncSnapshotNow(snapshot)
 }
 
 export const pullCloudSnapshotNow = async (mode = 'merge') => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked', applied: false }
   const result = await fetchLatestSnapshot()
   if (!result?.ok || !result?.snapshot) return { ...result, applied: false }
 
@@ -1170,6 +1219,7 @@ export const pullCloudSnapshotNow = async (mode = 'merge') => {
 // ── Time Machine Public API ──
 
 export const beginTimeMachineSession = async (snapshotId) => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
   const result = await fetchTimeMachineSnapshotById(snapshotId)
   if (!result.ok) return result
 
@@ -1196,10 +1246,12 @@ export const endTimeMachineSession = () => {
 }
 
 export const listHistoricalSnapshots = (page = 1, pageSize = 6) => {
+  if (isPreviewMode()) return Promise.resolve({ ok: true, items: [], total: 0, page, pageSize })
   return listTimeMachineSnapshots({ page, pageSize })
 }
 
 export const saveSnapshot = async (title = '', mode = 'manual') => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
   const snapshot = exportDataBundle()
 
   // Debug: 检查数据结构
@@ -1224,11 +1276,13 @@ export const saveSnapshot = async (title = '', mode = 'manual') => {
 }
 
 export const ensureCurrentMonthSnapshot = async () => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
   const snapshot = exportDataBundle()
   return ensureMonthlyTimeMachineSnapshot({ snapshot })
 }
 
 export const deleteTimeMachineSnapshot = async (snapshotId) => {
+  if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
   try {
     const result = await deleteTimeMachineSnapshotById(snapshotId)
     return result
