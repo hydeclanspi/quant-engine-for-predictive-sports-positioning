@@ -20,6 +20,37 @@ import { issueMockUnlockToken, unlockWithToken } from '../lib/displayMode'
 
 const MOCK_DEV_PASSWORD = import.meta.env.VITE_DEV_UNLOCK_PASSWORD || null
 
+/**
+ * Try the production /api/unlock endpoint first. If it isn't reachable
+ * (local dev without `vercel dev`, network failure, or the function is
+ * not deployed yet) we fall back to the in-frontend mock so the unlock
+ * flow remains exercisable.
+ */
+const requestUnlock = async (password) => {
+  try {
+    const res = await fetch('/api/unlock', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    })
+    // 404 means the API route doesn't exist on this deployment (local
+    // `vite dev` without `vercel dev`). Treat as "API not present" and
+    // fall back to the frontend mock.
+    if (res.status === 404) return { ok: false, reason: 'api_absent' }
+    const payload = await res.json().catch(() => ({}))
+    if (res.ok && payload?.ok && payload.token) {
+      return { ok: true, token: payload.token }
+    }
+    if (res.status === 401) return { ok: false, reason: 'invalid_password' }
+    if (res.status === 500) return { ok: false, reason: payload?.reason || 'server_error' }
+    return { ok: false, reason: payload?.reason || 'unknown' }
+  } catch (err) {
+    // Network failure or CORS → fall back to mock so dev experience
+    // doesn't break entirely.
+    return { ok: false, reason: 'network_error' }
+  }
+}
+
 export default function UnlockModal({ open, onClose, onUnlock }) {
   const [password, setPassword] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -66,22 +97,35 @@ export default function UnlockModal({ open, onClose, onUnlock }) {
     setSubmitting(true)
     setError('')
 
-    // ── Mock validation path (Step 2-5) ──
-    // Frontend-only check until /api/unlock is wired in Step 6.
-    // If VITE_DEV_UNLOCK_PASSWORD is set we honor it; otherwise any
-    // non-empty password passes so the flow can be tested locally.
-    await new Promise((resolve) => window.setTimeout(resolve, 320))
-    const passes = MOCK_DEV_PASSWORD == null ? true : trimmed === MOCK_DEV_PASSWORD
-    if (!passes) {
+    // Production path: hit /api/unlock and consume the signed JWT.
+    const apiResult = await requestUnlock(trimmed)
+
+    let token
+    if (apiResult.ok && apiResult.token) {
+      token = apiResult.token
+    } else if (apiResult.reason === 'invalid_password') {
+      // Real backend rejected the password — no fallback, no leak.
       setSubmitting(false)
       setError('密码不正确')
       triggerShake()
       setPassword('')
       window.setTimeout(() => inputRef.current?.focus(), 60)
       return
+    } else {
+      // API is absent (local dev) or network failure — fall back to
+      // the frontend mock so the unlock flow stays demonstrable.
+      const passesMock = MOCK_DEV_PASSWORD == null ? true : trimmed === MOCK_DEV_PASSWORD
+      if (!passesMock) {
+        setSubmitting(false)
+        setError('密码不正确')
+        triggerShake()
+        setPassword('')
+        window.setTimeout(() => inputRef.current?.focus(), 60)
+        return
+      }
+      token = issueMockUnlockToken()
     }
 
-    const token = issueMockUnlockToken()
     const result = unlockWithToken(token)
     setSubmitting(false)
     if (!result.ok) {

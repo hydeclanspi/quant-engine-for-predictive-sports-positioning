@@ -10,15 +10,16 @@
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 0"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "date-fns": "^3.3.0",
+    "jose": "^5.10.0",
+    "lucide-react": "^0.312.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.22.0",
-    "@supabase/supabase-js": "^2.39.0",
-    "lucide-react": "^0.312.0",
     "recharts": "^2.12.0",
-    "zustand": "^4.5.0",
-    "date-fns": "^3.3.0",
-    "xlsx": "^0.18.5"
+    "xlsx": "^0.18.5",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.48",
