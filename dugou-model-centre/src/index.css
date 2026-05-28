@@ -2879,22 +2879,21 @@
   will-change: transform;
 }
 
-/* ── PREVIEW state — mint, airy, refreshing ── */
+/* ── PREVIEW state — soft seafoam, discreet, well-made ── */
 .pm-toggle-preview {
-  padding: 5px 10px 5px 9px;
+  padding: 3px 8px 3px 7px;
   border-radius: 999px;
   background:
-    linear-gradient(135deg, #f0fdf4 0%, #dcfce7 55%, #bbf7d0 100%);
-  border-color: rgba(16, 185, 129, 0.36);
+    linear-gradient(135deg, #f5fcf7 0%, #d8f3e2 60%, #c0ead0 100%);
+  border-color: rgba(16, 185, 129, 0.22);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.85) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.55) inset,
-    0 1px 2px rgba(6, 95, 70, 0.06),
-    0 4px 14px -8px rgba(16, 185, 129, 0.28);
+    0 1px 0 rgba(255, 255, 255, 0.7) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.4) inset,
+    0 1px 2px rgba(6, 95, 70, 0.04);
   color: #047857;
-  letter-spacing: 0.6px;
-  font-size: 10.5px;
-  font-weight: 700;
+  letter-spacing: 0.55px;
+  font-size: 9.5px;
+  font-weight: 600;
 }
 
 .pm-toggle-preview::before {
@@ -2917,14 +2916,11 @@
 }
 
 .pm-toggle-preview-dot {
-  width: 6px;
-  height: 6px;
+  width: 4.5px;
+  height: 4.5px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #a7f3d0 0%, #10b981 65%, #047857 100%);
-  box-shadow:
-    0 0 0 2px rgba(16, 185, 129, 0.14),
-    0 0 6px rgba(16, 185, 129, 0.45);
-  animation: pmPreviewDotPulse 2.4s ease-in-out infinite;
+  background: radial-gradient(circle at 35% 35%, #b9eccd 0%, #34c997 75%, #047857 100%);
+  box-shadow: 0 0 0 1.5px rgba(16, 185, 129, 0.1);
 }
 
 .pm-toggle-preview-text {
@@ -2936,29 +2932,29 @@
   display: inline-block;
   max-width: 0;
   overflow: hidden;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
+  font-size: 9px;
+  font-weight: 500;
+  letter-spacing: 0.35px;
   opacity: 0;
   margin-left: 0;
   white-space: nowrap;
-  color: #065f46;
+  color: #047857;
   transition:
-    max-width 280ms cubic-bezier(0.4, 0.6, 0.2, 1),
-    opacity 220ms ease,
-    margin-left 220ms ease;
+    max-width 260ms cubic-bezier(0.4, 0.6, 0.2, 1),
+    opacity 200ms ease,
+    margin-left 200ms ease;
 }
 
 .pm-toggle-preview:hover {
-  transform: translateY(-1px) scale(1.045);
+  transform: translateY(-0.5px) scale(1.025);
   background:
-    linear-gradient(135deg, #f7fef9 0%, #d4f7e0 55%, #a7f3d0 100%);
-  border-color: rgba(16, 185, 129, 0.6);
+    linear-gradient(135deg, #f8fdfa 0%, #d0f0dc 60%, #b3e4c5 100%);
+  border-color: rgba(16, 185, 129, 0.36);
   box-shadow:
-    0 1px 0 rgba(255, 255, 255, 0.95) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.7) inset,
-    0 3px 8px rgba(16, 185, 129, 0.16),
-    0 12px 28px -10px rgba(16, 185, 129, 0.42);
+    0 1px 0 rgba(255, 255, 255, 0.85) inset,
+    0 0 0 1px rgba(255, 255, 255, 0.55) inset,
+    0 2px 6px rgba(16, 185, 129, 0.08),
+    0 6px 16px -10px rgba(16, 185, 129, 0.26);
 }
 
 .pm-toggle-preview:hover::before {
@@ -2966,15 +2962,13 @@
 }
 
 .pm-toggle-preview:hover .pm-toggle-preview-hint {
-  max-width: 64px;
-  margin-left: 4px;
-  opacity: 0.78;
+  max-width: 52px;
+  margin-left: 3px;
+  opacity: 0.72;
 }
 
 .pm-toggle-preview:hover .pm-toggle-preview-dot {
-  box-shadow:
-    0 0 0 3px rgba(16, 185, 129, 0.22),
-    0 0 10px rgba(16, 185, 129, 0.6);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.18);
 }
 
 .pm-toggle-preview:active {
@@ -3043,21 +3037,6 @@
   box-shadow:
     0 0 0 2px rgba(56, 189, 248, 0.22),
     0 0 0 4px rgba(56, 189, 248, 0.32);
-}
-
-@keyframes pmPreviewDotPulse {
-  0%, 100% {
-    transform: scale(1);
-    box-shadow:
-      0 0 0 2px rgba(16, 185, 129, 0.14),
-      0 0 6px rgba(16, 185, 129, 0.45);
-  }
-  50% {
-    transform: scale(1.18);
-    box-shadow:
-      0 0 0 3px rgba(16, 185, 129, 0.24),
-      0 0 9px rgba(16, 185, 129, 0.6);
-  }
 }
 
 @keyframes pmLiveDotPulse {
