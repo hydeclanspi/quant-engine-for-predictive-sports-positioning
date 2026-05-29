@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Check, ChevronsLeft, ChevronsRight, Plus, RefreshCw, ShieldCheck, ShieldOff, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react'
+import { Check, Plus, RefreshCw, ShieldCheck, ShieldOff, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react'
 import { bumpTeamSamples, getInvestments, getSystemConfig, saveInvestment } from '../lib/localData'
 import { getPredictionCalibrationContext, buildComboRetrospective } from '../lib/analytics'
 import {
@@ -9,6 +9,7 @@ import {
   estimateEntryAnchorOdds,
 } from '../lib/atomicParlay'
 import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
+import ComboExpandHint from '../components/ComboExpandHint'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { isPreviewMode } from '../lib/displayMode'
@@ -5165,13 +5166,10 @@ export default function ComboPage({ openModal }) {
                   </button>
                 </>
               )}
-              <button
-                onClick={() => setLeftPanelCollapsed((p) => !p)}
-                className={`p-1.5 rounded-lg text-stone-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors ${leftPanelCollapsed ? 'absolute top-2.5 right-2.5 z-10' : ''}`}
-                title={leftPanelCollapsed ? '展开面板' : '收起面板'}
-              >
-                {leftPanelCollapsed ? <ChevronsRight size={14} /> : <ChevronsLeft size={14} />}
-              </button>
+              <ComboExpandHint
+                collapsed={leftPanelCollapsed}
+                onToggle={() => setLeftPanelCollapsed((p) => !p)}
+              />
             </div>
           </div>
 
