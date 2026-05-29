@@ -4679,9 +4679,12 @@ export default function ParamsPage({ openModal }) {
         </p>
       </div>
 
-      {/* Demo/preview: surface the Future Iteration roadmap right below the
-          回归分析校准 card. FULL mode keeps it in its original slot below. */}
-      {isPreviewMode() && futureIterationCard}
+      {/* Demo/preview: surface the Future Iteration roadmap below the 回归分析校准
+          card. The pt-[26px] wrapper adds +26px on top of the regression card's
+          base mb-9 (36px) gap → ~62px (≈ +72.5% breathing room); padding (not
+          margin) keeps it additive without margin-collapse. FULL mode keeps the
+          card in its original slot below. */}
+      {isPreviewMode() && <div className="pt-[26px]">{futureIterationCard}</div>}
 
       <div className="flex flex-col">
       <div className="order-5 glow-card relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/30 to-cyan-50/30 p-6 mb-6">
