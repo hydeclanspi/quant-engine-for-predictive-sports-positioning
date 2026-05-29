@@ -3345,6 +3345,44 @@ export default function ParamsPage({ openModal }) {
     })
   }
 
+  // The "Future Iteration" roadmap card. In demo/preview mode it sits right
+  // below the 回归分析校准 card (showcase position); in FULL mode it keeps its
+  // original slot near the data-utility cards. Same `mb-9` rhythm in both spots.
+  const futureIterationCard = (
+    <div
+      onClick={openFutureFeaturesModal}
+      className="console-interactive-surface glow-card rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white/92 to-cyan-50/78 p-6 mb-9 cursor-pointer backdrop-blur-sm shadow-[0_20px_45px_rgba(56,189,248,0.18),inset_0_1px_0_rgba(255,255,255,0.86)]"
+    >
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-sky-200 bg-white/80 text-sky-600">
+              <Sparkles size={14} strokeWidth={1.8} />
+            </span>
+            <span className="text-xs text-sky-700 font-medium uppercase tracking-[0.1em]">Future Iteration</span>
+            <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-100/70 px-2 py-0.5 text-[10px] text-sky-700 font-semibold">
+              BETA
+            </span>
+          </div>
+          <h3 className="text-lg font-semibold text-stone-800">未来迭代 · 概念版features前瞻</h3>
+          <p className="text-sm text-stone-500 mt-2 max-w-3xl">
+            装载完整研究原文（Part 4）与十项进阶方向的全量详细解读，支持分层阅读与右向左推出交互。
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation()
+            openFutureFeaturesModal()
+          }}
+          className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white/85 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-50 transition-colors"
+        >
+          查看详情 <ChevronRight size={14} />
+        </button>
+      </div>
+    </div>
+  )
+
   const getCurrentLayoutMode = () => {
     if (typeof window === 'undefined') return config.layoutMode || 'modern'
     const cached = window.localStorage.getItem('dugou:layout-mode')
@@ -4640,6 +4678,11 @@ export default function ParamsPage({ openModal }) {
           回归校准乘数已自动应用于新建投资的建议金额计算。散点在 y=x 线上方表示实际表现优于预期。
         </p>
       </div>
+
+      {/* Demo/preview: surface the Future Iteration roadmap right below the
+          回归分析校准 card. FULL mode keeps it in its original slot below. */}
+      {isPreviewMode() && futureIterationCard}
+
       <div className="flex flex-col">
       <div className="order-5 glow-card relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/30 to-cyan-50/30 p-6 mb-6">
         <div className="pointer-events-none absolute -top-14 -right-8 h-36 w-36 rounded-full bg-indigo-200/20 blur-3xl" />
@@ -5154,39 +5197,9 @@ export default function ParamsPage({ openModal }) {
       </div>
       </div>
 
-      {/* Layout Mode Toggle */}
-      <div
-        onClick={openFutureFeaturesModal}
-        className="console-interactive-surface glow-card rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white/92 to-cyan-50/78 p-6 mb-9 cursor-pointer backdrop-blur-sm shadow-[0_20px_45px_rgba(56,189,248,0.18),inset_0_1px_0_rgba(255,255,255,0.86)]"
-      >
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-sky-200 bg-white/80 text-sky-600">
-                <Sparkles size={14} strokeWidth={1.8} />
-              </span>
-              <span className="text-xs text-sky-700 font-medium uppercase tracking-[0.1em]">Future Iteration</span>
-              <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-100/70 px-2 py-0.5 text-[10px] text-sky-700 font-semibold">
-                BETA
-              </span>
-            </div>
-            <h3 className="text-lg font-semibold text-stone-800">未来迭代 · 概念版features前瞻</h3>
-            <p className="text-sm text-stone-500 mt-2 max-w-3xl">
-              装载完整研究原文（Part 4）与十项进阶方向的全量详细解读，支持分层阅读与右向左推出交互。
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation()
-              openFutureFeaturesModal()
-            }}
-            className="shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-sky-200 bg-white/85 px-3 py-2 text-xs font-medium text-sky-700 hover:bg-sky-50 transition-colors"
-          >
-            查看详情 <ChevronRight size={14} />
-          </button>
-        </div>
-      </div>
+      {/* FULL mode keeps the Future Iteration card here; demo/preview renders
+          it above (right below 回归分析校准). */}
+      {!isPreviewMode() && futureIterationCard}
 
       <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">
         <div className="flex items-center justify-between mb-4">
