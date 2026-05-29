@@ -11,7 +11,7 @@ import UnlockModal from './UnlockModal'
  * Lifecycle (a tiny state machine):
  *   pre   → waiting out the appear delay (or skipped if shown this session)
  *   enter → playing the float-in animation
- *   idle  → settled; breathing dot + subtle float; auto-fades after 6s
+ *   idle  → settled; breathing dot + subtle float; auto-fades after 7.75s
  *   leave → playing the float-out animation
  *   done  → unmounted from view (modal may still be open)
  *
@@ -19,13 +19,13 @@ import UnlockModal from './UnlockModal'
  *   - Preview/home-only mounting is decided by the parent (App).
  *   - Shows once per browser session (sessionStorage) so navigating in and
  *     out of the homepage doesn't re-nag.
- *   - Auto-fades 6s after settling; hovering pauses (and resets) the timer.
+ *   - Auto-fades 7.75s after settling; hovering pauses (and resets) the timer.
  *   - prefers-reduced-motion degrades to a plain cross-fade.
  */
 
 const SESSION_SHOWN_KEY = 'dugou.demo_bubble_shown.v1'
 const APPEAR_DELAY_MS = 2770
-const AUTO_FADE_MS = 6000
+const AUTO_FADE_MS = 7750
 const ENTER_MS = 660 // ~demoBubbleIn (640ms) + small buffer
 const LEAVE_MS = 400 // ~demoBubbleOut (380ms) + small buffer
 
