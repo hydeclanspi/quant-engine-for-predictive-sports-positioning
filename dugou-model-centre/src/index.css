@@ -333,9 +333,15 @@
     opacity: 0;
     max-height: 0;
     pointer-events: none;
-    margin: 0;
-    padding-top: 0;
-    padding-bottom: 0;
+    /* !important so the collapse fully wins over Tailwind's `p-4`/border
+       shorthand utilities (which live in the later `utilities` layer and
+       would otherwise leave ~18px of residual padding + 1px borders per
+       card — the "中间空白" between the match list and the summary). */
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
   }
   .combo-left-panel-summary {
     transition: opacity 200ms ease 200ms, max-height 200ms ease 160ms;

@@ -11,6 +11,7 @@ import {
 import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
+import { isPreviewMode } from '../lib/displayMode'
 
 const MODE_FACTOR_MAP = {
   常规: 1.0,
@@ -3822,7 +3823,9 @@ export default function ComboPage({ openModal }) {
   const [expandedComboIdxSet, setExpandedComboIdxSet] = useState(() => new Set())
   const [expandedPortfolioIdxSet, setExpandedPortfolioIdxSet] = useState(() => new Set())
   const [showAllPortfolios, setShowAllPortfolios] = useState(false)
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false)
+  // Demo/预览模式下：今日备选比赛固定不变，默认折叠左栏，让页面更紧凑、
+  // 把下方「依赖风险矩阵」卡片露出来，提示访客往下滑还有内容。
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => isPreviewMode())
   const [ftCellOverrides, setFtCellOverrides] = useState({}) // { portfolioKey: { "rowKey|colKey": "decouple"|"release" } }
   const [ftDirtyPortfolios, setFtDirtyPortfolios] = useState(() => new Set()) // Set<portfolioKey>
   const [ftConflictResolution, setFtConflictResolution] = useState(null)
