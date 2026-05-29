@@ -7,6 +7,7 @@ import TopBar from './components/TopBar'
 import ModernTopBar from './components/ModernTopBar'
 import BottomBar from './components/BottomBar'
 import Modal from './components/Modal'
+import DemoBubble from './components/DemoBubble'
 
 // Pages
 import NewInvestmentPage from './pages/NewInvestmentPage'
@@ -130,6 +131,10 @@ function App() {
   const ambientTone = VALID_AMBIENT_TONES.includes(ambientToneCandidate) ? ambientToneCandidate : 'classic_white'
   const ambientClassName = `app-ambient-scope app-ambient-tone-${ambientTone}`
 
+  // Demo nudge — bottom-right glass bubble, preview mode + homepage only.
+  const isHomeRoute = location.pathname === '/' || location.pathname === '/new'
+  const demoBubble = displayMode === PREVIEW_MODE && isHomeRoute ? <DemoBubble /> : null
+
   const pageRoutes = (
     <Routes>
       <Route path="/" element={<NewInvestmentPage openModal={openModal} />} />
@@ -162,6 +167,7 @@ function App() {
           </div>
         </main>
         {modalData && <Modal data={modalData} onClose={closeModal} />}
+        {demoBubble}
       </div>
     )
   }
@@ -183,6 +189,7 @@ function App() {
           </div>
         </main>
         {modalData && <Modal data={modalData} onClose={closeModal} />}
+        {demoBubble}
       </div>
     )
   }
