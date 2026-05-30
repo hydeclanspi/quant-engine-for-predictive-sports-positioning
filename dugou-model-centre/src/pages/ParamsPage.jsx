@@ -69,6 +69,7 @@ import TimeMachineIcon from '../components/TimeMachineIcon'
 import ConfidenceRing from '../components/ConfidenceRing'
 import CountUp from '../components/CountUp'
 import AdaptiveLoopDiagram from '../components/AdaptiveLoopDiagram'
+import ExplainHover from '../components/ExplainHover'
 
 const TYS_BASE_FACTORS = {
   S: 1.08,
@@ -165,38 +166,6 @@ const ConsoleCardIcon = ({ IconComp }) => (
     <IconComp size={14} strokeWidth={1.7} />
   </span>
 )
-
-const ExplainHover = ({ card, align = 'left', children }) => {
-  const maskText = usePreviewTextMask()
-  if (!card) return children
-  const alignClass = align === 'right' ? 'right-0' : 'left-0'
-  const lines = [
-    { label: '是什么', value: maskText(card.what) },
-    { label: '描述', value: maskText(card.describes) },
-    { label: '当前值', value: maskText(card.current) },
-    { label: '基准值', value: maskText(card.baseline) },
-    { label: '当前状态', value: maskText(card.status) },
-    { label: '其它状态', value: maskText(card.others) },
-  ].filter((line) => line.value)
-
-  return (
-    <span className="group/explain relative inline-flex">
-      {children}
-      <span className={`pointer-events-none absolute ${alignClass} top-full z-[240] mt-2.5 w-[300px] translate-y-1 rounded-xl border border-sky-200/85 bg-[linear-gradient(145deg,rgba(240,249,255,0.95),rgba(255,255,255,0.95)_48%,rgba(238,242,255,0.9))] p-3 text-left opacity-0 shadow-[0_16px_34px_-26px_rgba(56,189,248,0.45),inset_0_1px_0_rgba(255,255,255,0.92)] transition-all duration-180 group-hover/explain:translate-y-0 group-hover/explain:opacity-100 group-hover/explain:shadow-[0_22px_44px_-24px_rgba(56,189,248,0.5),inset_0_1px_0_rgba(255,255,255,0.92)]`}>
-        <span className="block text-[10px] font-semibold uppercase tracking-[0.1em] text-sky-600">{maskText(card.title)}</span>
-        <span className="mt-1 block h-px w-full bg-gradient-to-r from-sky-200 via-indigo-200/80 to-transparent" />
-        <span className="mt-1.5 block space-y-1.5">
-          {lines.map((line) => (
-            <span key={`${card.title}-${line.label}`} className="block text-[11px] leading-[1.45] text-stone-600">
-              <span className="font-semibold text-stone-700">{line.label}：</span>
-              {line.value}
-            </span>
-          ))}
-        </span>
-      </span>
-    </span>
-  )
-}
 
 const PAGE_AMBIENT_ITEMS = [
   { key: 'new', label: 'New', hint: '新建投资' },

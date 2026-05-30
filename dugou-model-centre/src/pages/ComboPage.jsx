@@ -12,6 +12,7 @@ import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
 import ComboExpandHint from '../components/ComboExpandHint'
 import ComboGenerateReveal from '../components/ComboGenerateReveal'
 import CountUp from '../components/CountUp'
+import ExplainHover from '../components/ExplainHover'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { isPreviewMode } from '../lib/displayMode'
@@ -6491,17 +6492,24 @@ export default function ComboPage({ openModal }) {
           {mcSimResult && (
             <div className="mt-4 p-3 rounded-xl bg-gradient-to-br from-stone-50 to-indigo-50/30 border border-stone-100">
               <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2">
-                蒙特卡洛模拟 · {mcSimResult.iterations.toLocaleString()}次
+                <ExplainHover term="monteCarlo">
+                  <span className="cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">蒙特卡洛模拟</span>
+                </ExplainHover>
+                {' · '}{mcSimResult.iterations.toLocaleString()}次
               </p>
               <div className="grid grid-cols-3 gap-x-3 gap-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-stone-400">盈利概率</span>
+                  <ExplainHover term="profitProb">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">盈利概率</span>
+                  </ExplainHover>
                   <span className={`font-semibold ${mcSimResult.profitProb >= 0.5 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     <CountUp value={mcSimResult.profitProb * 100} decimals={1} suffix="%" runKey={resultsAnimNonce} />
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">中位收益</span>
+                  <ExplainHover term="evMedian">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">中位收益</span>
+                  </ExplainHover>
                   <span className={`font-mono ${mcSimResult.median >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     <CountUp
                       value={mcSimResult.median}
@@ -6512,7 +6520,9 @@ export default function ComboPage({ openModal }) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">平均收益</span>
+                  <ExplainHover term="evMean" align="right">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">平均收益</span>
+                  </ExplainHover>
                   <span className={`font-mono ${mcSimResult.mean >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     <CountUp
                       value={mcSimResult.mean}
@@ -6523,7 +6533,9 @@ export default function ComboPage({ openModal }) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">95%VaR</span>
+                  <ExplainHover term="var95">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">95%VaR</span>
+                  </ExplainHover>
                   <span className="text-rose-500 font-mono">
                     <CountUp
                       value={mcSimResult.var95}
@@ -6533,7 +6545,9 @@ export default function ComboPage({ openModal }) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">最大收益</span>
+                  <ExplainHover term="maxPnl">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">最大收益</span>
+                  </ExplainHover>
                   <span className="text-emerald-600 font-mono">
                     <CountUp
                       value={mcSimResult.maxPnl}
@@ -6544,7 +6558,9 @@ export default function ComboPage({ openModal }) {
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-stone-400">全亏概率</span>
+                  <ExplainHover term="allLose" align="right">
+                    <span className="text-stone-400 cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">全亏概率</span>
+                  </ExplainHover>
                   <span className="text-rose-500 font-mono">
                     <CountUp value={mcSimResult.allLoseProb * 100} decimals={1} suffix="%" runKey={resultsAnimNonce} />
                   </span>
