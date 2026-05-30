@@ -448,13 +448,17 @@ export default function SettlePage() {
     setExpandedCombo((prev) => (prev && ids.has(prev) ? null : prev))
   }
 
-  const triggerWaxSealStamp = (target) => {
+  const triggerWaxSealStamp = (target, options = {}) => {
     const point = getWaxSealStampPoint(target)
     setWaxSealBurst((prev) => ({
       active: true,
       token: prev.token + 1,
       x: point.x,
       y: point.y,
+      // A hit earns an emerald, celebratory seal; everything else (a loss,
+      // or a mixed batch) keeps the sober amber stamp.
+      tone: options.tone === 'win' ? 'win' : 'neutral',
+      profit: Number.isFinite(options.profit) ? options.profit : null,
     }))
   }
 
@@ -469,7 +473,9 @@ export default function SettlePage() {
       window.alert(error)
       return
     }
-    triggerWaxSealStamp(event?.currentTarget)
+    const isWin = form.matches.every((match) => match.isCorrect === true)
+    const profit = Number((Number.parseFloat(form.revenues) - combo.totalInputs).toFixed(2))
+    triggerWaxSealStamp(event?.currentTarget, { tone: isWin ? 'win' : 'neutral', profit })
     applySettlement(combo, form)
 
     // 结算后自动微调自适应权重（安全约束：单次 ±0.02，总量 ≤0.08）

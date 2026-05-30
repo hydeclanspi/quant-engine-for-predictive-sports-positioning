@@ -21,13 +21,18 @@ export const getWaxSealStampPoint = (target) => {
 }
 
 export default function WaxSealStampOverlay({ burst, onDone }) {
+  const isWin = burst?.tone === 'win'
+  // A win runs a touch longer so the spark ring + rising profit figure can
+  // resolve before the layer unmounts.
+  const ttl = isWin ? 1680 : 980
+
   useEffect(() => {
     if (!burst?.active) return undefined
     const timer = window.setTimeout(() => {
       onDone?.()
-    }, 980)
+    }, ttl)
     return () => window.clearTimeout(timer)
-  }, [burst?.active, burst?.token, onDone])
+  }, [burst?.active, burst?.token, onDone, ttl])
 
   if (!burst?.active) return null
 
@@ -35,10 +40,11 @@ export default function WaxSealStampOverlay({ burst, onDone }) {
     left: `${burst.x}px`,
     top: `${burst.y}px`,
   }
+  const showProfit = isWin && Number.isFinite(burst.profit) && burst.profit > 0
 
   return (
     <div className="wax-seal-burst-layer" aria-hidden="true">
-      <div key={burst.token} className="wax-seal-burst-anchor" style={style}>
+      <div key={burst.token} className={`wax-seal-burst-anchor${isWin ? ' is-win' : ''}`} style={style}>
         <div className="wax-seal-burst-ripple wax-seal-burst-ripple-1" />
         <div className="wax-seal-burst-ripple wax-seal-burst-ripple-2" />
         <div className="wax-seal-burst-impact-glow" />
@@ -50,6 +56,16 @@ export default function WaxSealStampOverlay({ burst, onDone }) {
           <div className="wax-seal-burst-divider" />
           <span className="wax-seal-burst-cs">CS</span>
         </div>
+        {isWin && (
+          <div className="wax-seal-burst-sparks">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <span key={i} className="wax-seal-burst-spark" style={{ '--spark-i': i }} />
+            ))}
+          </div>
+        )}
+        {showProfit && (
+          <span className="wax-seal-burst-profit">+¥{Math.round(burst.profit)}</span>
+        )}
       </div>
     </div>
   )
