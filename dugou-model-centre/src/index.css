@@ -3640,7 +3640,9 @@
   to { opacity: 1; transform: translateY(0) translateX(0); }
 }
 
-/* Ethereal hairline connector (button → coachmark), drawn in on appear. */
+/* Ethereal hairline connector (button → coachmark). Fades in together
+   with the coachmark — same delay + duration — so the line and the chip
+   surface as one, rather than the line sweeping in a beat later. */
 .combo-expand-connector {
   position: absolute;
   left: calc(100% - 8px);
@@ -3650,6 +3652,8 @@
   overflow: visible;
   pointer-events: none;
   z-index: 3;
+  opacity: 0;
+  animation: comboConnectorIn 0.5s cubic-bezier(0.22, 1, 0.36, 1) 0.12s both;
 }
 
 .combo-expand-connector-line {
@@ -3657,23 +3661,16 @@
   stroke: url(#comboConnectorStroke);
   stroke-width: 1.4;
   stroke-linecap: round;
-  stroke-dasharray: 1;
-  stroke-dashoffset: 1;
-  animation: comboConnectorDraw 0.72s cubic-bezier(0.65, 0, 0.35, 1) 0.1s forwards;
 }
 
 .combo-expand-connector-dot {
   fill: #a5b4fc;
-  opacity: 0;
-  animation: comboConnectorDot 0.4s ease 0.72s forwards;
+  opacity: 0.9;
 }
 
-@keyframes comboConnectorDraw {
-  to { stroke-dashoffset: 0; }
-}
-
-@keyframes comboConnectorDot {
-  to { opacity: 0.9; }
+@keyframes comboConnectorIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3681,8 +3678,7 @@
   .combo-expand-btn.is-nudging svg { animation: none; }
   .combo-expand-coach { animation: none; }
   .combo-expand-coach-spark { animation: none; opacity: 0.85; }
-  .combo-expand-connector-line { animation: none; stroke-dashoffset: 0; }
-  .combo-expand-connector-dot { animation: none; opacity: 0.9; }
+  .combo-expand-connector { animation: none; opacity: 1; }
 }
 
 /* ============================================================

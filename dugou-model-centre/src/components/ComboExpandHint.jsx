@@ -129,9 +129,9 @@ export default function ComboExpandHint({ collapsed, onToggle }) {
       </button>
       {coachOpen && (
         <>
-          {/* Ethereal anime-style hairline: button → coachmark. The path
-              normalises to pathLength=1 so the draw-in animation is
-              independent of the curve's true length. */}
+          {/* Ethereal anime-style hairline: button → coachmark. Fades in
+              in lockstep with the coachmark chip (see .combo-expand-connector
+              in index.css) so the two surface together. */}
           <svg
             className="combo-expand-connector"
             viewBox="0 0 64 34"
@@ -147,7 +147,6 @@ export default function ComboExpandHint({ collapsed, onToggle }) {
             </defs>
             <path
               className="combo-expand-connector-line"
-              pathLength={1}
               d="M4 28 C 20 26, 24 3, 46 0"
             />
             <circle className="combo-expand-connector-dot" cx="46" cy="0" r="1.9" />
