@@ -3870,6 +3870,49 @@
 }
 
 /* ============================================================
+   ConfidenceRing — radial gauge on the 模型收口验证 card. The arc
+   sweep is CSS-driven (not rAF) so it resolves in background tabs.
+   ============================================================ */
+
+.confidence-ring {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.confidence-ring-svg {
+  transform: rotate(-90deg); /* begin the arc at 12 o'clock */
+}
+
+.confidence-ring-progress {
+  stroke-dashoffset: var(--ring-target);
+  animation-name: confidenceRingSweep;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  animation-fill-mode: both;
+  /* animation-duration is set inline per instance */
+}
+
+@keyframes confidenceRingSweep {
+  from { stroke-dashoffset: var(--ring-circumference); }
+  to { stroke-dashoffset: var(--ring-target); }
+}
+
+.confidence-ring-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .confidence-ring-progress {
+    animation: none;
+    stroke-dashoffset: var(--ring-target);
+  }
+}
+
+/* ============================================================
    Global Bottom Bar — brand micro-touchpoint
    ============================================================ */
 

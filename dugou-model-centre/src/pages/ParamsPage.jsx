@@ -66,6 +66,8 @@ import { isPreviewMode } from '../lib/displayMode'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
+import ConfidenceRing from '../components/ConfidenceRing'
+import CountUp from '../components/CountUp'
 
 const TYS_BASE_FACTORS = {
   S: 1.08,
@@ -3065,6 +3067,22 @@ export default function ParamsPage({ openModal }) {
           badge: 'bg-stone-100 border-stone-200 text-stone-600',
         }
 
+  // 「验证揭晓」hero ring: walk-forward consistency — the share of time
+  // windows where calibration improved Brier. A genuine [0,1] figure
+  // (no invented composite) so the arc fill is honest.
+  const validationConfidence =
+    modelValidation.walkForward && modelValidation.walkForward.length > 0
+      ? modelValidation.positiveWalkForward / modelValidation.walkForward.length
+      : 0
+  const validationRingColor =
+    modelValidation.stability === 'stable'
+      ? '#10b981'
+      : modelValidation.stability === 'watch'
+        ? '#f59e0b'
+        : modelValidation.stability === 'risk'
+          ? '#f43f5e'
+          : '#a8a29e'
+
   const modelValidationGlossary = useMemo(() => {
     const sampleCount = Number(modelValidation.sampleCount || 0)
     const minimumSamples = Number(modelValidation.minimumSamples || 24)
@@ -4908,6 +4926,53 @@ export default function ParamsPage({ openModal }) {
           <p className="text-sm text-stone-500">{modelValidation.message || '暂无验证结果。'}</p>
         ) : (
           <>
+            {modelValidation.walkForward.length > 0 && (
+              <div className="mb-4 flex items-center gap-4 rounded-xl border border-stone-100 bg-gradient-to-br from-stone-50 to-indigo-50/30 p-3.5">
+                <ConfidenceRing
+                  value={validationConfidence}
+                  color={validationRingColor}
+                  size={72}
+                  stroke={7}
+                  runKey={modelValidation.sampleCount}
+                >
+                  <div className="flex flex-col items-center leading-none">
+                    <CountUp
+                      value={validationConfidence * 100}
+                      decimals={0}
+                      suffix="%"
+                      duration={1100}
+                      runKey={modelValidation.sampleCount}
+                      className="text-base font-semibold text-stone-700"
+                    />
+                    <span className="mt-0.5 text-[9px] text-stone-400">正向窗口</span>
+                  </div>
+                </ConfidenceRing>
+                <div className="min-w-0">
+                  <ExplainHover
+                    card={{
+                      title: '校准可信度',
+                      what: '正向 walk-forward 窗口占比',
+                      describes:
+                        '把样本按时间切成多个窗口，逐窗用更早的数据做校准、更晚的数据做检验；该比例 = 校准让 Brier 改善的窗口数 ÷ 总窗口数。越高代表校准在不同时间段都稳定有效，而非过拟合某一段。',
+                      current: `${modelValidation.positiveWalkForward}/${modelValidation.walkForward.length} 窗口`,
+                      status: modelValidationMeta.label,
+                    }}
+                  >
+                    <span className={`cursor-help text-sm font-semibold decoration-dotted underline decoration-stone-300/80 underline-offset-[2px] ${modelValidationMeta.tone}`}>
+                      校准收口验证 · {modelValidationMeta.label}
+                    </span>
+                  </ExplainHover>
+                  <p className="mt-1 text-[11px] leading-relaxed text-stone-500">
+                    在 {modelValidation.walkForward.length} 个 walk-forward 窗口中，校准让{' '}
+                    {modelValidation.positiveWalkForward} 个窗口的预测更准；Brier 整体改善{' '}
+                    <span className={modelValidation.brier.gainPct >= 0 ? 'text-emerald-600' : 'text-rose-500'}>
+                      {toSigned(modelValidation.brier.gainPct, 2, '%')}
+                    </span>
+                    。
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-4 gap-3 mb-4">
               <div className="p-3 bg-stone-50 rounded-xl">
                 <ExplainHover card={modelValidationGlossary.sampleCount}>
