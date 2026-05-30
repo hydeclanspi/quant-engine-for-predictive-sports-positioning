@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { Activity, TrendingUp, X } from 'lucide-react'
 import { assessComboFragility, getOddsBand } from '../lib/analytics'
 import { getInvestments } from '../lib/localData'
+import ExplainHover from './ExplainHover'
 
 const getMedian = (values = []) => {
   const nums = values
@@ -335,7 +336,11 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-50 to-sky-100/80 border border-sky-200/50">
               <TrendingUp size={14} strokeWidth={2} className="text-sky-500" />
             </div>
-            <h3 className="font-medium text-stone-700 tracking-tight">依赖风险矩阵智能</h3>
+            <h3 className="font-medium text-stone-700 tracking-tight">
+              <ExplainHover term="fragility">
+                <span className="cursor-help underline decoration-dotted decoration-stone-300 underline-offset-4">依赖风险矩阵智能</span>
+              </ExplainHover>
+            </h3>
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] border border-sky-200/80 bg-[linear-gradient(120deg,rgba(224,242,254,0.86),rgba(255,255,255,0.9)_52%,rgba(224,242,254,0.84))] text-[11px] font-medium text-sky-700 tracking-[0.02em] shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_10px_22px_-18px_rgba(14,165,233,0.5)] backdrop-blur-[1px]">
             <Activity size={12} strokeWidth={1.9} className="text-sky-500" />
@@ -789,7 +794,11 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
             <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-sky-50 to-sky-100/80 border border-sky-200/50">
               <TrendingUp size={14} strokeWidth={2} className="text-sky-500" />
             </div>
-            <h3 className="font-medium text-stone-700 tracking-tight">依赖风险矩阵智能</h3>
+            <h3 className="font-medium text-stone-700 tracking-tight">
+              <ExplainHover term="fragility">
+                <span className="cursor-help underline decoration-dotted decoration-stone-300 underline-offset-4">依赖风险矩阵智能</span>
+              </ExplainHover>
+            </h3>
           </div>
           <div className="flex items-center gap-2.5">
             <button

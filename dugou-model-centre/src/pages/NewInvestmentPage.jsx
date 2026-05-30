@@ -6,6 +6,7 @@ import { handleNoteShortcut } from '../lib/noteFormatting'
 import { getPredictionCalibrationContext, getModeKellyRecommendations } from '../lib/analytics'
 import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryRecord } from '../lib/entryParsing'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
+import ExplainHover from '../components/ExplainHover'
 import {
   buildAtomicMatchProfile,
   calcAtomicEquivalentOdds,
@@ -1640,8 +1641,10 @@ export default function NewInvestmentPage() {
         <div className="px-6 py-6 bg-gradient-to-r from-stone-50 to-orange-50/30 border-t border-stone-100">
           <div className="flex items-center justify-between gap-4 max-[960px]:flex-wrap">
             <div className="flex items-center gap-6 min-w-0 flex-nowrap">
-              <div>
-                <span className="text-xs text-stone-400 block whitespace-nowrap">综合 Odds</span>
+              <div className="flex flex-col items-start">
+                <ExplainHover term="odds">
+                  <span className="text-xs text-stone-400 block whitespace-nowrap cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">综合 Odds</span>
+                </ExplainHover>
                 <span className="text-xl font-semibold text-stone-800">{Number.isFinite(combinedOdds) ? combinedOdds.toFixed(2) : '--'}</span>
               </div>
               <div className="w-px h-10 bg-stone-200" />

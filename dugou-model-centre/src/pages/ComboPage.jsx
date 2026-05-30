@@ -6762,7 +6762,9 @@ export default function ComboPage({ openModal }) {
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-stone-700 truncate">{row.combo}</p>
                     <p className="text-[11px] text-stone-400">
-                      <span className="text-violet-600 font-medium">{row.legs || row.subset.length}关</span> · Odds {row.combinedOdds.toFixed(2)} · Hit {row.winRate} · Profit {row.profitWinRate}
+                      <ExplainHover term="leg">
+                        <span className="text-violet-600 font-medium cursor-help underline decoration-dotted decoration-violet-300 underline-offset-2">{row.legs || row.subset.length}关</span>
+                      </ExplainHover> · Odds {row.combinedOdds.toFixed(2)} · Hit {row.winRate} · Profit {row.profitWinRate}
                     </p>
                   </div>
                   <div className="text-right">
