@@ -3599,7 +3599,7 @@
 .combo-expand-coach {
   position: absolute;
   left: calc(100% + 34px);
-  top: -13px;
+  top: -20px;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;

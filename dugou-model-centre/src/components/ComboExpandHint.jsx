@@ -27,7 +27,7 @@ const SESSION_HINT_KEY = 'dugou.combo_expand_hint.v1'
 const START_DELAY_MS = 650 // let the page settle before nudging
 const SONAR_MS = 2500 // sonar phase (3 rings staggered)
 const NUDGE_MS = 1300 // directional chevron nudge phase
-const COACH_VISIBLE_MS = 4600 // coachmark on-screen lifetime
+const COACH_VISIBLE_MS = 6900 // coachmark on-screen lifetime
 
 const alreadyHintedThisSession = () => {
   try {
@@ -148,9 +148,9 @@ export default function ComboExpandHint({ collapsed, onToggle }) {
             <path
               className="combo-expand-connector-line"
               pathLength={1}
-              d="M4 28 C 20 26, 24 9, 46 7"
+              d="M4 28 C 20 26, 24 3, 46 0"
             />
-            <circle className="combo-expand-connector-dot" cx="46" cy="7" r="1.9" />
+            <circle className="combo-expand-connector-dot" cx="46" cy="0" r="1.9" />
           </svg>
           <div className="combo-expand-coach" role="status">
             <span className="combo-expand-coach-spark" aria-hidden="true">✦</span>
