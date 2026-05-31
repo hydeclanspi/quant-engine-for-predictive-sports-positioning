@@ -1550,9 +1550,7 @@ export default function DashboardPage({ openModal }) {
         ))}
       </div>
 
-      <CapitalCurveReveal investments={capitalInvestments} compact />
-
-      <div className="-mt-[14px] space-y-2.5">
+      <div className="space-y-2.5">
         {showSmartReminder && (
           <div className="rounded-lg border border-stone-200/80 bg-white/85 px-3 py-1.5 shadow-[0_1px_8px_rgba(28,25,23,0.06)] backdrop-blur-sm flex items-center gap-2.5">
             <span className="text-[10px] uppercase tracking-[0.14em] text-stone-400">Evidence Brief</span>
@@ -1813,6 +1811,8 @@ export default function DashboardPage({ openModal }) {
           </div>
         </div>
       </div>
+
+      <CapitalCurveReveal investments={capitalInvestments} compact />
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl p-6 border border-stone-100">
         <div className="flex items-center justify-between mb-4">
