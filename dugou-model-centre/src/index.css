@@ -4765,6 +4765,41 @@
   }
 }
 
+/* 赛前评分权重「均衡器」版式：行内可编辑权重值——去掉大输入框，
+   数值即正文（粗体、按 tone 着色），点一下就地改；常态留一道极淡虚线
+   暗示可编辑，悬停/聚焦时收紧为同色虚线。隐藏数字微调箭头。 */
+.pmw-value-input {
+  width: 4ch;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-bottom: 1.5px dashed rgba(120, 113, 108, 0.28);
+  border-radius: 2px;
+  text-align: right;
+  font-weight: 700;
+  line-height: 1.15;
+  outline: none;
+  cursor: text;
+  caret-color: currentColor;
+  -moz-appearance: textfield;
+  transition: border-color 0.18s ease;
+}
+.pmw-value-input::-webkit-outer-spin-button,
+.pmw-value-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.pmw-value-input:hover,
+.pmw-value-input:focus {
+  border-bottom-color: currentColor;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pmw-value-input {
+    transition: none;
+  }
+}
+
 /* ============================================================
    Global Bottom Bar — brand micro-touchpoint
    ============================================================ */

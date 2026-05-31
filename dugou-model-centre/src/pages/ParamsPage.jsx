@@ -4708,21 +4708,24 @@ export default function ParamsPage({ openModal }) {
           <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
             {WEIGHT_FIELDS.map((field, index) => {
               const toneSet = [
-                'from-indigo-50/85 to-white border-indigo-100',
-                'from-cyan-50/85 to-white border-cyan-100',
-                'from-sky-50/85 to-white border-sky-100',
-                'from-violet-50/85 to-white border-violet-100',
-                'from-emerald-50/85 to-white border-emerald-100',
-                'from-amber-50/85 to-white border-amber-100',
+                { card: 'from-indigo-50/85 to-white border-indigo-100', accent: '#6366f1', text: '#4338ca', track: 'rgba(99, 102, 241, 0.16)' },
+                { card: 'from-cyan-50/85 to-white border-cyan-100', accent: '#06b6d4', text: '#0e7490', track: 'rgba(6, 182, 212, 0.16)' },
+                { card: 'from-sky-50/85 to-white border-sky-100', accent: '#0ea5e9', text: '#0369a1', track: 'rgba(14, 165, 233, 0.16)' },
+                { card: 'from-violet-50/85 to-white border-violet-100', accent: '#8b5cf6', text: '#6d28d9', track: 'rgba(139, 92, 246, 0.16)' },
+                { card: 'from-emerald-50/85 to-white border-emerald-100', accent: '#10b981', text: '#047857', track: 'rgba(16, 185, 129, 0.16)' },
+                { card: 'from-amber-50/85 to-white border-amber-100', accent: '#f59e0b', text: '#b45309', track: 'rgba(245, 158, 11, 0.16)' },
               ]
               const tone = toneSet[index % toneSet.length]
+              const weightVal = Number(config[field.key] || 0)
+              const share = totalPreMatchWeight > 0
+                ? Math.min(100, Math.max(0, (weightVal / totalPreMatchWeight) * 100))
+                : 0
               return (
-                <div key={field.key} className={`p-3 rounded-xl border bg-gradient-to-br ${tone}`}>
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-xs text-stone-500 block">{maskText(field.label)}</label>
-                    <span className="text-[10px] text-stone-400">{maskText(field.hint)}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
+                <div key={field.key} className={`p-3 rounded-xl border bg-gradient-to-br ${tone.card}`}>
+                  <div className="flex items-baseline justify-between gap-2">
+                    <label className="text-xs text-stone-500 truncate" title={maskText(field.label)}>
+                      {maskText(field.label)}
+                    </label>
                     <input
                       type="number"
                       step="0.01"
@@ -4730,8 +4733,28 @@ export default function ParamsPage({ openModal }) {
                       max="1.5"
                       value={config[field.key]}
                       onChange={(event) => handleConfigChange(field.key, event.target.value)}
-                      className="input-glow w-full px-3 py-2 rounded-lg text-sm text-right border border-white/90 bg-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.85)]"
+                      className="pmw-value-input text-lg tabular-nums"
+                      style={{ color: tone.text }}
+                      aria-label={maskText(field.label)}
                     />
+                  </div>
+                  <div
+                    className="mt-2 h-1.5 w-full overflow-hidden rounded-full"
+                    style={{ background: tone.track }}
+                  >
+                    <div
+                      className="h-full rounded-full transition-[width] duration-500 ease-out"
+                      style={{ width: `${share}%`, background: tone.accent }}
+                    />
+                  </div>
+                  <div className="mt-1.5 flex items-center justify-between">
+                    <span className="text-[10px] text-stone-400 truncate">{maskText(field.hint)}</span>
+                    <span
+                      className="text-[10px] font-medium tabular-nums"
+                      style={{ color: tone.text, opacity: 0.72 }}
+                    >
+                      占 {share.toFixed(0)}%
+                    </span>
                   </div>
                 </div>
               )
