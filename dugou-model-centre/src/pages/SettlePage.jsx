@@ -8,10 +8,11 @@ import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSeal
 import { useLabels } from '../lib/labels'
 import { isPreviewMode } from '../lib/displayMode'
 
-// 演示态首屏「秀一下」：进入待结算页 0.9s 后，自动把第一条记录「展卷」展开
-// （复用 Quick Input 的 qi-collapse 动效），并掠过一道扫描线——只展开，不收回。
-const SETTLE_PEEK_DELAY_MS = 900
-const SETTLE_PEEK_SCAN_MS = 1300 // 扫描线播放时长后撤下 is-peeking（展开态保留）
+// 演示态首屏「展卷」：进入待结算页 1.7s 后，自动把第一条记录从容「展卷」展开
+// （复用 qi-collapse 高度动效，但走待结算专属的 is-peek-unfurl 慢展 + 内容无回弹），
+// 同时顶部漫起一束「破晓」柔光自我介绍——只展开，不收回。
+const SETTLE_PEEK_DELAY_MS = 1700
+const SETTLE_PEEK_DAWN_MS = 1400 // 破晓柔光播放时长后撤下 is-peek-dawn（展卷态常驻保留）
 const prefersReducedMotion = () => {
   try {
     return window.matchMedia('(prefers-reduced-motion: reduce)').matches
@@ -153,8 +154,10 @@ export default function SettlePage() {
     const initial = createPendingCombos()
     return initial.length > 0 ? initial[0].id : null
   })
-  // 仅演示态首屏「秀一下」时，给首条记录加一道扫描线（展开后即撤下）。
-  const [peekingComboId, setPeekingComboId] = useState(null)
+  // 演示态首屏「展卷」：is-peek-unfurl 常驻（首条慢展、内容无回弹，手动再展亦从容）；
+  // is-peek-dawn 瞬时（顶部破晓柔光，播放一次后撤下，手动再展不再复现）。
+  const [peekUnfurlComboId, setPeekUnfurlComboId] = useState(null)
+  const [peekDawnComboId, setPeekDawnComboId] = useState(null)
   const [forms, setForms] = useState(() => createInitialForms(createPendingCombos()))
   const [selectedComboIds, setSelectedComboIds] = useState({})
   const [batchRating, setBatchRating] = useState('')
@@ -214,14 +217,14 @@ export default function SettlePage() {
     })
   }, [pendingCombos])
 
-  // 演示态首屏「秀一下」：进入页面后稍候，自动「展卷」展开第一条待结算记录。
-  // 复用 Quick Input 的 qi-collapse 动效（展开缓出 + 内容重力 Q 弹 + 一道扫描线），
-  // 但只展开、不收回——让首条记录自我介绍，又保持整页克制的默认折叠态。
+  // 演示态首屏「展卷」：进入页面后稍候，自动从容展开第一条待结算记录。
+  // 走待结算专属的 is-peek-unfurl（慢展 + 内容无回弹）+ is-peek-dawn（顶部破晓柔光），
+  // 只展开、不收回——让首条记录自我介绍，又保持整页克制的默认折叠态。
   useEffect(() => {
     if (!isPreviewMode()) return undefined
     const firstId = createPendingCombos()[0]?.id
     if (!firstId) return undefined
-    // 降级：尊重 prefers-reduced-motion——直接展开，不加动效/扫描线。
+    // 降级：尊重 prefers-reduced-motion——直接展开，不加任何动效/柔光。
     if (prefersReducedMotion()) {
       setExpandedCombo((prev) => prev ?? firstId)
       return undefined
@@ -230,13 +233,15 @@ export default function SettlePage() {
     timers.push(
       window.setTimeout(() => {
         setExpandedCombo((prev) => prev ?? firstId)
-        setPeekingComboId(firstId)
+        setPeekUnfurlComboId(firstId)
+        setPeekDawnComboId(firstId)
       }, SETTLE_PEEK_DELAY_MS),
     )
     timers.push(
       window.setTimeout(() => {
-        setPeekingComboId((cur) => (cur === firstId ? null : cur))
-      }, SETTLE_PEEK_DELAY_MS + SETTLE_PEEK_SCAN_MS),
+        // 破晓柔光退场（撤下 is-peek-dawn）；is-peek-unfurl 常驻不动。
+        setPeekDawnComboId((cur) => (cur === firstId ? null : cur))
+      }, SETTLE_PEEK_DELAY_MS + SETTLE_PEEK_DAWN_MS),
     )
     return () => timers.forEach((t) => window.clearTimeout(t))
     // 仅挂载时执行一次；演示态在页面生命周期内稳定。
@@ -726,8 +731,8 @@ export default function SettlePage() {
 
             <div
               className={`qi-collapse${expandedCombo === combo.id ? ' is-open' : ''}${
-                peekingComboId === combo.id ? ' is-peeking' : ''
-              }`}
+                peekUnfurlComboId === combo.id ? ' is-peek-unfurl' : ''
+              }${peekDawnComboId === combo.id ? ' is-peek-dawn' : ''}`}
               inert={expandedCombo === combo.id ? undefined : ''}
             >
               <div className="qi-collapse-inner">

@@ -4685,6 +4685,79 @@
   }
 }
 
+/* ── 待结算首屏「展卷」专用（is-peek-unfurl / is-peek-dawn）────────────────
+   待结算大卡片展开后远超一屏，重点在「从折叠 0 态从容下展」这一动作本身，而非
+   展开完成后的收尾（其下半身根本不在可视区内）。故此处不复用 Quick Input 的
+   重力 Q 弹 + 扫描线，而是：
+   - 展卷（is-peek-unfurl，常驻）：更长、更匀速的下展，让下沿在可视区内稳稳滑过；
+     内容只淡入轻沉、绝不回弹。常驻故手动再展亦保持同一份从容、安静。
+   - 破晓（is-peek-dawn，瞬时）：顶部锚定的一束柔光自上而下晕染后随即隐去，语义
+     是「内容苏醒」而非「激光扫过（秀一下）」；播放一次即撤下，手动再展不再复现。 */
+.qi-collapse.is-peek-unfurl.is-open {
+  /* 从容下展：更长时长 + 近匀速缓出，让下沿在可视区内稳稳滑过而非瞬间窜过。 */
+  transition: grid-template-rows 0.9s cubic-bezier(0.33, 0, 0.22, 1);
+}
+
+/* 内容随高度揭开：仅淡入 + 轻微下沉归位，绝不过冲回弹（无「弹」，只「展」）。 */
+.qi-collapse.is-peek-unfurl.is-open .qi-collapse-inner {
+  animation: qiUnfurlCalm 0.96s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes qiUnfurlCalm {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+    filter: blur(2px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* 破晓柔光：顶部锚定，自上而下由靛蓝过渡到天青再到透明；淡入后随即退去。 */
+.qi-collapse.is-peek-dawn.is-open .qi-collapse-inner::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 58%;
+  max-height: 360px;
+  z-index: 1;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(99, 102, 241, 0.16) 0%,
+    rgba(56, 189, 248, 0.07) 46%,
+    rgba(56, 189, 248, 0) 100%
+  );
+  animation: qiDawn 1.25s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+
+@keyframes qiDawn {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  35% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  70% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(0);
+  }
+}
+
 /* 折叠/展开箭头：单个 ChevronRight 旋转 90° 即为下展态，过渡平滑高级。 */
 .qi-chevron {
   transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
@@ -4703,6 +4776,15 @@
     animation: none;
   }
   .qi-collapse.is-peeking .qi-collapse-inner::after {
+    display: none;
+  }
+  .qi-collapse.is-peek-unfurl.is-open {
+    transition: none;
+  }
+  .qi-collapse.is-peek-unfurl.is-open .qi-collapse-inner {
+    animation: none;
+  }
+  .qi-collapse.is-peek-dawn.is-open .qi-collapse-inner::before {
     display: none;
   }
   .qi-chevron {
