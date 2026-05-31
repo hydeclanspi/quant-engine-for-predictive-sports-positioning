@@ -70,6 +70,7 @@ import ConfidenceRing from '../components/ConfidenceRing'
 import CountUp from '../components/CountUp'
 import AdaptiveLoopDiagram from '../components/AdaptiveLoopDiagram'
 import WalkForwardStrip from '../components/WalkForwardStrip'
+import KellyModeCard from '../components/KellyModeCard'
 import ExplainHover from '../components/ExplainHover'
 
 const TYS_BASE_FACTORS = {
@@ -2396,6 +2397,14 @@ export default function ParamsPage({ openModal }) {
     [showAllKellyRows, kellyBacktest.globalRows],
   )
   const hasMoreKellyRows = (kellyBacktest.globalRows || []).length > 6
+  const kellyModeMaxDrawdown = useMemo(
+    () =>
+      Math.max(
+        1,
+        ...(kellyBacktest.modeRecommendations || []).map((row) => Number(row.best?.maxDrawdown) || 0),
+      ),
+    [kellyBacktest.modeRecommendations],
+  )
   const recommendedKellyDivisor = useMemo(() => {
     if (!modeKellyRows || modeKellyRows.length === 0) return 4
     const totalSamples = modeKellyRows.reduce((sum, row) => sum + (row.samples || 0), 0)
@@ -4864,23 +4873,15 @@ export default function ParamsPage({ openModal }) {
         )}
 
         <div className="mt-4 grid grid-cols-3 gap-3">
-          {kellyBacktest.modeRecommendations.map((row) => (
-            <div key={`mode-kelly-${row.mode}`} className="p-3 rounded-xl bg-stone-50 border border-stone-100">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium text-stone-700">{maskMode(row.mode)}</span>
-                <button
-                  onClick={() => applyKellyDivisor(row.best?.divisor)}
-                  disabled={!row.best}
-                  className="text-[10px] px-2 py-1 rounded-md bg-white border border-stone-200 text-stone-500 hover:text-amber-600 disabled:opacity-40"
-                >
-                  应用
-                </button>
-              </div>
-              <p className="text-xs text-stone-400 mt-1">建议分母 {row.best?.divisor || '--'}</p>
-              <p className={`text-xs mt-1 ${row.best?.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                ROI {row.best ? toSigned(row.best.roi, 1, '%') : '--'} · 回撤 {row.best ? `-${row.best.maxDrawdown.toFixed(1)}%` : '--'} · MC {row.best?.runs || 0}
-              </p>
-            </div>
+          {kellyBacktest.modeRecommendations.map((row, index) => (
+            <KellyModeCard
+              key={`mode-kelly-${row.mode}`}
+              label={maskMode(row.mode)}
+              best={row.best}
+              accentIndex={index}
+              maxDrawdown={kellyModeMaxDrawdown}
+              onApply={() => applyKellyDivisor(row.best?.divisor)}
+            />
           ))}
         </div>
         <p className="text-[11px] text-stone-400 mt-3">Mode 建议用于参考，可点击“应用”将该分母设为全局。</p>

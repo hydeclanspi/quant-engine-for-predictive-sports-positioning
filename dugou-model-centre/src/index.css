@@ -4445,6 +4445,158 @@
 }
 
 /* ============================================================
+   Kelly 分母回测台 · Mode 策略推荐卡 (KellyModeCard)
+   原本是三宫格里几个寡淡的文字盒子。改成带彩色身份点的风险/收益小卡：
+   大号「建议分母」+ ROI + 按回撤严重度分档着色(绿/琥珀/玫红)的「风险计」
+   长条——六个策略一眼看清各自的稳健度。悬停轻微上浮，仅此一处动效。
+   ============================================================ */
+.kelly-mode-card {
+  --kelly-accent: #10b981;
+  --kelly-accent-soft: rgba(16, 185, 129, 0.16);
+  position: relative;
+  padding: 12px 13px 13px;
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ffffff, #fafaf9);
+  border: 1px solid #f0efed;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.kelly-mode-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--kelly-accent-soft);
+  box-shadow: 0 13px 28px -20px rgba(41, 37, 36, 0.55);
+}
+.kelly-mode-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.kelly-mode-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #44403c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.kelly-mode-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--kelly-accent);
+  box-shadow: 0 0 0 3px var(--kelly-accent-soft);
+}
+.kelly-mode-apply {
+  flex: none;
+  padding: 2px 9px;
+  border-radius: 8px;
+  border: 1px solid #e7e5e4;
+  background: #ffffff;
+  font-size: 10px;
+  color: #78716c;
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+.kelly-mode-apply:hover:not(:disabled) {
+  color: #b45309;
+  border-color: rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.08);
+}
+.kelly-mode-apply:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.kelly-mode-body {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 11px;
+}
+.kelly-mode-divisor {
+  display: flex;
+  flex-direction: column;
+}
+.kelly-mode-divisor-val {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: #292524;
+  font-variant-numeric: tabular-nums;
+}
+.kelly-mode-divisor-label {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #a8a29e;
+}
+.kelly-mode-roi {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.kelly-mode-roi-val {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.kelly-mode-roi.is-up .kelly-mode-roi-val {
+  color: #059669;
+}
+.kelly-mode-roi.is-down .kelly-mode-roi-val {
+  color: #e11d48;
+}
+.kelly-mode-roi-label {
+  margin-top: 3px;
+  font-size: 10px;
+  color: #a8a29e;
+}
+.kelly-mode-risk {
+  margin-top: 12px;
+}
+.kelly-mode-risk-track {
+  display: block;
+  height: 4px;
+  border-radius: 999px;
+  background: #f1ede9;
+  overflow: hidden;
+}
+.kelly-mode-risk-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.kelly-mode-risk-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #a8a29e;
+  font-variant-numeric: tabular-nums;
+}
+.kelly-mode-risk-mc {
+  color: #c4c1bd;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kelly-mode-card {
+    transition: none;
+  }
+  .kelly-mode-card:hover {
+    transform: none;
+  }
+  .kelly-mode-risk-fill {
+    transition: none;
+  }
+}
+
+/* ============================================================
    Quick Input 首屏「秀一下」(展卷 · 收锋)
    首屏 Quick Input 面板静息折叠；首次进入演示态时自动下拉展示再弹回。
    - 展开（展卷）：高度 0fr→1fr 缓出揭开，内容带重力 Q 弹落定，并掠过一道
