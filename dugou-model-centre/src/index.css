@@ -4200,14 +4200,14 @@
   /* Slight negative gap pulls the bubble down a touch so it points more
      directly at the loop diagram instead of crowding the card header. */
   margin-bottom: -4px;
-  max-width: 300px;
-  padding: 9px 12px;
-  border-radius: 11px;
+  max-width: 264px;
+  padding: 7px 10px;
+  border-radius: 10px;
   background: #4f46e5;
   color: #ffffff;
-  font-size: 11px;
-  line-height: 1.55;
-  box-shadow: 0 12px 28px -10px rgba(79, 70, 229, 0.6);
+  font-size: 10px;
+  line-height: 1.5;
+  box-shadow: 0 10px 24px -10px rgba(79, 70, 229, 0.6);
   cursor: pointer;
   z-index: 20;
   animation: adaptiveLoopCoachIn 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -4217,17 +4217,17 @@
   /* downward tail pointing at the diagram (right side, matching the anchor) */
   content: '';
   position: absolute;
-  right: 26px;
-  bottom: -4px;
-  width: 10px;
-  height: 10px;
+  right: 24px;
+  bottom: -3px;
+  width: 9px;
+  height: 9px;
   background: #4f46e5;
   border-radius: 2px;
   transform: rotate(45deg);
 }
 
 .adaptive-loop-coach-spark {
-  margin-right: 4px;
+  margin-right: 3px;
   color: #c7d2fe;
 }
 
