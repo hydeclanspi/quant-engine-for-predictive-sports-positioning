@@ -5866,6 +5866,8 @@
   display: block;
   width: 100%;
   height: 132px;
+  /* Draw-on origin: fully clipped from the right until revealed (see wipe). */
+  clip-path: inset(0 100% 0 0);
 }
 
 /* Compact band variant (Dashboard overview, between KPI row and 噪音过滤). */
@@ -5877,51 +5879,36 @@
   stroke-width: 2.25;
   stroke-linecap: round;
   stroke-linejoin: round;
-  /* Gap (2) deliberately longer than the dash (1) so that at the hidden
-     resting state (dashoffset:1) the pattern never restarts a dash within
-     the [0,1] path range — otherwise the round linecap renders a stray
-     green blob at the right endpoint before the draw-on begins. */
-  stroke-dasharray: 1 2;
-  stroke-dashoffset: 1;
 }
 
-.capital-curve.is-revealed .capital-curve-line {
-  animation: capitalCurveDraw 1.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+/* Draw-on is a left→right clip wipe over the whole plot (line + fill +
+   baseline) — NOT a stroke-dash trick. Under preserveAspectRatio="none"
+   non-uniform scaling, stroke-dasharray + pathLength normalisation is
+   unreliable: at wide aspect ratios the stroke can paint only partially even
+   at dashoffset:0, leaving the curve visually "short" at rest. A clip-path
+   inset is computed in the SVG's own CSS box and is immune to that distortion,
+   so the line is a solid full stroke that is simply revealed L→R. */
+.capital-curve.is-revealed .capital-curve-svg {
+  animation: capitalCurveWipe 1.2s cubic-bezier(0.5, 0, 0.22, 1) forwards;
 }
 
-@keyframes capitalCurveDraw {
+@keyframes capitalCurveWipe {
   to {
-    stroke-dashoffset: 0;
+    clip-path: inset(0 0 0 0);
   }
 }
 
 .capital-curve-area {
-  opacity: 0;
-}
-
-/* Fill ends in lockstep with the line's arrival (1.2s) — never ahead of the
-   bright frontier, so the curve never reads as "short" mid-reveal. */
-.capital-curve.is-revealed .capital-curve-area {
-  animation: capitalCurveFade 0.7s ease forwards;
-  animation-delay: 0.5s;
+  /* Revealed by the clip wipe along with the line — no separate fade. */
+  opacity: 1;
 }
 
 .capital-curve-zero {
   stroke: #d6d3d1;
   stroke-width: 1;
   stroke-dasharray: 3 4;
-  opacity: 0;
-}
-
-.capital-curve.is-revealed .capital-curve-zero {
-  animation: capitalCurveFade 0.6s ease forwards;
-  animation-delay: 0.2s;
-}
-
-@keyframes capitalCurveFade {
-  to {
-    opacity: 1;
-  }
+  /* Revealed by the clip wipe. */
+  opacity: 1;
 }
 
 .capital-curve-dot {
@@ -5950,13 +5937,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .capital-curve .capital-curve-line {
-    stroke-dashoffset: 0;
-    animation: none;
-  }
-  .capital-curve .capital-curve-area,
-  .capital-curve .capital-curve-zero {
-    opacity: 1;
+  .capital-curve .capital-curve-svg {
+    clip-path: inset(0 0 0 0);
     animation: none;
   }
   .capital-curve .capital-curve-dot {

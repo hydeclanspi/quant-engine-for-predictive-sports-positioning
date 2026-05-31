@@ -173,7 +173,6 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
           <path
             className="capital-curve-line"
             d={linePath}
-            pathLength="1"
             fill="none"
             stroke={accent}
             vectorEffect="non-scaling-stroke"
