@@ -4711,6 +4711,61 @@
 }
 
 /* ============================================================
+   演示态「时间近因权重」假改写入口
+   三个权重数字（1.4x / 1.15x / 1.0x）在演示态可点按就地自定义——纯视图
+   体验，绝不写入任何数据。静息时一道与色调同源（currentColor）的虚线下划线
+   暗示可编辑，悬停/聚焦加深；编辑态切换为就地输入框，右侧保留静态「x」。
+   ============================================================ */
+.rw-weight-trigger {
+  position: relative;
+  display: inline-block;
+  background: transparent;
+  border: 0;
+  margin: 0;
+  padding: 0 1px 3px;
+  cursor: text;
+  border-radius: 4px;
+  transition: background-color 0.18s ease;
+}
+.rw-weight-trigger::after {
+  content: '';
+  position: absolute;
+  left: 1px;
+  right: 1px;
+  bottom: 0;
+  border-bottom: 1.5px dashed currentColor;
+  opacity: 0.3;
+  transition: opacity 0.18s ease;
+}
+.rw-weight-trigger:hover {
+  background: rgba(15, 23, 42, 0.035);
+}
+.rw-weight-trigger:hover::after,
+.rw-weight-trigger:focus-visible::after {
+  opacity: 0.85;
+}
+.rw-weight-trigger:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18);
+}
+.rw-weight-input {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid currentColor;
+  outline: none;
+  margin: 0;
+  padding: 0;
+  min-width: 1.6ch;
+  caret-color: currentColor;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rw-weight-trigger,
+  .rw-weight-trigger::after {
+    transition: none;
+  }
+}
+
+/* ============================================================
    Global Bottom Bar — brand micro-touchpoint
    ============================================================ */
 

@@ -5,6 +5,7 @@ import { getInvestments } from '../lib/localData'
 import TimeRangePicker from '../components/TimeRangePicker'
 import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
+import { useDisplayMode, PREVIEW_MODE } from '../lib/displayMode'
 
 const PERIOD_LABELS = {
   '1w': '近一周',
@@ -727,6 +728,29 @@ export default function AnalysisPage({ openModal }) {
   const [leaguePages, setLeaguePages] = useState({})
   const [timePeriod, setTimePeriod] = useState('all')
   const [advantageMode, setAdvantageMode] = useState(MODE_ORDER[0])
+
+  // 演示态「时间近因权重」假改写入口：三个权重数字可点击自定义，仅存于本地视图
+  // 状态（按层级序号 0/1/2 记忆），绝不写入分析快照或任何持久化数据——纯体验。
+  const isPreview = useDisplayMode() === PREVIEW_MODE
+  const [weightOverrides, setWeightOverrides] = useState({})
+  const [editingWeightIdx, setEditingWeightIdx] = useState(null)
+  const [editingWeightValue, setEditingWeightValue] = useState('')
+  const startWeightEdit = (idx, current) => {
+    setEditingWeightValue(String(current).replace(/x$/i, ''))
+    setEditingWeightIdx(idx)
+  }
+  const commitWeightEdit = () => {
+    if (editingWeightIdx == null) return
+    const raw = editingWeightValue.trim()
+    setWeightOverrides((prev) => {
+      const next = { ...prev }
+      if (raw) next[editingWeightIdx] = /x$/i.test(raw) ? raw : `${raw}x`
+      else delete next[editingWeightIdx]
+      return next
+    })
+    setEditingWeightIdx(null)
+  }
+  const cancelWeightEdit = () => setEditingWeightIdx(null)
 
   const baseSnapshot = useMemo(() => getAnalysisSnapshot(timePeriod), [timePeriod])
   const dashboardSnapshot = useMemo(() => getDashboardSnapshot(timePeriod), [timePeriod])
@@ -1808,8 +1832,9 @@ export default function AnalysisPage({ openModal }) {
             </div>
 
             <div className="grid grid-cols-3 gap-4">
-              {deepData.timeWeights.map((item) => {
+              {deepData.timeWeights.map((item, idx) => {
                 const share = timeWeightTotalSamples > 0 ? Math.round((item.count / timeWeightTotalSamples) * 100) : 0
+                const displayWeight = weightOverrides[idx] ?? item.weight
                 const tone = item.highlight
                   ? {
                       card: 'border-emerald-200 bg-gradient-to-br from-emerald-50/90 to-white',
@@ -1836,7 +1861,46 @@ export default function AnalysisPage({ openModal }) {
                       <span className="text-[10px] uppercase tracking-[0.12em] text-stone-400">{tone.tag}</span>
                       <span className="text-[10px] text-stone-400">{share}%</span>
                     </div>
-                    <p className={`mt-2 text-3xl leading-none font-semibold tabular-nums ${tone.weight}`}>{item.weight}</p>
+                    {isPreview ? (
+                      editingWeightIdx === idx ? (
+                        <span className="mt-2 flex items-baseline gap-0.5">
+                          <input
+                            autoFocus
+                            type="text"
+                            inputMode="decimal"
+                            className={`rw-weight-input text-3xl leading-none font-semibold tabular-nums ${tone.weight}`}
+                            style={{ width: `${Math.max(1.6, editingWeightValue.length + 0.6)}ch` }}
+                            value={editingWeightValue}
+                            onChange={(event) => setEditingWeightValue(event.target.value)}
+                            onBlur={commitWeightEdit}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter') {
+                                event.preventDefault()
+                                commitWeightEdit()
+                              } else if (event.key === 'Escape') {
+                                event.preventDefault()
+                                cancelWeightEdit()
+                              }
+                            }}
+                            aria-label={`${tone.tag} 时间近因权重（演示态可自定义，不写入数据）`}
+                          />
+                          <span className={`text-3xl leading-none font-semibold ${tone.weight}`} aria-hidden="true">
+                            x
+                          </span>
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className={`rw-weight-trigger mt-2 text-3xl leading-none font-semibold tabular-nums ${tone.weight}`}
+                          onClick={() => startWeightEdit(idx, displayWeight)}
+                          title="点击自定义权重 · 演示态体验（不写入任何数据）"
+                        >
+                          {displayWeight}
+                        </button>
+                      )
+                    ) : (
+                      <p className={`mt-2 text-3xl leading-none font-semibold tabular-nums ${tone.weight}`}>{displayWeight}</p>
+                    )}
                     <p className="text-sm text-stone-700 mt-2">{item.period}</p>
                     <p className="text-[11px] text-stone-500 mt-1">{item.count} 场样本</p>
                     <div className="mt-2 h-1.5 rounded-full bg-white border border-white/80 overflow-hidden">
