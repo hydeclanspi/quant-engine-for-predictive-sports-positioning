@@ -5795,42 +5795,143 @@
   transform: translateX(120%);
 }
 
-.theme-modern .history-expand-row .history-expand-content {
+/* ── History 记录展开：重力揭示（grid 高度展卷 + 内容重力 Q 弹落定）──
+   点开一条记录：外壳以 grid-template-rows 0fr→1fr 从上向下「展卷」撑开行高，
+   下方行随之顺滑让位；内容做一次重力 Q 弹——自上方带微模糊滑入、越过停点轻微
+   过冲、回弹落定。组合记录里每场比赛卡片依次重力坠落（错峰），尾部汇总块随后
+   柔和升入，形成一眼看全、自上而下的优雅坠落序列。
+   （沿用 Quick Input「展卷·收锋」与 Settle 重力落印的物理语汇。）
+   reduced-motion 下全部直接落位（无展卷、无重力、无模糊）。 */
+.theme-modern .history-expand-cell {
+  /* 垂直内边距移入 clip 内部，使行高能真正从 0 展开（外层不残留留白）。 */
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* 展卷高度过渡：挂载时为 0fr（收拢），下一帧由 JS 翻转 .is-open → 1fr，行高自 0
+   平滑撑开，下方行随之让位（与 Quick Input 折叠同款机制——比 @starting-style 在
+   「内容撑高的 fr 轨道」上更可靠）。0fr 能真正收拢到 0 的前提是 clip 设了
+   min-height:0 + overflow:hidden 且自身无 padding（padding 会成为无法消除的最小
+   高度下限）。 */
+.theme-modern .history-expand-shell {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.46s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--history-expand-delay, 0ms);
+}
+
+.theme-modern .history-expand-shell.is-open {
+  grid-template-rows: 1fr;
+}
+
+.theme-modern .history-expand-clip {
+  overflow: hidden;
+  min-height: 0;
+}
+
+/* 单场记录：内容整体做一次重力 Q 弹落定。 */
+.theme-modern .history-expand-content--solo {
   opacity: 0;
-  transform: translateY(-8px) scale(0.995);
-  animation: historyExpandReveal 420ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  transform: translateY(-12px) scaleY(0.985);
+  animation: historyExpandDrop 0.62s cubic-bezier(0.34, 1.4, 0.5, 1) both;
   animation-delay: var(--history-expand-delay, 0ms);
   transform-origin: top center;
+  will-change: transform, opacity;
 }
 
-.theme-modern .history-expand-item {
-  opacity: 0;
-  transform: translateY(6px);
-  animation: historyExpandItemReveal 360ms cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+/* 组合记录卡框：仅柔和淡入（容器本身由展卷揭开），重力交给内部各块。 */
+.theme-modern .history-expand-content--combo {
+  animation: historyExpandFrame 0.4s ease-out both;
   animation-delay: var(--history-expand-delay, 0ms);
 }
 
-@keyframes historyExpandReveal {
-  from {
+/* 组合记录里每场比赛卡片：自上方重力坠入、过冲、落定（错峰）。 */
+.theme-modern .history-expand-item {
+  opacity: 0;
+  transform: translateY(-14px) scale(0.985);
+  animation: historyExpandItemDrop 0.56s cubic-bezier(0.34, 1.46, 0.52, 1) both;
+  animation-delay: var(--history-expand-delay, 0ms);
+  transform-origin: top center;
+  will-change: transform, opacity;
+}
+
+/* 尾部汇总块：随各场比赛落定之后柔和升入收束序列。 */
+.theme-modern .history-expand-tail {
+  opacity: 0;
+  transform: translateY(-8px);
+  animation: historyExpandTail 0.5s cubic-bezier(0.22, 0.61, 0.36, 1) both;
+  animation-delay: var(--history-expand-delay, 0ms);
+}
+
+@keyframes historyExpandDrop {
+  0% {
     opacity: 0;
-    transform: translateY(-8px) scale(0.995);
-    filter: saturate(0.92);
+    transform: translateY(-12px) scaleY(0.985);
+    filter: blur(2px);
   }
-  to {
+  52% {
     opacity: 1;
-    transform: translateY(0) scale(1);
-    filter: saturate(1);
+    filter: blur(0);
+  }
+  72% {
+    transform: translateY(4px) scaleY(1.006);
+  }
+  86% {
+    transform: translateY(-2px) scaleY(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scaleY(1);
+    filter: blur(0);
   }
 }
 
-@keyframes historyExpandItemReveal {
+@keyframes historyExpandFrame {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
+  }
+}
+
+@keyframes historyExpandItemDrop {
+  0% {
+    opacity: 0;
+    transform: translateY(-14px) scale(0.985);
+    filter: blur(1.5px);
+  }
+  50% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  72% {
+    transform: translateY(5px) scale(1.004);
+  }
+  86% {
+    transform: translateY(-2px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes historyExpandTail {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(1px);
+  }
+  60% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
     transform: translateY(0);
+    filter: blur(0);
   }
 }
 
@@ -5839,22 +5940,54 @@
    then the fill + zero baseline fade in and the endpoint dot pops. Triggered
    only after the card scrolls into view (.is-revealed); reduced motion snaps
    everything to its resting state. */
-/* The signature net-P&L figure gets a specially-set numeral: Fraunces (the
-   app's editorial serif) at a light weight, in a calmer/lighter accent so it
-   reads as a refined caption to the curve rather than a loud headline. Tabular
-   lining figures keep the width steady while CountUp animates the digits. */
+/* The signature net-P&L figure gets a specially-set numeral: Playfair Display —
+   a high-contrast Didone serif whose dramatic thick/thin stroke modulation reads
+   as an editorial "art" numeral rather than a default system figure. Weight 600
+   gives the hairlines enough body to survive at this small size; tabular lining
+   figures are requested so the width stays steady while CountUp ticks the digits.
+   The unit "rmb" trails in a clean muted sans — the classic editorial pairing of
+   an expressive serif number with a quiet sans caption. */
 .capital-curve-figure {
-  font-family: 'Fraunces', 'Cormorant Garamond', Georgia, serif;
-  font-weight: 500;
+  font-family: 'Playfair Display', Georgia, serif;
+  font-weight: 600;
   font-variant-numeric: tabular-nums lining-nums;
   font-feature-settings: 'tnum' 1, 'lnum' 1;
-  font-optical-sizing: auto;
-  letter-spacing: 0.004em;
+  letter-spacing: 0.01em;
   color: #34a981; /* lighter, less eye-catching emerald (was emerald-600) */
 }
 
 .capital-curve-figure.is-down {
   color: #ef7186; /* matching lighter rose for a net loss */
+}
+
+/* Width-reserving wrapper: the hidden ghost sizes the box to the final value,
+   the live number rides absolutely on top, right-aligned — so the figure's
+   right edge and the trailing unit never shift while CountUp animates. */
+.capital-curve-num {
+  position: relative;
+  display: inline-block;
+}
+.capital-curve-num-ghost {
+  visibility: hidden;
+}
+.capital-curve-num-live {
+  position: absolute;
+  top: 0;
+  right: 0;
+  white-space: nowrap;
+}
+
+/* The trailing currency unit — deliberately small, light and muted-neutral so
+   it reads as a quiet caption to the figure (big-company "$1,234 USD" idiom).
+   A clean sans against the Playfair serif gives a crisp editorial contrast. */
+.capital-curve-unit {
+  margin-left: 0.42em; /* easy breathing from the figure */
+  font-family: 'DM Sans', 'Outfit', system-ui, sans-serif;
+  font-weight: 500;
+  font-size: 0.5em;
+  letter-spacing: 0.04em;
+  color: #b3aca5; /* muted stone, well below the accent figure */
+  vertical-align: 0.1em;
 }
 
 .capital-curve-plot {
@@ -6317,11 +6450,30 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .theme-modern .history-expand-row .history-expand-content,
+  .theme-modern .history-expand-content--solo,
+  .theme-modern .history-expand-content--combo,
   .theme-modern .history-expand-item,
+  .theme-modern .history-expand-tail,
   .theme-modern .team-select-card--selected,
   .team-select-pill {
     animation: none !important;
+  }
+
+  .theme-modern .history-expand-shell {
+    grid-template-rows: 1fr !important;
+    transition: none !important;
+  }
+
+  .theme-modern .history-expand-clip {
+    overflow: visible !important;
+  }
+
+  .theme-modern .history-expand-content--solo,
+  .theme-modern .history-expand-item,
+  .theme-modern .history-expand-tail {
+    opacity: 1 !important;
+    transform: none !important;
+    filter: none !important;
   }
 
   .theme-modern .console-motion-scope .console-interactive-surface,

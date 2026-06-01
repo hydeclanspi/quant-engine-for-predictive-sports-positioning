@@ -6,7 +6,7 @@ import { useLabels } from '../lib/labels'
 import { isPreviewMode } from '../lib/displayMode'
 
 // 演示态首屏「秀一下」：进入历史记录页 0.9s 后，自动展开最近一条记录（与 Settle
-// 页同理），复用 History 既有的展开揭示动画（historyExpandReveal）——只展开不收回。
+// 页同理），复用 History 的重力展开动画（展卷高度过渡 + 内容重力 Q 弹）——只展开不收回。
 const HISTORY_PEEK_DELAY_MS = 900
 const prefersReducedMotion = () => {
   try {
@@ -14,6 +14,35 @@ const prefersReducedMotion = () => {
   } catch {
     return false
   }
+}
+
+/* 展开行外壳：挂载后下一帧翻转 .is-open，驱动 grid-template-rows 0fr→1fr 的「展卷」
+   高度过渡（与 Quick Input 折叠同款的类切换机制，在「内容撑高的 fr 轨道」上比
+   @starting-style 可靠）。内容自身的重力 Q 弹落定由各自 CSS 动画在挂载时一并播放，
+   两者叠合即「行从 0 撑开 + 内容自上方坠入回弹」。 */
+function HistoryExpandShell({ delay, children }) {
+  const [open, setOpen] = useState(false)
+  useEffect(() => {
+    // 下一帧翻转 is-open，让 0fr 初始态先绘制一帧，过渡才会触发（可见时走这条路，
+    // 得到平滑展卷）。同时挂一个定时兜底：requestAnimationFrame 在页面隐藏时会被
+    // 暂停，若仅靠它则内容可能停在 0 高度被裁切——定时器即使隐藏也会触发，确保内容
+    // 永不卡在收拢态。两者谁先到都只是把 open 置真，幂等无副作用。
+    let raf2 = 0
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setOpen(true))
+    })
+    const fallback = setTimeout(() => setOpen(true), 120)
+    return () => {
+      cancelAnimationFrame(raf1)
+      cancelAnimationFrame(raf2)
+      clearTimeout(fallback)
+    }
+  }, [])
+  return (
+    <div className={`history-expand-shell${open ? ' is-open' : ''}`} style={{ '--history-expand-delay': delay }}>
+      <div className="history-expand-clip">{children}</div>
+    </div>
+  )
 }
 
 const LEAGUE_ORDER = ['英超', '西甲', '意甲', '德甲', '法甲', '荷甲', '葡超', '土超', '沙特联', '国际赛', '其他']
@@ -875,7 +904,9 @@ export default function HistoryPage() {
               {filteredRows.map((row, rowIndex) => {
                 const isSolo = row.parlaySize === 1
                 const isExpanded = isSolo ? Boolean(expandedSoloIds[row.id]) : Boolean(expandedComboIds[row.id])
-                const expandDelay = `${Math.min(rowIndex, 12) * 34}ms`
+                const expandBaseMs = Math.min(rowIndex, 10) * 26
+                const expandDelay = `${expandBaseMs}ms`
+                const comboTailDelay = `${Math.min(expandBaseMs + 150 + (row.matchRows?.length || 0) * 70 + 30, 820)}ms`
 
                 return (
                 <Fragment key={row.id}>
@@ -984,8 +1015,9 @@ export default function HistoryPage() {
 
                   {isSolo && isExpanded && (
                     <tr className="history-expand-row border-t border-stone-100 bg-white text-[11px]">
-                      <td colSpan={8} className="px-3 py-2.5">
-                        <div className="history-expand-content flex flex-wrap items-center gap-x-4 gap-y-2" style={{ '--history-expand-delay': expandDelay }}>
+                      <td colSpan={8} className="history-expand-cell px-3">
+                        <HistoryExpandShell delay={expandDelay}>
+                          <div className="history-expand-content history-expand-content--solo flex flex-wrap items-center gap-x-4 gap-y-2 py-2.5" style={{ '--history-expand-delay': expandDelay }}>
                           <div className="flex items-center gap-1.5">
                             <span className="text-stone-400">状态</span>
                             <span className={`px-1.5 py-0.5 rounded-full text-[10px] ${getStatusBadgeTone(row.status)}`}>
@@ -1008,15 +1040,17 @@ export default function HistoryPage() {
                             <span className="text-stone-400 mr-1.5">赛后备注</span>
                             <span className="text-stone-600">{renderStyledNote(row.postNote || '-')}</span>
                           </div>
-                        </div>
+                          </div>
+                        </HistoryExpandShell>
                       </td>
                     </tr>
                   )}
 
                   {!isSolo && isExpanded && (
                     <tr className="history-expand-row border-t border-stone-100 bg-stone-50/60 text-[11px]">
-                      <td colSpan={8} className="px-4 py-4">
-                        <div className="history-expand-content rounded-xl border border-stone-200 bg-white p-4" style={{ '--history-expand-delay': expandDelay }}>
+                      <td colSpan={8} className="history-expand-cell px-4">
+                        <HistoryExpandShell delay={expandDelay}>
+                          <div className="history-expand-content history-expand-content--combo my-4 rounded-xl border border-stone-200 bg-white p-4" style={{ '--history-expand-delay': expandDelay }}>
                           <div className="space-y-2">
                             {row.matchRows.map((matchRow, matchIndex) => {
                               const notePayload = buildMatchNoteDisplayPayload(matchRow.preNote, matchRow.postNote)
@@ -1024,7 +1058,7 @@ export default function HistoryPage() {
                                 <div
                                   key={matchRow.id}
                                   className="history-expand-item rounded-lg border border-stone-100 px-3 py-2"
-                                  style={{ '--history-expand-delay': `${Math.min(rowIndex * 26 + matchIndex * 24, 460)}ms` }}
+                                  style={{ '--history-expand-delay': `${Math.min(expandBaseMs + 150 + matchIndex * 70, 760)}ms` }}
                                 >
                                   <div className="flex flex-wrap items-center justify-between gap-2">
                                     <p className="text-stone-700 font-medium">
@@ -1095,7 +1129,7 @@ export default function HistoryPage() {
                             })}
                           </div>
 
-                          <div className="grid gap-2 mt-3 border-t border-stone-100 pt-3 md:grid-cols-2 xl:grid-cols-4">
+                          <div className="history-expand-tail grid gap-2 mt-3 border-t border-stone-100 pt-3 md:grid-cols-2 xl:grid-cols-4" style={{ '--history-expand-delay': comboTailDelay }}>
                             <div className="rounded-lg border border-stone-100 bg-stone-50 px-3 py-2">
                               <p className="text-[10px] text-stone-400">状态</p>
                               <p className="mt-1">
@@ -1117,7 +1151,8 @@ export default function HistoryPage() {
                               <p className="mt-1 font-semibold text-stone-300">—</p>
                             </div>
                           </div>
-                        </div>
+                            </div>
+                        </HistoryExpandShell>
                       </td>
                       </tr>
                   )}

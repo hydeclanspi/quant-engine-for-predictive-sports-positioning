@@ -26,11 +26,17 @@ const PAD_X = 8 // left inset — the curve starts a hair off the edge
 const PAD_R = 3 // right inset — kept tight so the line reaches close to the edge
 const PAD_Y = 16
 
-const toRmb = (n) => {
+// Visible hero figure: signed amount only (no currency glyph) — the unit
+// "rmb" is rendered separately as a smaller, muted suffix so the number itself
+// stays the headline. e.g. +960 / −1,240 / 0
+const toSignedNumber = (n) => {
   const v = Math.round(Number(n) || 0)
   const sign = v > 0 ? '+' : v < 0 ? '-' : ''
-  return `${sign}¥${Math.abs(v).toLocaleString('en-US')}`
+  return `${sign}${Math.abs(v).toLocaleString('en-US')}`
 }
+
+// Full spoken string for the SVG aria-label (keeps the unit inline). e.g. +960 rmb
+const toRmb = (n) => `${toSignedNumber(n)} rmb`
 
 // ── Preview-only synthetic equity path ──────────────────────────────────
 // A deterministic (seeded → no flicker between renders) "螺旋震荡向上" curve
@@ -71,7 +77,7 @@ const buildDemoCapitalSeries = (count, peak) => {
     const draws =
       dip(u, 0.3, 0.05, 0.15) + // first pullback
       dip(u, 0.62, 0.065, 0.23) + // the deep drawdown
-      dip(u, 0.84, 0.04, 0.155) // closing shake-out before the breakout
+      dip(u, 0.855, 0.042, 0.215) // deeper, later, tighter closing shake-out → sharper breakout to the final high
     const tex = P * 0.025 * env * noise[k]
     raw.push(trend + osc + draws + tex)
   }
@@ -189,11 +195,26 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
         </div>
         <div className="text-right leading-none">
           <div
-            className={`capital-curve-figure tabular-nums ${
-              compact ? 'text-xl' : 'text-2xl'
+            className={`capital-curve-figure ${
+              compact ? 'text-[18px]' : 'text-[22px]'
             }${positive ? '' : ' is-down'}`}
           >
-            {revealed ? <CountUp value={final} format={toRmb} duration={compact ? 1100 : 1400} /> : toRmb(0)}
+            {/* Playfair's numerals are proportional (no tabular feature), so the
+                width would dance as CountUp ticks. A hidden "ghost" of the final
+                value reserves the box width; the live number is absolutely
+                right-aligned inside it, pinning the right edge + the rmb unit so
+                only the digits redistribute internally — no layout jitter. */}
+            <span className="capital-curve-num">
+              <span className="capital-curve-num-ghost" aria-hidden="true">{toSignedNumber(final)}</span>
+              <span className="capital-curve-num-live">
+                {revealed ? (
+                  <CountUp value={final} format={toSignedNumber} duration={compact ? 1100 : 1400} />
+                ) : (
+                  toSignedNumber(0)
+                )}
+              </span>
+            </span>
+            <span className="capital-curve-unit">rmb</span>
           </div>
           {!compact && <div className="text-[11px] text-stone-400 mt-1.5">净盈亏 · 累计</div>}
         </div>
