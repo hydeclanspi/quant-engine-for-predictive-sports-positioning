@@ -15,7 +15,11 @@ if (isPreviewMode()) {
 const renderApp = () => {
   ReactDOM.createRoot(document.getElementById('root')).render(
     <React.StrictMode>
-      <BrowserRouter>
+      {/* Opt into React Router v7 behaviours early — silences the two future
+          flag warnings and pre-aligns for the v7 upgrade. Safe here: all
+          routes are flat & absolute with no splat routes, so v7_relativeSplatPath
+          is behaviour-neutral and v7_startTransition is the recommended path. */}
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <App />
       </BrowserRouter>
     </React.StrictMode>,
