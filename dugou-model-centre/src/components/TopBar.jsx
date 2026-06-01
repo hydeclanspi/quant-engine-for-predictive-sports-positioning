@@ -35,8 +35,8 @@ const NAV_ITEMS = [
     label: 'Dashboard',
     Icon: BarChart3,
     children: [
-      { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', Icon: TrendingUp },
       { id: 'metrics', path: '/dashboard/metrics', label: '数据总览', Icon: FileText },
+      { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', Icon: TrendingUp },
     ],
   },
   {

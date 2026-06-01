@@ -31,8 +31,8 @@ const NAV_ITEMS = [
     Icon: BarChart3,
     children: [
       { id: 'dashboard-main', path: '/dashboard', label: 'Overview', Icon: BarChart3 },
-      { id: 'analysis', path: '/dashboard/analysis', label: 'Analysis', Icon: TrendingUp },
       { id: 'metrics', path: '/dashboard/metrics', label: 'Metrics', Icon: FileText },
+      { id: 'analysis', path: '/dashboard/analysis', label: 'Analysis', Icon: TrendingUp },
     ],
   },
   {
