@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import CountUp from './CountUp'
+import { isPreviewMode } from '../lib/displayMode'
 
 /**
  * CapitalCurveReveal — History 时间线揭示 (B 类，无弹窗).
@@ -31,6 +32,54 @@ const toRmb = (n) => {
   return `${sign}¥${Math.abs(v).toLocaleString('en-US')}`
 }
 
+// ── Preview-only synthetic equity path ──────────────────────────────────
+// A deterministic (seeded → no flicker between renders) "螺旋震荡向上" curve
+// used ONLY in demo/preview mode. The real seeded sample happens to climb
+// almost monotonically, which reads as an unrealistic straight line — so for
+// the demo we model an honest-looking capital journey instead: an upward
+// trend carrying tapered oscillation, two genuine drawdowns and a closing
+// shake-out before a breakout to a fresh high. The whole path is scaled so
+// its final point lands on `peak` (the REAL cumulative figure), so only the
+// in-between shape is dramatised while the headline number stays truthful.
+const makeRng = (seed) => {
+  let t = seed >>> 0
+  return () => {
+    t = (t + 0x6d2b79f5) >>> 0
+    let r = Math.imul(t ^ (t >>> 15), t | 1)
+    r ^= r + Math.imul(r ^ (r >>> 7), r | 61)
+    return ((r ^ (r >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const buildDemoCapitalSeries = (count, peak) => {
+  const P = peak
+  const n = Math.max(12, count)
+  const rng = makeRng(0x5eed2026)
+  // Per-step noise, drawn once for micro-texture (kept deterministic).
+  const noise = []
+  for (let k = 0; k <= n; k += 1) noise.push(rng() - 0.5)
+  // A Gaussian "drawdown" notch centred at fraction `c`, width `w`, depth `d`.
+  const dip = (u, c, w, d) => -P * d * Math.exp(-((u - c) ** 2) / (2 * w * w))
+  const raw = []
+  for (let k = 0; k <= n; k += 1) {
+    const u = k / n
+    const env = Math.sin(Math.PI * u) // 0→1→0 taper keeps both ends anchored
+    const trend = P * (0.7 * u + 0.3 * u * u) // monotonic base, ends exactly at P
+    const osc =
+      P * 0.115 * env * Math.sin(u * Math.PI * 5 + 0.4) +
+      P * 0.05 * env * Math.sin(u * Math.PI * 11)
+    const draws =
+      dip(u, 0.3, 0.05, 0.15) + // first pullback
+      dip(u, 0.62, 0.065, 0.23) + // the deep drawdown
+      dip(u, 0.84, 0.04, 0.155) // closing shake-out before the breakout
+    const tex = P * 0.025 * env * noise[k]
+    raw.push(trend + osc + draws + tex)
+  }
+  raw[0] = 0 // start at break-even
+  raw[raw.length - 1] = P // land exactly on the honest cumulative figure
+  return raw.map((v) => ({ cum: Math.round(v) }))
+}
+
 export default function CapitalCurveReveal({ investments, compact = false }) {
   const series = useMemo(() => {
     const settled = (Array.isArray(investments) ? investments : [])
@@ -50,6 +99,15 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
       cum += Number(inv.profit)
       points.push({ cum })
     })
+
+    // Demo/preview only: replace the (near-monotonic) sample path with a
+    // realistic spiral-upward equity curve that still ENDS on the exact same
+    // honest cumulative figure. Live data is never reshaped; the headline
+    // 净盈亏 and 已结算 count are identical either way.
+    if (isPreviewMode() && cum > 0) {
+      return { points: buildDemoCapitalSeries(settled.length, cum), settledCount: settled.length }
+    }
+
     return { points, settledCount: settled.length }
   }, [investments])
 

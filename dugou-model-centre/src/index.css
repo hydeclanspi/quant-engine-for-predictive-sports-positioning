@@ -5870,9 +5870,10 @@
   clip-path: inset(0 100% 0 0);
 }
 
-/* Compact band variant (Dashboard overview, between KPI row and 噪音过滤). */
+/* Compact band variant (Dashboard overview). Taller plot than a strip so the
+   realistic drawdowns / oscillation in the equity path have room to read. */
 .capital-curve.is-compact .capital-curve-svg {
-  height: 54px;
+  height: 103px;
 }
 
 .capital-curve-line {
