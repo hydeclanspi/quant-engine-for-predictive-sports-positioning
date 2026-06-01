@@ -169,6 +169,17 @@ const ConsoleCardIcon = ({ IconComp }) => (
   </span>
 )
 
+// Small group heading used inside the 时间近因机制 card — a tinted dot keyed to
+// the section's palette + a quiet label/hint, so the three sub-groups read as
+// one coherent system instead of three stacked grids.
+const RecencyGroupLabel = ({ dot, text, hint }) => (
+  <div className="mb-2 flex items-center gap-2">
+    <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ background: dot }} />
+    <span className="text-[11px] font-medium tracking-wide text-stone-500">{text}</span>
+    {hint ? <span className="text-[10px] text-stone-400">· {hint}</span> : null}
+  </div>
+)
+
 const PAGE_AMBIENT_ITEMS = [
   { key: 'new', label: 'New', hint: '新建投资' },
   { key: 'combo', label: 'Portfolio', hint: '智能组合建议' },
@@ -4776,40 +4787,105 @@ export default function ParamsPage({ openModal }) {
           <p className="text-sm text-stone-500">时间近因与球队校准计算中，请稍候...</p>
         ) : (
           <>
+            {/* ── 主角：Conf / FSE 近因校准结果 ── */}
+            <RecencyGroupLabel dot="linear-gradient(90deg,#f59e0b,#0ea5e9)" text="校准结果" hint="近因加权后" />
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                {
+                  key: 'conf',
+                  label: maskText('Conf 近因校准'),
+                  value: calibrationContext.multipliers.conf,
+                  tint: { card: 'from-amber-50/85 to-white border-amber-200/70', text: '#b45309', chipBg: '#fef3c7', chipText: '#b45309' },
+                },
+                {
+                  key: 'fse',
+                  label: maskText('FSE 近因校准'),
+                  value: calibrationContext.multipliers.fse,
+                  tint: { card: 'from-sky-50/85 to-white border-sky-200/70', text: '#0369a1', chipBg: '#e0f2fe', chipText: '#0369a1' },
+                },
+              ].map((m) => {
+                const v = Number(m.value)
+                const pct = Math.round((v - 1) * 100)
+                const up = pct > 0
+                const down = pct < 0
+                const neutral = pct === 0
+                return (
+                  <div key={m.key} className={`p-4 rounded-2xl border bg-gradient-to-br ${m.tint.card}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-medium text-stone-500 truncate">{m.label}</p>
+                      <span
+                        className="shrink-0 px-1.5 py-0.5 rounded-md text-[10px] font-semibold tabular-nums"
+                        style={{ background: neutral ? '#f5f5f4' : m.tint.chipBg, color: neutral ? '#78716c' : m.tint.chipText }}
+                      >
+                        {up ? '▲' : down ? '▼' : '±'}{Math.abs(pct)}%
+                      </span>
+                    </div>
+                    <p className="mt-2 text-3xl font-semibold tabular-nums leading-none" style={{ color: m.tint.text }}>×{v.toFixed(2)}</p>
+                    <p className="mt-1.5 text-[10px] text-stone-400">相对基准 1.00 的近因偏移</p>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ── 近因衰减：按时间分档加权 ── */}
+            <div className="mt-5">
+              <RecencyGroupLabel dot="linear-gradient(90deg,#6366f1,#94a3b8)" text="近因衰减" hint="按时间" />
+            </div>
             <div className="grid grid-cols-3 gap-3">
-              {calibrationContext.bands.map((band) => (
-                <div key={band.key} className="p-3 bg-stone-50 rounded-xl border border-stone-200/70">
-                  <p className="text-xs text-stone-400">{band.label}</p>
-                  <p className="mt-1 text-sm font-semibold text-stone-700">
-                    权重 ×{band.weight.toFixed(2)} <span className="text-xs font-normal text-stone-400">· {band.samples} 场</span>
-                  </p>
-                </div>
-              ))}
+              {(() => {
+                const maxBoost = Math.max(...calibrationContext.bands.map((b) => Number(b.weight) - 1), 0.0001)
+                const RAMP = ['#6366f1', '#818cf8', '#94a3b8']
+                return calibrationContext.bands.map((band, idx) => {
+                  const boost = Number(band.weight) - 1
+                  const accent = RAMP[Math.min(idx, RAMP.length - 1)]
+                  const widthPct = Math.min(100, (boost / maxBoost) * 100)
+                  return (
+                    <div key={band.key} className="p-3 rounded-xl border border-indigo-100/70 bg-gradient-to-br from-indigo-50/45 to-white">
+                      <p className="text-xs text-stone-500 truncate">{band.label}</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums leading-none text-stone-700">×{Number(band.weight).toFixed(2)}</p>
+                      <div className="relative mt-2 h-1.5 w-full rounded-full" style={{ background: 'rgba(99,102,241,0.12)' }}>
+                        <div className="absolute top-0 left-0 h-full rounded-full transition-[width] duration-500 ease-out" style={{ width: `${widthPct}%`, background: accent }} />
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-stone-400">{band.samples} 场</p>
+                    </div>
+                  )
+                })
+              })()}
             </div>
 
-            <div className="grid grid-cols-2 gap-3 mt-3">
-              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200">
-                <p className="text-xs text-amber-700">{maskText('Conf 近因校准')}</p>
-                <p className="mt-1 text-lg font-semibold text-amber-700">×{calibrationContext.multipliers.conf.toFixed(2)}</p>
-              </div>
-              <div className="p-3 bg-sky-50 rounded-xl border border-sky-200">
-                <p className="text-xs text-sky-700">{maskText('FSE 近因校准')}</p>
-                <p className="mt-1 text-lg font-semibold text-sky-700">×{calibrationContext.multipliers.fse.toFixed(2)}</p>
-              </div>
+            {/* ── 随机性降噪：按 REP 方向性加权 ── */}
+            <div className="mt-5">
+              <RecencyGroupLabel dot="linear-gradient(90deg,#10b981,#f43f5e)" text="随机性降噪" hint="按 REP" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              {(() => {
+                const maxDev = Math.max(...calibrationContext.repBuckets.map((b) => Math.abs(Number(b.weight) - 1)), 0.0001)
+                return calibrationContext.repBuckets.map((bucket) => {
+                  const dev = Number(bucket.weight) - 1
+                  const boost = dev > 0.001
+                  const penalty = dev < -0.001
+                  const tone = boost
+                    ? { card: 'from-emerald-50/85 to-white border-emerald-100', text: '#047857', accent: '#10b981' }
+                    : penalty
+                      ? { card: 'from-rose-50/85 to-white border-rose-100', text: '#be123c', accent: '#f43f5e' }
+                      : { card: 'from-stone-50 to-white border-stone-200/70', text: '#57534e', accent: '#a8a29e' }
+                  const halfPct = Math.min(50, (Math.abs(dev) / maxDev) * 50)
+                  return (
+                    <div key={bucket.key} className={`p-3 rounded-xl border bg-gradient-to-br ${tone.card}`}>
+                      <p className="text-xs text-stone-500 truncate">{bucket.label}</p>
+                      <p className="mt-1 text-lg font-semibold tabular-nums leading-none" style={{ color: tone.text }}>×{Number(bucket.weight).toFixed(2)}</p>
+                      <div className="relative mt-2 h-1.5 w-full rounded-full" style={{ background: 'rgba(120,113,108,0.12)' }}>
+                        <div className="absolute top-1/2 left-1/2 h-2 w-px -translate-x-1/2 -translate-y-1/2 bg-stone-300" />
+                        <div className="absolute top-0 h-full rounded-full transition-[width] duration-500 ease-out" style={boost ? { left: '50%', width: `${halfPct}%`, background: tone.accent } : penalty ? { right: '50%', width: `${halfPct}%`, background: tone.accent } : { left: '50%', width: '0%' }} />
+                      </div>
+                      <p className="mt-1.5 text-[10px] text-stone-400">{bucket.samples} 场</p>
+                    </div>
+                  )
+                })
+              })()}
             </div>
 
-            <div className="grid grid-cols-3 gap-3 mt-3">
-              {calibrationContext.repBuckets.map((bucket) => (
-                <div key={bucket.key} className="p-2.5 rounded-lg border border-stone-200 text-xs text-stone-500 bg-white">
-                  <p>{bucket.label}</p>
-                  <p className="mt-1 text-stone-700">
-                    ×{bucket.weight.toFixed(2)} · {bucket.samples} 场
-                  </p>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-[11px] text-stone-400 mt-3">
+            <p className="mt-4 text-[11px] text-stone-400 leading-relaxed">
               {maskText('已启用 REP 方向性降噪：低随机性样本上调权重，高随机性样本降权，避免“运气样本”放大误导。')}
             </p>
           </>
