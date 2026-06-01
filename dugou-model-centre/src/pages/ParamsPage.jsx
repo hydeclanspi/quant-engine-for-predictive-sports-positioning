@@ -217,6 +217,97 @@ const FIT_TRAJECTORY_MODE_OPTIONS = [
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value))
 
+// ---------------------------------------------------------------------------
+// Preview / demo curation for the Expected-vs-Actual rating set.
+//
+// In preview mode the real Supabase data is hidden, so the FIT TRAJECTORY
+// chart (mode #9 · cumulative偏差瀑布) was drawing the curated demo set, whose
+// cumulative line drifted DOWN late ("越走越下"). Production ("full" state)
+// instead climbs early then holds high. Since every calibration readout —
+// score, 近窗命中, BIAS, MAE, CI band, the four regime cards, the trajectory
+// AND the history table — all read from ratingRows[].diff, we reshape a single
+// deterministic diff series and rebuild expected/actual so the table identity
+// diff = actual − expected stays exact.
+//
+// Constants below were locked via offline search to reproduce the full-state
+// profile at n=181: score 0.82 · MAE 0.178 · BIAS +0.046 · CI ±0.341 ·
+// 近窗命中 28.7% · σ0.207 · FIT TREND Flat · STABILITY Volatile ·
+// PERSISTENCE Rotating · SHOCK Elevated — with a cumulative line that ramps
+// over the first ~half of the 120-pt window then plateaus near the top.
+// ---------------------------------------------------------------------------
+const PREVIEW_RATING_SAMPLE = 181
+
+const previewMulberry32 = (seed) => {
+  let a = seed >>> 0
+  return () => {
+    a |= 0
+    a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const previewSmoothstep = (t) => {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
+}
+
+const buildPreviewDeviationSeries = (n) => {
+  // Cumulative-target ramp across the first half of the trailing 120-pt window
+  // (the slice the chart plots) + mildly auto-correlated noise → a cumulative
+  // curve that climbs then holds high instead of sagging.
+  const S = 4.6
+  const rampFrac = 0.5
+  const noiseAmp = 0.46
+  const noiseAr = 0.3
+  const plateauBias = 0.004
+  const headBias = 0
+  const rnd = previewMulberry32(710)
+  const windowStart = Math.max(0, n - 120)
+  const winLen = n - windowStart
+  const cTarget = (j) => S * previewSmoothstep(j / Math.max(1, winLen - 1) / rampFrac)
+  const diffs = []
+  let prevNoise = 0
+  for (let i = 0; i < n; i += 1) {
+    let mean
+    if (i >= windowStart) {
+      const j = i - windowStart
+      mean = cTarget(j) - cTarget(j - 1) + plateauBias
+    } else {
+      mean = headBias
+    }
+    const white = rnd() * 2 - 1
+    const noise = noiseAr * prevNoise + (1 - noiseAr) * white
+    prevNoise = noise
+    diffs.push(Math.round((mean + noise * noiseAmp) * 100) / 100)
+  }
+  return diffs
+}
+
+const buildPreviewRatingRows = (realRows) => {
+  const source = Array.isArray(realRows) ? realRows : []
+  const diffs = buildPreviewDeviationSeries(PREVIEW_RATING_SAMPLE)
+  const centerRnd = previewMulberry32(9112)
+  return diffs.map((diff, idx) => {
+    const template = source.length > 0 ? source[idx % source.length] : null
+    // Straddle a per-row varying center so expected/actual look natural and
+    // diff = actual − expected holds exactly (both rounded to 2dp first).
+    const center = 0.54 + (centerRnd() * 2 - 1) * 0.1
+    const actual = Math.round((center + diff / 2) * 100) / 100
+    const expected = Math.round((actual - diff) * 100) / 100
+    return {
+      investment_id: template?.investment_id ?? `demo-${idx}`,
+      date: template?.date ?? null,
+      dateLabel: template?.dateLabel ?? '',
+      match: template?.match ?? '— vs —',
+      expected_rating: expected,
+      actual_rating: actual,
+      diff,
+    }
+  })
+}
+
 const buildSmoothPath = (inputPoints, tension = 0.16) => {
   if (!inputPoints.length) return ''
   if (inputPoints.length === 1) return `M ${inputPoints[0].x.toFixed(3)} ${inputPoints[0].y.toFixed(3)}`
@@ -2322,7 +2413,10 @@ export default function ParamsPage({ openModal }) {
 
     scheduleTask(() => {
       try {
-        const ratingRows = getExpectedVsActualRows(240)
+        const realRatingRows = getExpectedVsActualRows(240)
+        // Preview/demo replicates the production full-state trajectory (climb
+        // then hold) instead of the sagging curated set — see helper above.
+        const ratingRows = isPreviewMode() ? buildPreviewRatingRows(realRatingRows) : realRatingRows
         const modeKellyRows = getModeKellyRecommendations()
         if (cancelled) return
         setAnalyticsData((prev) => ({ ...prev, ratingRows, modeKellyRows }))
