@@ -2942,10 +2942,10 @@ export default function ParamsPage({ openModal }) {
     [kellyBacktest.globalRows],
   )
   const kellyVisibleRows = useMemo(
-    () => (showAllKellyRows ? kellyBacktest.globalRows || [] : (kellyBacktest.globalRows || []).slice(0, 6)),
+    () => (showAllKellyRows ? kellyBacktest.globalRows || [] : (kellyBacktest.globalRows || []).slice(0, 5)),
     [showAllKellyRows, kellyBacktest.globalRows],
   )
-  const hasMoreKellyRows = (kellyBacktest.globalRows || []).length > 6
+  const hasMoreKellyRows = (kellyBacktest.globalRows || []).length > 5
   const kellyModeMaxDrawdown = useMemo(
     () =>
       Math.max(
@@ -3896,9 +3896,9 @@ export default function ParamsPage({ openModal }) {
     })
   }
 
-  // The "Future Iteration" roadmap card. In demo/preview mode it sits right
-  // below the 回归分析校准 card (showcase position); in FULL mode it keeps its
-  // original slot near the data-utility cards. Same `mb-9` rhythm in both spots.
+  // The "Future Iteration" roadmap card. It sits between the 时间近因机制 card
+  // (last in the model-cards column) and the Excel data card, in both demo and
+  // full mode; its own `mb-9` keeps a symmetric gap above and below.
   const futureIterationCard = (
     <div
       onClick={openFutureFeaturesModal}
@@ -5240,14 +5240,6 @@ export default function ParamsPage({ openModal }) {
         </p>
       </div>
 
-      {/* Demo/preview: surface the Future Iteration roadmap at the TOP of the
-          model-cards column (it renders as the first flex item, order-0, since the
-          column now opens above the 回归分析校准 card). The pt-[26px] wrapper adds
-          +26px on top of the Time Machine card's mb-9 (36px) gap → ~62px breathing
-          room; padding (not margin) keeps it additive without margin-collapse.
-          FULL mode renders the card in its slot below the column. */}
-      {isPreviewMode() && <div className="pt-[26px]">{futureIterationCard}</div>}
-
       <div className="order-6 glow-card relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/30 to-cyan-50/30 p-6 mb-6">
         <div className="pointer-events-none absolute -top-14 -right-8 h-36 w-36 rounded-full bg-indigo-200/20 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-12 -left-10 h-36 w-36 rounded-full bg-cyan-200/20 blur-3xl" />
@@ -5512,7 +5504,7 @@ export default function ParamsPage({ openModal }) {
                   onClick={() => setShowAllKellyRows((prev) => !prev)}
                   className="h-7 px-3 rounded-full text-[11px] border border-amber-200 bg-amber-50/80 text-amber-700 hover:bg-amber-100 transition-colors"
                 >
-                  {showAllKellyRows ? '收起回测行' : `展开更多（+${kellyBacktest.globalRows.length - 6}）`}
+                  {showAllKellyRows ? '收起回测行' : `展开更多（+${kellyBacktest.globalRows.length - 5}）`}
                 </button>
               </div>
             )}
@@ -5848,9 +5840,9 @@ export default function ParamsPage({ openModal }) {
       </div>
       </div>
 
-      {/* FULL mode keeps the Future Iteration card here; demo/preview renders
-          it at the top of the model-cards column above. */}
-      {!isPreviewMode() && futureIterationCard}
+      {/* Future Iteration roadmap — sits between the 时间近因机制 card (last in the
+          model-cards column) and the Excel data card, in both demo and full mode. */}
+      {futureIterationCard}
 
       <div id="console-grp-data" className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">
         <div className="flex items-center justify-between mb-4">
