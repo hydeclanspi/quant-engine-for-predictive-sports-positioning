@@ -1,21 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import CountUp from './CountUp'
+import { useMemo } from 'react'
 import { isPreviewMode } from '../lib/displayMode'
 
 /**
- * CapitalCurveReveal — History 时间线揭示 (B 类，无弹窗).
+ * CapitalCurveReveal — 资金累计曲线 (B 类，无弹窗).
  *
  * A quiet "资金累计" (cumulative net P&L) curve built ENTIRELY from real
- * settled investments, sorted by date. It draws on ONCE the first time it
- * scrolls into view (IntersectionObserver, observe → fire → disconnect),
- * then the final figure counts up alongside the line. This is the History
- * page's single signature moment: zero interruption, no popup, honest data.
+ * settled investments, sorted by date. It renders in its complete, final
+ * state on mount — no draw-on, no count-up, no entrance choreography — so
+ * every visit shows the finished journey immediately, fully formed.
  *
  * The series is all-time and deliberately independent of the list filters —
  * filtering to "已中" only and watching a monotonic line would be a lie.
- *
- * prefers-reduced-motion: the CSS snaps every element to its resting state
- * (no draw, no fade) and CountUp settles immediately.
  *
  * Renders nothing when fewer than two settled records exist — no fake chart.
  */
@@ -165,38 +160,6 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
     return { points, settledCount: settled.length }
   }, [investments])
 
-  const containerRef = useRef(null)
-  const firedRef = useRef(false)
-  const [revealed, setRevealed] = useState(false)
-
-  useEffect(() => {
-    const el = containerRef.current
-    if (!el || firedRef.current) return undefined
-
-    const fire = () => {
-      if (firedRef.current) return
-      firedRef.current = true
-      setRevealed(true)
-    }
-
-    if (typeof IntersectionObserver === 'undefined') {
-      fire()
-      return undefined
-    }
-
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting && e.intersectionRatio >= 0.3)) {
-          fire()
-          obs.disconnect()
-        }
-      },
-      { threshold: [0, 0.3, 0.6] },
-    )
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [])
-
   if (!series) return null
 
   const { points, settledCount } = series
@@ -227,10 +190,9 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
 
   return (
     <div
-      ref={containerRef}
       className={`capital-curve glow-card bg-white rounded-2xl border border-stone-100 ${
         compact ? 'is-compact p-4' : 'p-4 md:p-5 mb-4'
-      }${revealed ? ' is-revealed' : ''}`}
+      }`}
     >
       <div className={`flex items-start justify-between gap-3 ${compact ? 'mb-1' : 'mb-1.5'}`}>
         <div className="min-w-0">
@@ -247,21 +209,7 @@ export default function CapitalCurveReveal({ investments, compact = false }) {
               compact ? 'text-[18px]' : 'text-[22px]'
             }${positive ? '' : ' is-down'}`}
           >
-            {/* Playfair's numerals are proportional (no tabular feature), so the
-                width would dance as CountUp ticks. A hidden "ghost" of the final
-                value reserves the box width; the live number is absolutely
-                right-aligned inside it, pinning the right edge + the rmb unit so
-                only the digits redistribute internally — no layout jitter. */}
-            <span className="capital-curve-num">
-              <span className="capital-curve-num-ghost" aria-hidden="true">{toSignedNumber(final)}</span>
-              <span className="capital-curve-num-live">
-                {revealed ? (
-                  <CountUp value={final} format={toSignedNumber} duration={compact ? 1100 : 1400} />
-                ) : (
-                  toSignedNumber(0)
-                )}
-              </span>
-            </span>
+            {toSignedNumber(final)}
             <span className="capital-curve-unit">rmb</span>
           </div>
           {!compact && <div className="text-[11px] text-stone-400 mt-1.5">净盈亏 · 累计</div>}

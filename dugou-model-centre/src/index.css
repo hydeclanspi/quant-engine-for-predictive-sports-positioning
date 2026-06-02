@@ -5937,16 +5937,15 @@
   }
 }
 
-/* ── History 资金累计曲线：滚动入场描绘一次（B 类，无弹窗）──
-   The line traces on once via stroke-dashoffset (pathLength normalised to 1),
-   then the fill + zero baseline fade in and the endpoint dot pops. Triggered
-   only after the card scrolls into view (.is-revealed); reduced motion snaps
-   everything to its resting state. */
+/* ── 资金累计曲线（B 类，无弹窗）──
+   A cumulative net-P&L curve rendered in its complete, final state on mount —
+   no draw-on, no fade, no endpoint pop. Every visit shows the finished
+   journey immediately, fully formed. */
 /* The signature net-P&L figure gets a specially-set numeral: Playfair Display —
    a high-contrast Didone serif whose dramatic thick/thin stroke modulation reads
    as an editorial "art" numeral rather than a default system figure. Weight 600
    gives the hairlines enough body to survive at this small size; tabular lining
-   figures are requested so the width stays steady while CountUp ticks the digits.
+   figures are requested so the figure keeps even, well-set spacing.
    The unit "rmb" trails in a clean muted sans — the classic editorial pairing of
    an expressive serif number with a quiet sans caption. */
 .capital-curve-figure {
@@ -5960,23 +5959,6 @@
 
 .capital-curve-figure.is-down {
   color: #ef7186; /* matching lighter rose for a net loss */
-}
-
-/* Width-reserving wrapper: the hidden ghost sizes the box to the final value,
-   the live number rides absolutely on top, right-aligned — so the figure's
-   right edge and the trailing unit never shift while CountUp animates. */
-.capital-curve-num {
-  position: relative;
-  display: inline-block;
-}
-.capital-curve-num-ghost {
-  visibility: hidden;
-}
-.capital-curve-num-live {
-  position: absolute;
-  top: 0;
-  right: 0;
-  white-space: nowrap;
 }
 
 /* The trailing currency unit — deliberately small, light and muted-neutral so
@@ -6001,8 +5983,6 @@
   display: block;
   width: 100%;
   height: 132px;
-  /* Draw-on origin: fully clipped from the right until revealed (see wipe). */
-  clip-path: inset(0 100% 0 0);
 }
 
 /* Compact band variant (Dashboard overview). Matched to the AJR sparkline that
@@ -6019,34 +5999,10 @@
   stroke-linejoin: round;
 }
 
-/* Draw-on is a left→right clip wipe over the whole plot (line + fill +
-   baseline) — NOT a stroke-dash trick. Under preserveAspectRatio="none"
-   non-uniform scaling, stroke-dasharray + pathLength normalisation is
-   unreliable: at wide aspect ratios the stroke can paint only partially even
-   at dashoffset:0, leaving the curve visually "short" at rest. A clip-path
-   inset is computed in the SVG's own CSS box and is immune to that distortion,
-   so the line is a solid full stroke that is simply revealed L→R. */
-.capital-curve.is-revealed .capital-curve-svg {
-  animation: capitalCurveWipe 1.2s cubic-bezier(0.5, 0, 0.22, 1) forwards;
-}
-
-@keyframes capitalCurveWipe {
-  to {
-    clip-path: inset(0 0 0 0);
-  }
-}
-
-.capital-curve-area {
-  /* Revealed by the clip wipe along with the line — no separate fade. */
-  opacity: 1;
-}
-
 .capital-curve-zero {
   stroke: #d6d3d1;
   stroke-width: 1;
   stroke-dasharray: 3 4;
-  /* Revealed by the clip wipe. */
-  opacity: 1;
 }
 
 .capital-curve-dot {
@@ -6055,35 +6011,7 @@
   height: 9px;
   margin: -4.5px 0 0 -4.5px;
   border-radius: 9999px;
-  opacity: 0;
-  transform: scale(0);
   pointer-events: none;
-}
-
-/* Bloom the endpoint only once the line has actually reached it (≥ 1.2s draw),
-   so the dot caps the journey instead of floating ahead of an unfinished line. */
-.capital-curve.is-revealed .capital-curve-dot {
-  animation: capitalCurveDotPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
-  animation-delay: 1.2s;
-}
-
-@keyframes capitalCurveDotPop {
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .capital-curve .capital-curve-svg {
-    clip-path: inset(0 0 0 0);
-    animation: none;
-  }
-  .capital-curve .capital-curve-dot {
-    opacity: 1;
-    transform: scale(1);
-    animation: none;
-  }
 }
 
 /* ── Teams: selected feedback and prism glass glow ── */
