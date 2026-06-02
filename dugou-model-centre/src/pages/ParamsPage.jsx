@@ -2540,22 +2540,22 @@ function ConsoleAnchorRail() {
       aria-label="参数后台分区导航"
       className={`console-anchor-rail hidden xl:flex fixed right-4 top-1/2 z-40 -translate-y-1/2 flex-col transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${navStateClass}`}
     >
-      <div className="relative flex flex-col gap-0.5 rounded-2xl border border-stone-200/60 bg-white/55 px-1.5 py-2 backdrop-blur-xl shadow-[0_16px_40px_-34px_rgba(79,70,229,0.42)]">
+      <div className="relative flex flex-col gap-0.5 rounded-2xl border border-emerald-200/55 bg-gradient-to-br from-emerald-50/75 via-teal-50/45 to-emerald-100/55 px-1.5 py-2 backdrop-blur-xl shadow-[0_18px_44px_-30px_rgba(16,185,129,0.5),inset_0_1px_0_rgba(255,255,255,0.75)]">
         {/* 分区轨道：淡淡的竖线，把 5 个分区串成一条序列 */}
         <span
           aria-hidden
-          className="pointer-events-none absolute right-[4px] top-3 bottom-3 w-px bg-gradient-to-b from-transparent via-stone-200/80 to-transparent"
+          className="pointer-events-none absolute right-[4px] top-3 bottom-3 w-px bg-gradient-to-b from-transparent via-emerald-200/70 to-transparent"
         />
         {/* 滑动高亮底块：跟随当前分区平滑滑动 */}
         <span
           aria-hidden
-          className="pointer-events-none absolute left-1 right-1 rounded-xl bg-gradient-to-r from-violet-100/55 to-indigo-100/40 ring-1 ring-inset ring-violet-200/40 transition-[transform,height,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+          className="pointer-events-none absolute left-1 right-1 rounded-xl bg-gradient-to-r from-emerald-100/60 to-teal-100/45 ring-1 ring-inset ring-emerald-200/50 transition-[transform,height,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
           style={{ top: 0, height: indicator.height, transform: `translateY(${indicator.top}px)`, opacity: indicator.ready ? 1 : 0 }}
         />
         {/* 滑动光柱：右侧发光指示，强化"你在这里" */}
         <span
           aria-hidden
-          className="pointer-events-none absolute right-[2.5px] w-[2.5px] rounded-full bg-gradient-to-b from-violet-300 via-violet-400 to-indigo-400 shadow-[0_0_7px_1px_rgba(139,92,246,0.3)] transition-[transform,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+          className="pointer-events-none absolute right-[2.5px] w-[2.5px] rounded-full bg-gradient-to-b from-emerald-300 via-teal-400 to-emerald-400 shadow-[0_0_8px_1px_rgba(16,185,129,0.38)] transition-[transform,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
           style={{ top: 0, height: 18, transform: `translateY(${indicator.top + indicator.height / 2 - 9}px)`, opacity: indicator.ready ? 1 : 0 }}
         />
         {CONSOLE_NAV_GROUPS.map((group, i) => {
@@ -2576,7 +2576,7 @@ function ConsoleAnchorRail() {
             >
               <span
                 className={`whitespace-nowrap text-right text-[11.5px] leading-none tracking-[0.02em] transition-colors duration-300 ${
-                  active ? 'font-semibold text-violet-600' : 'font-medium text-stone-400 group-hover:text-stone-600'
+                  active ? 'font-semibold text-emerald-700' : 'font-medium text-stone-400 group-hover:text-emerald-600'
                 }`}
               >
                 {group.label}
