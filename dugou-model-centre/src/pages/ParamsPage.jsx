@@ -2429,6 +2429,10 @@ function ConsoleAnchorRail() {
   const [visible, setVisible] = useState(false)
   const tickingRef = useRef(false)
   const scrollerRef = useRef(null)
+  const navRef = useRef(null)
+  const canvasRef = useRef(null)
+  const btnRefs = useRef([])
+  const [indicator, setIndicator] = useState({ top: 0, height: 0, ready: false })
 
   useEffect(() => {
     const readMetrics = (scroller) => {
@@ -2477,6 +2481,118 @@ function ConsoleAnchorRail() {
     }
   }, [])
 
+  // 滑动指示器：测量当前分区按钮的位置/高度，让高亮底块与右侧光柱平滑滑过去（层次感）。
+  useEffect(() => {
+    const measure = () => {
+      const btn = btnRefs.current[activeIdx]
+      if (!btn) return
+      setIndicator({ top: btn.offsetTop, height: btn.offsetHeight, ready: true })
+    }
+    measure()
+    window.addEventListener('resize', measure)
+    return () => window.removeEventListener('resize', measure)
+  }, [activeIdx, visible])
+
+  // 悬停星点拖尾：鼠标在导航栏上移动时，于 canvas 喷洒会上浮、微闪、渐隐的星点；rAF 按需启停。
+  // 尊重 prefers-reduced-motion；canvas 只覆盖面板且 pointer-events:none，不影响点击与滚动。
+  useEffect(() => {
+    const canvas = canvasRef.current
+    const nav = navRef.current
+    if (!canvas || !nav) return undefined
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return undefined
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return undefined
+    const dpr = Math.min(window.devicePixelRatio || 1, 2)
+    const particles = []
+    const COLORS = ['rgba(167,139,250,', 'rgba(139,92,246,', 'rgba(196,181,253,', 'rgba(255,255,255,']
+    let rafId = 0
+    let running = false
+    let prev = 0
+    let rect = nav.getBoundingClientRect()
+    let lx = 0
+    let ly = 0
+    let lt = 0
+    const resize = () => {
+      rect = nav.getBoundingClientRect()
+      canvas.width = Math.max(1, Math.ceil(rect.width * dpr))
+      canvas.height = Math.max(1, Math.ceil(rect.height * dpr))
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    }
+    const draw = () => {
+      const now = performance.now()
+      const dt = Math.min(now - prev, 48)
+      prev = now
+      ctx.clearRect(0, 0, rect.width, rect.height)
+      for (let i = particles.length - 1; i >= 0; i -= 1) {
+        const p = particles[i]
+        p.life += dt
+        if (p.life >= p.ttl) {
+          particles.splice(i, 1)
+        } else {
+          p.x += p.vx * dt
+          p.y += p.vy * dt
+          const k = 1 - p.life / p.ttl
+          const twinkle = 0.6 + 0.4 * Math.sin(p.ph + now * 0.013)
+          const alpha = Math.max(0, k * twinkle) * 0.85
+          ctx.beginPath()
+          ctx.fillStyle = p.c + alpha.toFixed(3) + ')'
+          ctx.shadowColor = p.c + (alpha * 0.9).toFixed(3) + ')'
+          ctx.shadowBlur = 6
+          ctx.arc(p.x, p.y, p.r * (0.55 + 0.45 * k), 0, Math.PI * 2)
+          ctx.fill()
+        }
+      }
+      ctx.shadowBlur = 0
+      if (particles.length > 0) {
+        rafId = window.requestAnimationFrame(draw)
+      } else {
+        running = false
+      }
+    }
+    const ensureLoop = () => {
+      if (running) return
+      running = true
+      prev = performance.now()
+      rafId = window.requestAnimationFrame(draw)
+    }
+    const spawn = (x, y) => {
+      const dist = lt ? Math.hypot(x - lx, y - ly) : 0
+      lx = x
+      ly = y
+      lt = performance.now()
+      const n = 1 + Math.min(2, Math.round(dist / 6))
+      for (let i = 0; i < n; i += 1) {
+        particles.push({
+          x: x + (Math.random() - 0.5) * 4,
+          y: y + (Math.random() - 0.5) * 4,
+          vx: (Math.random() - 0.5) * 0.018,
+          vy: -0.01 - Math.random() * 0.016,
+          r: 0.5 + Math.random() * 1.5,
+          life: 0,
+          ttl: 520 + Math.random() * 460,
+          ph: Math.random() * Math.PI * 2,
+          c: COLORS[Math.floor(Math.random() * COLORS.length)],
+        })
+      }
+      if (particles.length > 90) particles.splice(0, particles.length - 90)
+      ensureLoop()
+    }
+    const onMove = (e) => spawn(e.clientX - rect.left, e.clientY - rect.top)
+    const onEnter = () => {
+      rect = nav.getBoundingClientRect()
+    }
+    resize()
+    nav.addEventListener('mousemove', onMove)
+    nav.addEventListener('mouseenter', onEnter)
+    window.addEventListener('resize', resize)
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      nav.removeEventListener('mousemove', onMove)
+      nav.removeEventListener('mouseenter', onEnter)
+      window.removeEventListener('resize', resize)
+    }
+  }, [])
+
   const goto = (id) => {
     const el = document.getElementById(id)
     if (!el) return
@@ -2496,44 +2612,59 @@ function ConsoleAnchorRail() {
   if (typeof document === 'undefined') return null
   return createPortal(
     <nav
+      ref={navRef}
       aria-label="参数后台分区导航"
-      className={`console-anchor-rail hidden xl:flex fixed right-4 top-1/2 z-40 -translate-y-1/2 flex-col transition-all duration-500 ease-out ${
-        visible ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none translate-x-3 opacity-0'
+      className={`console-anchor-rail hidden xl:flex fixed right-4 top-1/2 z-40 -translate-y-1/2 flex-col transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${
+        visible ? 'pointer-events-auto translate-x-0 opacity-100' : 'pointer-events-none translate-x-4 opacity-0'
       }`}
     >
-      <div className="flex flex-col gap-0.5 rounded-2xl border border-stone-200/70 bg-white/70 px-1.5 py-2 backdrop-blur-xl shadow-[0_22px_50px_-32px_rgba(79,70,229,0.55)]">
+      <div className="relative flex flex-col gap-0.5 rounded-2xl border border-stone-200/70 bg-white/70 px-1.5 py-2 backdrop-blur-xl shadow-[0_22px_50px_-32px_rgba(79,70,229,0.55)]">
+        {/* 分区轨道：淡淡的竖线，把 5 个分区串成一条序列 */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-[4px] top-3 bottom-3 w-px bg-gradient-to-b from-transparent via-stone-200/80 to-transparent"
+        />
+        {/* 滑动高亮底块：跟随当前分区平滑滑动 */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-1 right-1 rounded-xl bg-gradient-to-r from-violet-100/70 to-indigo-100/55 ring-1 ring-inset ring-violet-200/55 transition-[transform,height,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+          style={{ top: 0, height: indicator.height, transform: `translateY(${indicator.top}px)`, opacity: indicator.ready ? 1 : 0 }}
+        />
+        {/* 滑动光柱：右侧发光指示，强化"你在这里" */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute right-[2.5px] w-[3px] rounded-full bg-gradient-to-b from-violet-400 via-violet-500 to-indigo-500 shadow-[0_0_12px_2px_rgba(139,92,246,0.5)] transition-[transform,opacity] duration-[460ms] [transition-timing-function:cubic-bezier(0.22,1,0.36,1)]"
+          style={{ top: 0, height: 18, transform: `translateY(${indicator.top + indicator.height / 2 - 9}px)`, opacity: indicator.ready ? 1 : 0 }}
+        />
         {CONSOLE_NAV_GROUPS.map((group, i) => {
           const active = i === activeIdx
           return (
             <button
               key={group.id}
+              ref={(el) => {
+                btnRefs.current[i] = el
+              }}
               type="button"
               onClick={() => goto(group.id)}
               aria-current={active ? 'true' : undefined}
-              className={`group flex items-center gap-2.5 rounded-xl py-1.5 pl-3 pr-2 transition-colors duration-200 ${
-                active ? 'bg-violet-50/70' : 'hover:bg-stone-50'
+              style={{ transitionDelay: visible ? `${90 + i * 48}ms` : '0ms' }}
+              className={`group relative z-[1] flex items-center justify-end rounded-xl py-1.5 pl-4 pr-3.5 transition-[transform,opacity] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] ${
+                visible ? 'translate-y-0 opacity-100' : 'translate-y-1 opacity-0'
               }`}
             >
               <span
-                className={`flex-1 whitespace-nowrap text-right text-[11.5px] leading-none tracking-[0.01em] transition-colors duration-200 ${
+                className={`whitespace-nowrap text-right text-[11.5px] leading-none tracking-[0.02em] transition-colors duration-300 ${
                   active ? 'font-semibold text-violet-700' : 'font-medium text-stone-400 group-hover:text-stone-600'
                 }`}
               >
                 {group.label}
               </span>
-              <span className="relative flex h-4 w-1 items-center justify-center">
-                <span
-                  className={`block w-1 rounded-full transition-all duration-300 ease-out ${
-                    active
-                      ? 'h-4 bg-violet-500 shadow-[0_0_0_3px_rgba(139,92,246,0.16)]'
-                      : 'h-1.5 bg-stone-300 group-hover:h-2.5 group-hover:bg-stone-400'
-                  }`}
-                />
-              </span>
             </button>
           )
         })}
       </div>
+      {/* 悬停星点拖尾画布：覆盖面板、不拦截点击 */}
+      <canvas ref={canvasRef} aria-hidden className="pointer-events-none absolute inset-0 h-full w-full" />
     </nav>,
     document.body,
   )
