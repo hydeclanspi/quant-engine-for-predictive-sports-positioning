@@ -1045,7 +1045,7 @@ export default function AnalysisPage({ openModal }) {
         <div className="space-y-4">
           <div className="p-3 rounded-xl bg-stone-50 border border-stone-200 flex items-center justify-between">
             <span className="text-sm text-stone-700">
-              {cell.sizeBucket} × {maskMode(cell.mode)}
+              {maskText(cell.sizeBucket)} × {maskMode(cell.mode)}
             </span>
             <span className="text-xs text-stone-500">
               {cell.samples} 样本 · ROI {signed(cell.roi, 1, '%')} · 命中率 {cell.hitRate.toFixed(1)}%
@@ -1058,7 +1058,7 @@ export default function AnalysisPage({ openModal }) {
     }
 
     openModal({
-      title: `${cell.sizeBucket} × ${maskMode(cell.mode)} · 串关配置历史`,
+      title: maskText(`${cell.sizeBucket} × ${maskMode(cell.mode)} · 串关配置历史`),
       content: <ComboMatrixDetailContent />,
     })
   }
@@ -1466,8 +1466,8 @@ export default function AnalysisPage({ openModal }) {
 
           <div className="motion-v2-surface glow-card bg-white rounded-2xl p-6 border border-stone-100">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-medium text-stone-700">最优串关组合分析（S8）</h3>
-              <span className="text-xs text-stone-400">串关规模 × 主导 Mode · 点击单元格查看历史</span>
+              <h3 className="font-medium text-stone-700">{maskText('最优串关组合分析（S8）')}</h3>
+              <span className="text-xs text-stone-400">{maskText('串关规模 × 主导 Mode · 点击单元格查看历史')}</span>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs">
@@ -1484,7 +1484,7 @@ export default function AnalysisPage({ openModal }) {
                 <tbody>
                   {deepData.comboMatrixRows.map((row) => (
                     <tr key={`matrix-${row.sizeBucket}`} className="border-b border-stone-100">
-                      <td className="py-2.5 pr-3 font-medium text-stone-700">{row.sizeBucket}</td>
+                      <td className="py-2.5 pr-3 font-medium text-stone-700">{maskText(row.sizeBucket)}</td>
                       {row.cells.map((cell) => {
                         const intensity = Math.min(Math.abs(cell.roi) / 40, 1)
                         const bgColor = !cell.hasData
@@ -1739,7 +1739,7 @@ export default function AnalysisPage({ openModal }) {
             <div className="mt-6">
               <div className="flex items-center justify-between mb-3">
                 <h4 className="text-sm font-medium text-stone-700">Entries 类型表现（N4）</h4>
-                <span className="text-xs text-stone-400">按语义解析后的盘口类型切片</span>
+                <span className="text-xs text-stone-400">{maskText('按语义解析后的盘口类型切片')}</span>
               </div>
               <table className="w-full text-sm">
                 <thead>
@@ -1933,7 +1933,7 @@ export default function AnalysisPage({ openModal }) {
                 <p className="text-[12px] text-stone-600 mt-2">
                   最近 {momentumSummary.recentSamples} 场 / 基线 {momentumSummary.baseSamples} 场
                 </p>
-                <p className="text-[12px] text-stone-600 leading-6 mt-2">{recencyRegime.summary}</p>
+                <p className="text-[12px] text-stone-600 leading-6 mt-2">{maskText(recencyRegime.summary)}</p>
               </div>
               <div className="motion-v2-row rounded-xl border border-violet-100/90 bg-gradient-to-br from-violet-50/75 to-white p-3.5">
                 <p className="text-[10px] uppercase tracking-[0.12em] text-stone-400 mb-2">动量面板</p>
@@ -1957,7 +1957,7 @@ export default function AnalysisPage({ openModal }) {
                     </p>
                   </div>
                 </div>
-                <p className="mt-2.5 text-[12px] text-stone-600 leading-6">{momentumSummary.recommendation}</p>
+                <p className="mt-2.5 text-[12px] text-stone-600 leading-6">{maskText(momentumSummary.recommendation)}</p>
               </div>
             </div>
           </div>

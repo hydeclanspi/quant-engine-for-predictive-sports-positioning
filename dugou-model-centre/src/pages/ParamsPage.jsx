@@ -1264,7 +1264,9 @@ const LongFormDocument = ({ text, keyPrefix }) => {
   )
 }
 
-const CopulaRemarks = () => (
+const CopulaRemarks = () => {
+  const maskText = usePreviewTextMask()
+  return maskReactTree((
   <section className="mt-5 rounded-xl border border-stone-200/70 bg-stone-50/65 px-4 py-3">
     <p className="text-[11px] uppercase tracking-[0.14em] text-stone-400 font-medium">Remarks</p>
 
@@ -1313,7 +1315,8 @@ const CopulaRemarks = () => (
 
     <p className="mt-3 text-right text-[12px] font-bold text-stone-500">Feb 15, 2026.</p>
   </section>
-)
+  ), maskText)
+}
 
 const BayesianRemarks = () => {
   const maskText = usePreviewTextMask()

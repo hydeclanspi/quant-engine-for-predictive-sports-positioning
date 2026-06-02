@@ -1393,7 +1393,7 @@ export default function NewInvestmentPage() {
                     <div className="mt-2 space-y-1">
                       {getMatchOddsWarnings(match.entries).map((warning, warningIdx) => (
                         <p key={warningIdx} className="text-[11px] text-rose-500">
-                          ⚠ {warning}
+                          ⚠ {maskText(warning)}
                         </p>
                       ))}
                     </div>

@@ -5349,7 +5349,7 @@ export default function ComboPage({ openModal }) {
 
           <div className="combo-left-panel-detail mt-4 p-4 rounded-2xl border border-emerald-200/70 bg-gradient-to-br from-emerald-50/80 via-white to-teal-50/60 shadow-[0_14px_34px_rgba(16,185,129,0.10)] backdrop-blur-sm">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs text-emerald-600 font-semibold tracking-[0.02em]">串关结构偏好</span>
+              <span className="text-xs text-emerald-600 font-semibold tracking-[0.02em]">{maskText('串关结构偏好')}</span>
               <div className="flex items-center gap-1.5">
                 <button
                   onClick={() =>
@@ -5362,7 +5362,7 @@ export default function ComboPage({ openModal }) {
                   }
                   className="px-2.5 py-1 rounded-md text-[11px] border border-emerald-300/80 bg-gradient-to-r from-emerald-100 to-teal-100 text-emerald-600 hover:from-emerald-200 hover:to-teal-200 transition-colors"
                 >
-                  强串联
+                  {maskText('强串联')}
                 </button>
                 <button
                   onClick={() =>
@@ -5381,7 +5381,7 @@ export default function ComboPage({ openModal }) {
             </div>
             <div className="grid grid-cols-2 gap-2">
               <label className="text-[11px] text-stone-500 rounded-xl border border-emerald-100/80 bg-white/75 px-2.5 py-2 backdrop-blur-[2px]">
-                最小关数
+                {maskText('最小关数')}
                 <select
                   value={comboStructure.minLegs}
                   onChange={(e) =>
@@ -5389,14 +5389,14 @@ export default function ComboPage({ openModal }) {
                   }
                   className="input-glow mt-1 w-full px-2 py-1.5 rounded-lg border border-emerald-100 text-xs bg-white/90"
                 >
-                  <option value={1}>1（含单关）</option>
-                  <option value={2}>2（至少2串1）</option>
-                  <option value={3}>3（至少3串1）</option>
-                  <option value={4}>4（至少4串1）</option>
+                  <option value={1}>{maskText('1（含单关）')}</option>
+                  <option value={2}>{maskText('2（至少2串1）')}</option>
+                  <option value={3}>{maskText('3（至少3串1）')}</option>
+                  <option value={4}>{maskText('4（至少4串1）')}</option>
                 </select>
               </label>
               <label className="text-[11px] text-stone-500 rounded-xl border border-emerald-100/80 bg-white/75 px-2.5 py-2 backdrop-blur-[2px]">
-                串关偏好 β
+                {maskText('串关偏好 β')}
                 <input
                   type="range"
                   min="0"
@@ -5442,17 +5442,17 @@ export default function ComboPage({ openModal }) {
               </label>
             </div>
             <p className="text-[10px] text-emerald-600/75 mt-2">
-              β 提升多关串联的效用分；λ 控制 MMR 去重力度；η 给未覆盖候选加分。
+              {maskText('β 提升多关串联的效用分；λ 控制 MMR 去重力度；η 给未覆盖候选加分。')}
             </p>
             {Object.keys(generationSummary.legsDistribution || {}).length > 0 && (
               <div className="mt-2.5 pt-2.5 border-t border-emerald-200/70">
-                <p className="text-[10px] text-emerald-600 mb-1">上次生成关数分布</p>
+                <p className="text-[10px] text-emerald-600 mb-1">{maskText('上次生成关数分布')}</p>
                 <div className="flex gap-2 flex-wrap">
                   {Object.entries(generationSummary.legsDistribution)
                     .sort(([a], [b]) => Number(a) - Number(b))
                     .map(([legs, count]) => (
                       <span key={legs} className="px-1.5 py-0.5 rounded border border-emerald-200/70 bg-emerald-100/80 text-emerald-600 text-[10px]">
-                        {legs}关×{count}
+                        {legs}{isPreviewMode() ? '标' : '关'}×{count}
                       </span>
                     ))}
                 </div>
@@ -5748,7 +5748,7 @@ export default function ComboPage({ openModal }) {
                 <span className="font-medium text-stone-600">{activeStrategyMeta.label}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-stone-400">关数</span>
+                <span className="text-stone-400">{maskText('关数')}</span>
                 <span className="font-medium text-stone-600">≥{comboStructure.minLegs}</span>
               </div>
               <div className="flex items-center justify-between">
@@ -6707,11 +6707,11 @@ export default function ComboPage({ openModal }) {
               <div className="pt-2 mt-1 border-t border-stone-200 space-y-1">
                 <p className="text-[10px] font-semibold text-stone-400 uppercase tracking-wider">动态回测参数</p>
                 <div className="grid grid-cols-3 gap-x-3 gap-y-1">
-                  <div className="flex justify-between"><span className="text-stone-400">弱腿罚</span><span className="font-mono text-stone-600">{generationSummary.dynParams.tierPenaltyPerWeakLeg?.toFixed(3)}</span></div>
+                  <div className="flex justify-between"><span className="text-stone-400">{maskText('弱腿罚')}</span><span className="font-mono text-stone-600">{generationSummary.dynParams.tierPenaltyPerWeakLeg?.toFixed(3)}</span></div>
                   <div className="flex justify-between"><span className="text-stone-400">锚定</span><span className="font-mono text-stone-600">{generationSummary.dynParams.tierAnchorBonus?.toFixed(3)}</span></div>
                   <div className="flex justify-between"><span className="text-stone-400">覆盖</span><span className="font-mono text-stone-600">{generationSummary.dynParams.coveringBonus?.toFixed(3)}</span></div>
                   <div className="flex justify-between"><span className="text-stone-400">Sharpe</span><span className="font-mono text-stone-600">{generationSummary.dynParams.marginalSharpeThreshold?.toFixed(3)}</span></div>
-                  <div className="flex justify-between"><span className="text-stone-400">弱腿上限</span><span className="font-mono text-stone-600">{generationSummary.dynParams.maxWeakLegsPerCombo}</span></div>
+                  <div className="flex justify-between"><span className="text-stone-400">{maskText('弱腿上限')}</span><span className="font-mono text-stone-600">{generationSummary.dynParams.maxWeakLegsPerCombo}</span></div>
                   <div className="flex justify-between"><span className="text-stone-400">可信度</span><span className={`font-mono ${(generationSummary.dynParams.backtestReliability || 0) >= 0.5 ? 'text-emerald-600' : 'text-amber-500'}`}>{((generationSummary.dynParams.backtestReliability || 0) * 100).toFixed(0)}%</span></div>
                 </div>
                 {generationSummary.dynParams.confTierThresholds && (
@@ -6855,7 +6855,7 @@ export default function ComboPage({ openModal }) {
                 return (
                   <div key={layer.layer} className="rounded-xl border border-stone-100 bg-stone-50/70 p-3">
                     <div className="flex items-center justify-between">
-                      <span className={`text-xs px-2 py-1 rounded-full ${meta.badge}`}>{layer.layer}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${meta.badge}`}>{maskText(layer.layer)}</span>
                       <span className="text-xs text-stone-400">{layer.count} 个方案</span>
                     </div>
                     <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
