@@ -10,6 +10,7 @@ import {
 } from '../lib/atomicParlay'
 import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
 import ComboExpandHint from '../components/ComboExpandHint'
+import ComboOrbReveal from '../components/ComboOrbReveal'
 import CountUp from '../components/CountUp'
 import ExplainHover from '../components/ExplainHover'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
@@ -80,6 +81,11 @@ const prefersReducedMotion = () => {
     return false
   }
 }
+// 「聚光环揭幕」生成揭晓礼（仅演示态 + 允许动效）：点击「生成」后先把 Hero 卡夹成一张
+// 居中、约「第一眼可视面积」的紧凑卡，中央播放聚光环进度（蒙特卡洛意象）；环满绽放后
+// 再把卡片丝滑「拉长」揭晓结果。私用 FULL 态与 reduced-motion 直接即时揭晓、不打扰。
+const COMBO_REVEAL_COMPACT_PX = 500 // 紧凑卡高度（≈ Hero 卡第一眼可视高度，环钉在其垂直中央）
+const COMBO_REVEAL_STRETCH_MS = 640 // 「拉长揭晓」过渡时长（轻感级，丝滑不拖沓）
 const HARD_DECOUPLING_HINT_THRESHOLD = 5
 
 const SHARPE_BADGE_TONE_CLASS = {
@@ -3847,6 +3853,18 @@ export default function ComboPage({ openModal }) {
   // resultsAnimNonce bumps once per generate to (re)play the result count-up
   // + dependency-matrix 光扫，并驱动【最优】行的自动「秀一下」。
   const [resultsAnimNonce, setResultsAnimNonce] = useState(0)
+  // 「聚光环揭幕」礼的编排（仅演示态）：revealPhase ∈ 'idle' | 'computing' | 'reveal' | 'done'。
+  //  · computing：把 Hero 卡夹成紧凑卡，叠放聚光环跑进度；
+  //  · reveal：环满后量得 revealStretchPx（卡片自然高度），把卡片丝滑拉长揭晓；
+  //  · done：松开夹制，回归自然高度自适应。
+  // revealRunId 每次生成自增，作聚光环组件的 key 强制重挂，避免中途再次生成卡在上一轮。
+  const [revealPhase, setRevealPhase] = useState('idle')
+  const [revealStretchPx, setRevealStretchPx] = useState(null)
+  const [revealRunId, setRevealRunId] = useState(0)
+  // 紧凑卡高度：开礼时按 Hero 卡在视口里的实时位置动态算出，使聚光环正落在「视口中线」
+  // （而非整张高卡的几何中心）——这正是「动画中央应是屏幕中央」的要义，且对滚动/视口自适应。
+  const [revealCompactPx, setRevealCompactPx] = useState(COMBO_REVEAL_COMPACT_PX)
+  const heroCardRef = useRef(null)
   const [expandedComboIdxSet, setExpandedComboIdxSet] = useState(() => new Set())
   const [expandedPortfolioIdxSet, setExpandedPortfolioIdxSet] = useState(() => new Set())
   const [showAllPortfolios, setShowAllPortfolios] = useState(false)
@@ -4500,6 +4518,39 @@ export default function ComboPage({ openModal }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resultsAnimNonce])
 
+  // 聚光环填满（或被点击跳过）→ 量取 Hero 卡自然高度，切到「拉长揭晓」相位，并脉冲
+  // resultsAnimNonce 驱动数字 count-up、依赖矩阵光扫与【最优】行的自动「秀一下」。
+  const handleOrbComplete = () => {
+    if (revealPhase !== 'computing') return
+    const h = heroCardRef.current?.scrollHeight ?? null
+    setRevealStretchPx(h && h > 0 ? h : null)
+    setRevealPhase('reveal')
+    setResultsAnimNonce((n) => n + 1)
+  }
+
+  // 「拉长揭晓」过渡跑完 → 落到 'done'：松开 maxHeight 夹制，让 Hero 卡回归自然高度自适应。
+  useEffect(() => {
+    if (revealPhase !== 'reveal') return undefined
+    const t = window.setTimeout(() => {
+      setRevealPhase('done')
+      setRevealStretchPx(null)
+    }, COMBO_REVEAL_STRETCH_MS + 80)
+    return () => window.clearTimeout(t)
+  }, [revealPhase])
+
+  // Hero 卡在揭晓礼期间的夹制/拉长内联样式：computing 夹到紧凑高度；reveal 带过渡拉长到
+  // 量得的自然高度；done/idle 不加任何夹制（回归自适应）。
+  const heroRevealStyle =
+    revealPhase === 'computing'
+      ? { maxHeight: `${revealCompactPx}px`, overflow: 'hidden' }
+      : revealPhase === 'reveal'
+        ? {
+            maxHeight: `${revealStretchPx ?? revealCompactPx}px`,
+            overflow: 'hidden',
+            transition: `max-height ${COMBO_REVEAL_STRETCH_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`,
+          }
+        : undefined
+
   const handleGenerate = () => {
     if (selectedMatches.length === 0) {
       window.alert('请先勾选至少 1 场比赛。')
@@ -4575,9 +4626,24 @@ export default function ComboPage({ openModal }) {
     setLeftPanelCollapsed(true)
     setFtCellOverrides({})
     setFtDirtyPortfolios(new Set())
-    // 结果就绪即揭晓：脉冲一次 resultsAnimNonce 驱动数字 count-up、依赖矩阵光扫，
-    // 以及【最优】行的自动「秀一下」。
-    setResultsAnimNonce((n) => n + 1)
+    // 揭晓礼：演示态且允许动效时，放一段「聚光环揭幕」（夹成紧凑卡 → 环满 → 拉长揭晓），
+    // 其收尾会脉冲 resultsAnimNonce；私用 FULL 态或 reduced-motion 则即时揭晓——直接脉冲
+    // 一次 nonce 驱动数字 count-up、依赖矩阵光扫与【最优】行的自动「秀一下」。
+    if (isPreviewMode() && !prefersReducedMotion()) {
+      // 此刻 DOM 仍是生成前的稳定布局（上面这些 setState 尚未提交），Hero 卡 top 量得最准；
+      // 算出让聚光环正落在「视口中线」的紧凑卡高度：compact = 视口高 − 2 × 卡顶
+      // （即 2 ×（视口中线 − 卡顶））。与相位、本轮 id 同批写入，开礼首帧即正确、无跳变。
+      const vh = (typeof window !== 'undefined' && window.innerHeight) || 900
+      const top = heroCardRef.current?.getBoundingClientRect().top ?? 96
+      let compact = Math.round(vh - 2 * top)
+      if (!Number.isFinite(compact)) compact = COMBO_REVEAL_COMPACT_PX
+      compact = Math.max(360, Math.min(compact, Math.round(vh * 1.4)))
+      setRevealCompactPx(compact)
+      setRevealRunId((id) => id + 1)
+      setRevealPhase('computing')
+    } else {
+      setResultsAnimNonce((n) => n + 1)
+    }
   }
 
   const handleConfirmChecked = () => {
@@ -5856,7 +5922,20 @@ export default function ComboPage({ openModal }) {
         </div>
 
         {/* ═══ 智能组合包 Hero Card ═══ */}
-        <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-6 relative">
+        <div
+          ref={heroCardRef}
+          className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-6 relative"
+          style={heroRevealStyle}
+        >
+          {(revealPhase === 'computing' || revealPhase === 'reveal') && (
+            <ComboOrbReveal
+              key={revealRunId}
+              compactPx={revealCompactPx}
+              leaving={revealPhase === 'reveal'}
+              onComplete={handleOrbComplete}
+              onSkip={handleOrbComplete}
+            />
+          )}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-indigo-500" />

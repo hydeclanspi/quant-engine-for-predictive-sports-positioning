@@ -3821,6 +3821,154 @@
   .combo-ft-sweep { display: none; }
 }
 
+/* ──────────────────────────────────────────────────────────────
+   ComboOrbReveal —「聚光环揭幕」生成揭晓礼（仅演示态 + 允许动效）。点击「生成」
+   后外层把 Hero 卡夹成一张居中、约「第一眼可视面积」的紧凑卡，本层在其垂直中央
+   播放一枚聚光进度环（蒙特卡洛意象）：环 0→100 缓缓填满、中央百分比同步跳动、下方
+   阶段文案交替淡入；环满轻轻「绽放」一下后回调外层，外层量得卡片自然高度把卡片丝滑
+   「拉长」揭晓结果，本层随之轻盈隐去。焦点盒固定高度 = compactPx，把环钉在紧凑卡的
+   垂直中央，故拉长时环不漂移。
+   ────────────────────────────────────────────────────────────── */
+.combo-orb {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  border-radius: 1rem; /* 贴合 Hero 卡 rounded-2xl */
+  overflow: hidden;
+  cursor: pointer;
+  background:
+    radial-gradient(118% 78% at 50% 40%, rgba(238, 242, 255, 0.7), rgba(255, 255, 255, 0.95) 62%),
+    rgba(255, 255, 255, 0.97);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  opacity: 1;
+  transition: opacity 0.34s ease;
+}
+
+.combo-orb.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.combo-orb-focus {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* height 由内联 compactPx 给定。聚光环（.combo-orb-core）是唯一的常规流子元素，
+     由 flex 居中 → 环心正落在焦点盒（= 紧凑卡的可视带）的垂直中央；阶段/跳过文案改用
+     绝对定位悬于环下，故不影响环的居中。 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 1.5rem;
+}
+
+.combo-orb-core {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.combo-orb-core.is-bloom {
+  animation: comboOrbBloom 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes comboOrbBloom {
+  0% { transform: scale(1); }
+  55% { transform: scale(1.085); }
+  100% { transform: scale(1); }
+}
+
+.combo-orb-ring {
+  display: block;
+  filter: drop-shadow(0 4px 12px rgba(99, 102, 241, 0.18));
+  transition: filter 0.36s ease;
+}
+
+.combo-orb-core.is-bloom .combo-orb-ring {
+  filter: drop-shadow(0 6px 18px rgba(99, 102, 241, 0.34));
+}
+
+.combo-orb-track {
+  fill: none;
+  stroke: rgba(99, 102, 241, 0.12);
+  stroke-width: 5;
+}
+
+.combo-orb-arc {
+  fill: none;
+  stroke: url(#comboOrbGrad);
+  stroke-width: 5;
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.12s linear;
+}
+
+.combo-orb-pct {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 1.05rem;
+  letter-spacing: -0.01em;
+  color: #4338ca;
+}
+
+.combo-orb-pct i {
+  font-style: normal;
+  font-size: 0.6rem;
+  font-weight: 600;
+  margin-left: 1px;
+  margin-top: 0.3rem;
+  align-self: flex-start;
+  color: #6366f1;
+}
+
+/* 阶段文案 / 跳过提示：绝对定位悬于环下方（锚定焦点盒垂直中线 + 偏移），不参与
+   常规流，确保聚光环本身始终精确居中。 */
+.combo-orb-stage {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  margin-top: 46px; /* 环半径 ~36 + 间隙 → 落在环正下方 */
+  font-size: 0.8rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: #6b7280;
+  animation: comboOrbStageIn 0.4s ease both;
+}
+
+@keyframes comboOrbStageIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.combo-orb-skip {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  margin-top: 74px; /* 阶段文案之下 */
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  color: #c7c9d1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo-orb { transition: none; }
+  .combo-orb-core.is-bloom { animation: none; }
+  .combo-orb-ring { transition: none; }
+  .combo-orb-arc { transition: none; }
+  .combo-orb-stage { animation: none; }
+}
+
 /* ============================================================
    ConfidenceRing — radial gauge on the 模型收口验证 card. The arc
    sweep is CSS-driven (not rAF) so it resolves in background tabs.
