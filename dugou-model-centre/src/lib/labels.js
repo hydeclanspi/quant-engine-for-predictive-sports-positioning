@@ -75,12 +75,12 @@ const PREVIEW_LABELS = {
   rating: { short: 'Score', long: 'Judgmental Score' },
   rating_zh: { short: '评分', long: '后验评分' },
   modes: {
-    常规: 'Baseline-Drift',
-    '常规-稳': 'Mean-Reverting',
-    '常规-杠杆': 'Momentum-Carry',
-    半彩票半保险: 'Convex-Barbell',
-    保险产品: 'Defensive-Anchor',
-    赌一把: 'Heavy-Tail Sprint',
+    常规: 'Directional',
+    '常规-稳': 'Relative-Value',
+    '常规-杠杆': 'Trend',
+    半彩票半保险: 'Risk-Reversal',
+    保险产品: 'Tail-Risk',
+    赌一把: 'High-Conviction',
   },
   modesShort: {
     常规: 'Σ',

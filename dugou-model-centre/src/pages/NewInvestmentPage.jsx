@@ -1065,7 +1065,7 @@ export default function NewInvestmentPage() {
                 value={quickInputText}
                 onChange={(e) => setQuickInputText(e.target.value)}
                 placeholder={isPreview
-                  ? '欢迎体验 · 在此粘贴一句话即可自动解析为结构化投资单\n例如：曼城 win, 赔率 1.85, 变量 α 1.3, 变量 δ 0.72, 策略 Baseline-Drift, 仓位 150'
+                  ? '欢迎体验 · 在此粘贴一句话即可自动解析为结构化投资单\n例如：曼城 win, 赔率 1.85, 变量 α 1.3, 变量 δ 0.72, 策略 Directional, 仓位 150'
                   : '示例：利兹联 win/平 拜仁, conf 3.5, odds 7.4, fse 0.72, mode 半, input 180\n或：arsenal W, chelsea D, conf 55 60, odds 1.8 3.2, mode 常规-稳'}
                 rows={3}
                 className="input-glow w-full px-3 py-2 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-amber-400 resize-none"

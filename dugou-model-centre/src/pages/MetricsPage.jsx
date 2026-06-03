@@ -946,7 +946,7 @@ export default function MetricsPage({ openModal }) {
             </h3>
             <div className="flex gap-2">
               {MATRIX_TABS.map((tab) => {
-                const isPreview = labels.modes?.['常规'] === 'Baseline-Drift'
+                const isPreview = labels.modes?.['常规'] === 'Directional'
                 const display = isPreview ? (MATRIX_TAB_LABEL_OVERRIDES[tab.id] || tab.label) : tab.label
                 return (
                   <button

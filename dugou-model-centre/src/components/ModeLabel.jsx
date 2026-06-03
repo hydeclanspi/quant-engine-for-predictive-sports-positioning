@@ -4,9 +4,9 @@ import { useLabels } from '../lib/labels'
  * ModeLabel — renders a strategy-mode name routed through the active
  * display-mode dictionary. In FULL_MODE the raw Chinese mode names
  * (常规 / 常规-稳 / …) pass through unchanged. In PREVIEW_MODE they
- * are swapped for quant-style strategy class names (Baseline-Drift /
- * Mean-Reverting / Momentum-Carry / Convex-Barbell / Defensive-Anchor
- * / Heavy-Tail Sprint).
+ * are swapped for hedge-fund strategy-sleeve names (Directional /
+ * Relative-Value / Trend / Risk-Reversal / Tail-Risk /
+ * High-Conviction).
  *
  * Use this anywhere you render a mode string in JSX. For non-JSX use
  * (chart axis labels, table cell strings) call useModeLabel() instead.
