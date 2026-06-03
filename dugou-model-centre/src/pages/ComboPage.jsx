@@ -10,7 +10,6 @@ import {
 } from '../lib/atomicParlay'
 import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
 import ComboExpandHint from '../components/ComboExpandHint'
-import ComboGenerateReveal from '../components/ComboGenerateReveal'
 import CountUp from '../components/CountUp'
 import ExplainHover from '../components/ExplainHover'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
@@ -3845,10 +3844,8 @@ export default function ComboPage({ openModal }) {
   const [moreTeams, setMoreTeams] = useState(new Set())
   const [mcSimResult, setMcSimResult] = useState(null)
   const [portfolioAllocations, setPortfolioAllocations] = useState([])
-  // 「算法揭晓」reveal: generateRevealing mounts the choreography curtain
-  // over the hero card; resultsAnimNonce bumps each generate to (re)play
-  // the result count-up + heatmap sweep once the curtain lifts.
-  const [generateRevealing, setGenerateRevealing] = useState(false)
+  // resultsAnimNonce bumps once per generate to (re)play the result count-up
+  // + dependency-matrix 光扫，并驱动【最优】行的自动「秀一下」。
   const [resultsAnimNonce, setResultsAnimNonce] = useState(0)
   const [expandedComboIdxSet, setExpandedComboIdxSet] = useState(() => new Set())
   const [expandedPortfolioIdxSet, setExpandedPortfolioIdxSet] = useState(() => new Set())
@@ -4578,10 +4575,9 @@ export default function ComboPage({ openModal }) {
     setLeftPanelCollapsed(true)
     setFtCellOverrides({})
     setFtDirtyPortfolios(new Set())
-    // Play the「算法揭晓」curtain over the freshly computed hero card. The
-    // overlay fires onReveal at ~1.1s to start the result count-up while it
-    // dissolves; covers both generate entry points since both route here.
-    setGenerateRevealing(true)
+    // 结果就绪即揭晓：脉冲一次 resultsAnimNonce 驱动数字 count-up、依赖矩阵光扫，
+    // 以及【最优】行的自动「秀一下」。
+    setResultsAnimNonce((n) => n + 1)
   }
 
   const handleConfirmChecked = () => {
@@ -5861,12 +5857,6 @@ export default function ComboPage({ openModal }) {
 
         {/* ═══ 智能组合包 Hero Card ═══ */}
         <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-6 relative">
-          {generateRevealing && (
-            <ComboGenerateReveal
-              onReveal={() => setResultsAnimNonce((n) => n + 1)}
-              onDone={() => setGenerateRevealing(false)}
-            />
-          )}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Sparkles size={16} className="text-indigo-500" />
