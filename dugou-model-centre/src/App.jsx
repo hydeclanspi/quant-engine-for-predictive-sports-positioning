@@ -56,14 +56,6 @@ function App() {
   const location = useLocation()
   const displayMode = useDisplayMode()
 
-  // Demo/preview renders the whole app at 90% (browser-zoom equivalent);
-  // FULL (unlocked) mode stays 100%. Toggle the <html> class reactively so
-  // unlocking/locking at runtime switches the zoom without a reload.
-  useEffect(() => {
-    const root = document.documentElement
-    root.classList.toggle('dugou-preview-zoom', displayMode === PREVIEW_MODE)
-  }, [displayMode])
-
   // Listen for layout mode changes from ParamsPage
   useEffect(() => {
     const onLayoutChange = (e) => {

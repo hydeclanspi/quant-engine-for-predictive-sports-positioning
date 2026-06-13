@@ -8504,14 +8504,15 @@
 }
 
 /* ─────────────────────────────────────────────────────────────────────
-   Preview / demo global zoom (browser-zoom equivalent)
+   Global app zoom (browser-zoom equivalent)
    ---------------------------------------------------------------------
-   In preview/demo mode the whole app renders at 90% for a denser, more
-   premium "overview" feel — equivalent to opening the page at 90% browser
-   zoom. FULL (unlocked) mode is untouched at 100%.
+   The whole app renders at 90% for a denser, more premium "overview"
+   feel — equivalent to opening the page at 90% browser zoom. Applies in
+   BOTH demo/preview and FULL (unlocked) modes so the live owner view
+   matches the demo presentation.
 
-   The class is toggled on <html> by main.jsx (pre-paint, no flash) and
-   App.jsx (reactive to unlock/lock).
+   Pure CSS (no JS class toggle) means the zoom is present from the very
+   first paint — there is never a 100%→90% flash.
 
    Caveat handled: CSS `zoom` (unlike browser zoom) does NOT resize the
    viewport, so a `100vh` (`h-screen`) shell would render at 90vh and leave
@@ -8523,9 +8524,9 @@
    beat Tailwind's `h-screen` utility (which lives in the later `utilities`
    cascade layer and would otherwise win regardless of specificity).
    ───────────────────────────────────────────────────────────────────── */
-html.dugou-preview-zoom {
+html {
   zoom: 0.9;
 }
-html.dugou-preview-zoom .h-screen {
+html .h-screen {
   height: calc(100vh / 0.9);
 }
