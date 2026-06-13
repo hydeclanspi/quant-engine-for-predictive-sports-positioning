@@ -318,6 +318,18 @@ const getMatchStatus = (match) => {
   return 'pending'
 }
 
+// 整体命中标识：靶心环 + 右上灵光（命中且出彩）。仅在 status==='win' 时渲染，
+// 对 Solo 即 1场中1场、对 Combo 即 n场中n场（组合单全中才会 win）。
+const HitBadge = () => (
+  <span className="dugou-hit-badge ml-1.5 shrink-0" title="整体命中" aria-label="整体命中">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <circle cx="10.5" cy="13.5" r="7.3" stroke="#059669" strokeWidth="2.1" />
+      <circle cx="10.5" cy="13.5" r="2" fill="#059669" />
+      <path d="M18.6 1.8 L19.62 4.78 L22.6 5.8 L19.62 6.82 L18.6 9.8 L17.58 6.82 L14.6 5.8 L17.58 4.78 Z" fill="#34d399" />
+    </svg>
+  </span>
+)
+
 const getTeamLeague = (teamName) => {
   const name = String(teamName || '').trim()
   if (!name) return '其他'
@@ -934,7 +946,10 @@ export default function HistoryPage() {
                           aria-expanded={isExpanded}
                           aria-label={isExpanded ? '收起详情' : '展开详情'}
                         >
-                          <span className="block">{row.match}</span>
+                          <span className="flex min-w-0 items-center">
+                            <span className="truncate">{row.match}</span>
+                            {row.status === 'win' && <HitBadge />}
+                          </span>
                           <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full border border-stone-200 text-stone-400 group-hover:text-stone-600 group-hover:border-stone-300">
                             {isExpanded ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
                           </span>
@@ -953,7 +968,10 @@ export default function HistoryPage() {
                             {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                           </span>
                           <span>
-                            <span className="block">{row.match}</span>
+                            <span className="flex items-center">
+                              <span>{row.match}</span>
+                              {row.status === 'win' && <HitBadge />}
+                            </span>
                             <span className="block mt-0.5 text-[10px] font-normal text-stone-500">{row.comboOverview}</span>
                           </span>
                         </button>
@@ -1210,7 +1228,12 @@ export default function HistoryPage() {
                 {filteredDataRows.map((row) => (
                   <tr key={row.id} className="border-t border-stone-100 hover:bg-amber-50/30 transition-colors text-[11px]">
                     <td className="px-2 py-2.5 text-stone-500 whitespace-nowrap">{row.date}</td>
-                    <td className="px-2 py-2.5 font-medium text-stone-700">{row.match}</td>
+                    <td className="px-2 py-2.5 font-medium text-stone-700">
+                      <span className="inline-flex items-center">
+                        {row.match}
+                        {row.status === 'win' && <HitBadge />}
+                      </span>
+                    </td>
                     <td className="px-2 py-2.5 text-stone-600">{renderOutcomeText(row.entries)}</td>
                     <td className="px-2 py-2.5 font-semibold">{renderOutcomeText(row.results)}</td>
                     <td className="px-2 py-2.5 font-bold italic text-violet-600">{row.odds}</td>
