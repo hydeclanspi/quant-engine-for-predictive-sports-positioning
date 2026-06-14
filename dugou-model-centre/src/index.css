@@ -574,7 +574,7 @@
   animation: slideUp 0.3s ease-out;
 }
 
-/* 整体命中标识（History · 靶心环+角芒）：一次性入场微动效 */
+/* 整体命中标识（History · 星芒+土星环）：一次性入场微动效 */
 .dugou-hit-badge {
   display: inline-flex;
   align-items: center;

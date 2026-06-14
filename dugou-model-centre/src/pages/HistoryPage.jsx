@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useId, useMemo, useState } from 'react'
 import { Search, Filter, Trash2, Archive, Undo2, ChevronRight, ChevronDown, SquarePen } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { deleteInvestment, getInvestments, saveInvestment, setInvestmentArchived, updateInvestment } from '../lib/localData'
@@ -318,17 +318,74 @@ const getMatchStatus = (match) => {
   return 'pending'
 }
 
-// 整体命中标识：靶心环 + 右上灵光（命中且出彩）。仅在 status==='win' 时渲染，
-// 对 Solo 即 1场中1场、对 Combo 即 n场中n场（组合单全中才会 win）。
-const HitBadge = () => (
-  <span className="dugou-hit-badge ml-1.5 shrink-0" title="整体命中" aria-label="整体命中">
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <circle cx="10.5" cy="13.5" r="7.3" stroke="#059669" strokeWidth="2.1" />
-      <circle cx="10.5" cy="13.5" r="2" fill="#059669" />
-      <path d="M18.6 1.8 L19.62 4.78 L22.6 5.8 L19.62 6.82 L18.6 9.8 L17.58 6.82 L14.6 5.8 L17.58 4.78 Z" fill="#34d399" />
-    </svg>
-  </span>
-)
+// 整体命中标识：星芒主体 + 环绕的土星式光环带（命中且出彩）。仅在 status==='win'
+// 时渲染——对 Solo 即 1场中1场、对 Combo 即 n场中n场（组合单全中才会 win）。
+// 设计：四角星芒为主体（祖母绿宝石渐变 + 顶部玻璃高光），一条略微倾斜的轨道光环
+// 像土星环带一样从星芒身后绕到身前形成纵深，外裹一层柔和灵光。语义色＝命中绿。
+const HitBadge = () => {
+  const uid = useId().replace(/:/g, '')
+  const idStar = `hb-star-${uid}`
+  const idSheen = `hb-sheen-${uid}`
+  const idGlow = `hb-glow-${uid}`
+  const idRing = `hb-ring-${uid}`
+  // 四角星芒：上下左右四个等距锐角（tip 半径 9），每条边控制点落在正中心 → 深凹收腰、
+  // 象限完全对称的「闪耀」星形。星芒是绝对主体，土星环带做得纤细扁平、只从外侧贴身环绕。
+  const starPath = 'M12 3 Q12 12 21 12 Q12 12 12 21 Q12 12 3 12 Q12 12 12 3 Z'
+  return (
+    <span className="dugou-hit-badge ml-1.5 shrink-0" title="整体命中" aria-label="整体命中">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <defs>
+          <radialGradient id={idGlow} cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stopColor="#34d399" stopOpacity="0.4" />
+            <stop offset="55%" stopColor="#10b981" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#10b981" stopOpacity="0" />
+          </radialGradient>
+          <linearGradient id={idStar} x1="12" y1="3" x2="12" y2="21" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#5eead4" />
+            <stop offset="48%" stopColor="#10b981" />
+            <stop offset="100%" stopColor="#047857" />
+          </linearGradient>
+          <linearGradient id={idSheen} x1="12" y1="3" x2="12" y2="12.5" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.92" />
+            <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
+          </linearGradient>
+          <linearGradient id={idRing} x1="1.6" y1="12" x2="22.4" y2="12" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="#a7f3d0" stopOpacity="0" />
+            <stop offset="17%" stopColor="#a7f3d0" stopOpacity="0.95" />
+            <stop offset="50%" stopColor="#34d399" stopOpacity="1" />
+            <stop offset="83%" stopColor="#059669" stopOpacity="0.95" />
+            <stop offset="100%" stopColor="#047857" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        {/* 柔和灵光 */}
+        <circle cx="12" cy="12" r="11" fill={`url(#${idGlow})`} />
+        {/* 土星环 · 后半（绕到星芒身后，纤细略淡） */}
+        <path
+          d="M1.6 12 A10.4 2.6 0 0 0 22.4 12"
+          transform="rotate(-18 12 12)"
+          fill="none"
+          stroke={`url(#${idRing})`}
+          strokeWidth="1.05"
+          strokeLinecap="round"
+          opacity="0.4"
+        />
+        {/* 星芒主体 */}
+        <path d={starPath} fill={`url(#${idStar})`} />
+        {/* 顶部玻璃高光 */}
+        <path d={starPath} fill={`url(#${idSheen})`} opacity="0.6" />
+        {/* 土星环 · 前半（横跨星芒身前，明亮纤细） */}
+        <path
+          d="M1.6 12 A10.4 2.6 0 0 1 22.4 12"
+          transform="rotate(-18 12 12)"
+          fill="none"
+          stroke={`url(#${idRing})`}
+          strokeWidth="1.4"
+          strokeLinecap="round"
+        />
+      </svg>
+    </span>
+  )
+}
 
 const getTeamLeague = (teamName) => {
   const name = String(teamName || '').trim()
