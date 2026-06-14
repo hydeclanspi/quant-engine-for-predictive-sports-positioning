@@ -72,6 +72,7 @@
 import { findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveSystemConfig } from './localData'
 import { getPrimaryEntryMarket } from './entryParsing'
 import { lookupTeam } from './teamDatabase'
+import { isPreviewMode } from './displayMode'
 
 const MODE_KEYS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
 const MODE_ALIAS = {
@@ -1069,6 +1070,10 @@ export const getKellyDivisorBacktest = (divisors = KELLY_DIVISOR_CANDIDATES) => 
   return snapshot
 }
 
+// Demo 展示用蓄水池余额：仅 preview/demo 模式生效（见 getReservoirState 内覆盖），
+// 让公开 demo 的「卡片 / 弹窗顶部当前余额 / 新建·组合下注基数」统一显示该值。
+const DEMO_POOL_BALANCE = 1529
+
 /**
  * 蓄水池当前周期状态（cycle-aware）。结算会在 poolSettlements 上画一条时间分界线，
  * 当前周期即"最近一次结算之后"。此函数是蓄水池余额与新建/组合下注基数的唯一口径；
@@ -1106,8 +1111,18 @@ export const getReservoirState = () => {
 
   const poolBalance = cycleBaseCapital + cycleProfit
 
+  // ── Demo「后台大手」：preview/demo 模式下把对外的蓄水池余额顶到展示值 ──────
+  // 公开 demo 的最近一次结算会把当前周期清零（poolBalance=0），令首页卡片与新建/
+  // 组合下注基数都变 0、demo 看起来像坏掉。这里只在 preview 模式覆盖对外的
+  // poolBalance，使「卡片 / 弹窗顶部当前余额 / 下注基数」一致显示该值；明细表格各
+  // 行仍由 getDashboardSnapshot 独立按真实流水折算（止盈行照旧 →¥0），不受影响。
+  // FULL（解锁）模式走真实口径、不覆盖。
+  const displayPoolBalance = isPreviewMode()
+    ? DEMO_POOL_BALANCE
+    : Number(poolBalance.toFixed(2))
+
   return {
-    poolBalance: Number(poolBalance.toFixed(2)),
+    poolBalance: displayPoolBalance,
     cycleBaseCapital: Number(cycleBaseCapital.toFixed(2)),
     cycleProfit: Number(cycleProfit.toFixed(2)),
     cycleStartTime,
