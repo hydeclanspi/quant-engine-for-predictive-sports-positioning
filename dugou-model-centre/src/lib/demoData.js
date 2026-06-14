@@ -832,7 +832,37 @@ export const getDemoSystemConfig = () => ({
   weightFid: 0.14,
   weightOdds: 0.06,
   weightFse: 0.07,
-  capitalInjections: [],
+  // ── 蓄水池 demo 展示流水 ─────────────────────────────────────────
+  // 在「蓄水池余额·历史明细」第一页顶部演示两条特殊流水，第一眼即可见：
+  //   · 周期止盈结算（01-10）—— 排在最顶端（第 1 行）
+  //   · 注资 +300（01-04 12:00）—— 排在 3 条「待结算」行之下（第 5 行）
+  // 二者被那 3 条待结算行隔开，呈现「分开来、止盈在上、注资在下」。把原始
+  // 本金 600 拆成「原始 300 + 注资 300」，故 initialCapital 维持 600、不影响
+  // 其它口径与资金曲线。
+  // 注：止盈是最新事件、会把当前周期清零，故 demo「当前余额」显示 ¥0、新建
+  // 下注建议金额≈¥0（组合页有 Math.max(1,…) 兜底不会崩）。这是「刚止盈、新
+  // 周期尚未注资」的真实蓄水池口径；若要非零小余额，把两条流水下移到 12 月
+  // 即可（止盈仍在注资之上、余额≈¥98，但会落到第 10/12 行需轻微下滑）。
+  capitalInjections: [
+    {
+      id: 'inj_demo_20260104',
+      amount: 300,
+      note: '',
+      created_at: '2026-01-04T12:00:00.000Z',
+    },
+  ],
+  poolSettlements: [
+    {
+      id: 'stl_demo_20260110',
+      type: 'take_profit',
+      realizedProfit: 960,
+      poolBefore: 1560,
+      cycleBase: 600,
+      newCapital: 0,
+      linkedInjectionId: null,
+      created_at: '2026-01-10T12:00:00.000Z',
+    },
+  ],
   adaptiveWeights: {
     enabled: false,
     mode: 'suggest',
