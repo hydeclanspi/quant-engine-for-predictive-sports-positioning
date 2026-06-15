@@ -57,7 +57,10 @@ const buildSemanticResult = (name, marketType, semanticKey = '', detail = null) 
   detail,
 })
 
-export const normalizeEntryName = (value) =>
+// 录入过程中的「打字安全」规范化：只做全角→半角等字符替换，绝不折叠或
+// 删除空格，这样用户可以输入像「-1 win」这种以空格分隔、甚至临时以空格结尾的
+// 文本而不会「撞墙」。空白折叠与首尾清理留到失焦/提交时由 normalizeEntryName 完成。
+export const normalizeEntryNameWhileTyping = (value) =>
   String(value || '')
     .replace(/，/g, ',')
     .replace(/；/g, ';')
@@ -68,6 +71,9 @@ export const normalizeEntryName = (value) =>
     .replace(/[—–－﹣−]/g, '-')
     .replace(/[／]/g, '/')
     .replace(/　/g, ' ')
+
+export const normalizeEntryName = (value) =>
+  normalizeEntryNameWhileTyping(value)
     .replace(/\s*,\s*/g, ', ')
     .replace(/\s+/g, ' ')
     .replace(/^[,;，；\s]+|[,;，；\s]+$/g, '')

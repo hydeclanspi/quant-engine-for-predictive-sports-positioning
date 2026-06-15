@@ -4,7 +4,7 @@ import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react'
 import { bumpTeamSamples, findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveInvestment, searchTeamProfiles } from '../lib/localData'
 import { handleNoteShortcut } from '../lib/noteFormatting'
 import { getPredictionCalibrationContext, getModeKellyRecommendations, getReservoirState } from '../lib/analytics'
-import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryRecord } from '../lib/entryParsing'
+import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryNameWhileTyping, normalizeEntryRecord } from '../lib/entryParsing'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
 import ExplainHover from '../components/ExplainHover'
 import {
@@ -157,6 +157,80 @@ const createResettableMatchFields = () => ({
   note: '',
 })
 
+// ── 录入草稿持久化 ──
+// 进行中的表单只存在内存里，刷新 / 手机后台回收标签页都会清空，导致「输一半全没了」。
+// 这里把录入中的表单实时写进 localStorage，下次进入自动恢复；提交成功后清除。
+const DRAFT_KEY = 'dugou.new_investment_draft.v1'
+const DRAFT_MAX_AGE_MS = 1000 * 60 * 60 * 24 // 超过 24h 的草稿不再恢复，避免旧表单意外复活
+
+const draftMatchHasContent = (match) => {
+  if (!match || typeof match !== 'object') return false
+  if (normalizeTeamNameInput(match.homeTeam)) return true
+  if (normalizeTeamNameInput(match.awayTeam)) return true
+  if (String(match.note || '').trim()) return true
+  const entries = Array.isArray(match.entries) ? match.entries : []
+  return entries.some((entry) => String(entry?.name || '').trim() || String(entry?.odds || '').trim())
+}
+
+const draftHasContent = (matches, comboName) => {
+  if (String(comboName || '').trim()) return true
+  return Array.isArray(matches) && matches.some(draftMatchHasContent)
+}
+
+const normalizeDraftMatch = (raw) => {
+  const base = createEmptyMatch()
+  if (!raw || typeof raw !== 'object') return base
+  const entries =
+    Array.isArray(raw.entries) && raw.entries.length > 0
+      ? raw.entries.map((entry) => ({ name: String(entry?.name ?? ''), odds: String(entry?.odds ?? '') }))
+      : base.entries
+  return {
+    ...base,
+    ...raw,
+    homeTeam: String(raw.homeTeam ?? ''),
+    awayTeam: String(raw.awayTeam ?? ''),
+    entries,
+    note: String(raw.note ?? ''),
+  }
+}
+
+const readInvestmentDraft = () => {
+  if (typeof window === 'undefined') return null
+  try {
+    const raw = window.localStorage.getItem(DRAFT_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return null
+    if (!Number.isFinite(parsed.savedAt) || Date.now() - parsed.savedAt > DRAFT_MAX_AGE_MS) return null
+    const matches = Array.isArray(parsed.matches) ? parsed.matches.map(normalizeDraftMatch) : []
+    if (matches.length === 0) return null
+    const comboName = String(parsed.comboName || '')
+    if (!draftHasContent(matches, comboName)) return null
+    const parlaySize = clamp(Number.parseInt(parsed.parlaySize, 10) || matches.length, 1, 5)
+    return { parlaySize, matches, comboName, actualInput: String(parsed.actualInput ?? '') }
+  } catch {
+    return null
+  }
+}
+
+const writeInvestmentDraft = (draft) => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...draft, savedAt: Date.now() }))
+  } catch {
+    /* localStorage 不可用——放弃草稿持久化，不影响正常录入 */
+  }
+}
+
+const clearInvestmentDraft = () => {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* 忽略 */
+  }
+}
+
 const normalizeModeValue = (value) => (MODE_OPTIONS.includes(value) ? value : '常规')
 const normalizeTysValue = (value) => {
   const text = String(value || '').trim().toUpperCase()
@@ -256,11 +330,17 @@ export default function NewInvestmentPage() {
   const displayMode = useDisplayMode()
   const isPreview = displayMode === PREVIEW_MODE
   const [dataVersion, setDataVersion] = useState(0)
-  const [parlaySize, setParlaySize] = useState(1)
-  const [matches, setMatches] = useState([createEmptyMatch()])
-  const [comboName, setComboName] = useState('')
+  // 进入页面时一次性读取草稿——刷新 / 标签页被回收后恢复进行中的录入。
+  const restoredDraftRef = useRef(undefined)
+  if (restoredDraftRef.current === undefined) {
+    restoredDraftRef.current = readInvestmentDraft()
+  }
+  const restoredDraft = restoredDraftRef.current
+  const [parlaySize, setParlaySize] = useState(() => restoredDraft?.parlaySize ?? 1)
+  const [matches, setMatches] = useState(() => restoredDraft?.matches ?? [createEmptyMatch()])
+  const [comboName, setComboName] = useState(() => restoredDraft?.comboName ?? '')
   const [showModeDropdown, setShowModeDropdown] = useState({})
-  const [actualInput, setActualInput] = useState('150')
+  const [actualInput, setActualInput] = useState(() => restoredDraft?.actualInput ?? '150')
   const [activeTeamInput, setActiveTeamInput] = useState(null)
   const [profilesVersion, setProfilesVersion] = useState(0)
   const [historyPrefillApplied, setHistoryPrefillApplied] = useState({})
@@ -455,6 +535,7 @@ export default function NewInvestmentPage() {
     [],
   )
 
+  const prevParlaySizeRef = useRef(parlaySize)
   useEffect(() => {
     setMatches((prev) =>
       Array.from({ length: parlaySize }, (_, i) => {
@@ -465,8 +546,25 @@ export default function NewInvestmentPage() {
         }
       }),
     )
-    setActualInput(parlaySize > 1 ? '80' : '150')
+    // 仅在用户真正切换串关数量时重置默认仓位；挂载时（含 StrictMode 双调用）
+    // 不要覆盖 actualInput——它可能来自恢复的草稿。
+    if (prevParlaySizeRef.current !== parlaySize) {
+      setActualInput(parlaySize > 1 ? '80' : '150')
+    }
+    prevParlaySizeRef.current = parlaySize
   }, [parlaySize])
+
+  // 进行中的表单实时存草稿（刷新 / 标签页被回收也不丢）；空表单则清掉草稿。
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      if (draftHasContent(matches, comboName)) {
+        writeInvestmentDraft({ parlaySize, matches, comboName, actualInput })
+      } else {
+        clearInvestmentDraft()
+      }
+    }, 500)
+    return () => window.clearTimeout(handle)
+  }, [parlaySize, matches, comboName, actualInput])
 
   useEffect(() => {
     setHistoryPrefillApplied((prev) => {
@@ -528,8 +626,25 @@ export default function NewInvestmentPage() {
       const entries = [...match.entries]
       const oldEntry = entries[entryIdx]
       const normalizedValue =
-        field === 'name' ? normalizeEntryName(value) : sanitizeDecimalInputText(value, { maxDecimals: 2 })
+        field === 'name' ? normalizeEntryNameWhileTyping(value) : sanitizeDecimalInputText(value, { maxDecimals: 2 })
       entries[entryIdx] = { ...oldEntry, [field]: normalizedValue }
+      next[idx] = { ...match, entries }
+      return next
+    })
+  }
+
+  // 失焦时对 Entry 名称做完整规范化（折叠多余空格、去掉首尾标点/空白）。
+  const finalizeEntryName = (idx, entryIdx) => {
+    setMatches((prev) => {
+      const next = [...prev]
+      const match = next[idx]
+      if (!match) return prev
+      const entries = [...match.entries]
+      const oldEntry = entries[entryIdx]
+      if (!oldEntry) return prev
+      const cleaned = normalizeEntryName(oldEntry.name)
+      if (cleaned === oldEntry.name) return prev
+      entries[entryIdx] = { ...oldEntry, name: cleaned }
       next[idx] = { ...match, entries }
       return next
     })
@@ -967,6 +1082,7 @@ export default function NewInvestmentPage() {
     setProfilesVersion((prev) => prev + 1)
     setComboName('')
     resetForm()
+    clearInvestmentDraft()
     return newInvestment
   }
 
@@ -1362,6 +1478,7 @@ export default function NewInvestmentPage() {
                             placeholder={isPreview ? 'win / draw / -2.5 lose' : '主胜 / 平 / 大2.5...'}
                             value={entry.name}
                             onChange={(event) => updateEntry(idx, entryIdx, 'name', event.target.value)}
+                            onBlur={() => finalizeEntryName(idx, entryIdx)}
                             className="input-glow w-full px-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-amber-400"
                           />
                         </div>
