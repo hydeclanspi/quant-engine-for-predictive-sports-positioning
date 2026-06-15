@@ -349,12 +349,14 @@ const HitBadge = () => {
             <stop offset="0%" stopColor="#ffffff" stopOpacity="0.92" />
             <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
           </linearGradient>
+          {/* 沿光环长轴：浓厚的祖母绿落在「左下方」端（offset 0% 经 rotate(-18) 映射到左下），
+              向「右上方」端渐次变浅、透明化 → 经典逆时针土星环带的纵深感。 */}
           <linearGradient id={idRing} x1="1.6" y1="12" x2="22.4" y2="12" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stopColor="#a7f3d0" stopOpacity="0" />
-            <stop offset="17%" stopColor="#a7f3d0" stopOpacity="0.95" />
-            <stop offset="50%" stopColor="#34d399" stopOpacity="1" />
-            <stop offset="83%" stopColor="#059669" stopOpacity="0.95" />
-            <stop offset="100%" stopColor="#047857" stopOpacity="0" />
+            <stop offset="0%" stopColor="#047857" stopOpacity="0" />
+            <stop offset="14%" stopColor="#059669" stopOpacity="1" />
+            <stop offset="44%" stopColor="#10b981" stopOpacity="0.95" />
+            <stop offset="74%" stopColor="#5eead4" stopOpacity="0.5" />
+            <stop offset="100%" stopColor="#a7f3d0" stopOpacity="0" />
           </linearGradient>
         </defs>
         {/* 柔和灵光 */}
@@ -373,13 +375,13 @@ const HitBadge = () => {
         <path d={starPath} fill={`url(#${idStar})`} />
         {/* 顶部玻璃高光 */}
         <path d={starPath} fill={`url(#${idSheen})`} opacity="0.6" />
-        {/* 土星环 · 前半（横跨星芒身前，明亮纤细） */}
+        {/* 土星环 · 前半（横跨星芒身前；浓厚端在左下，向右上渐隐） */}
         <path
           d="M1.6 12 A10.4 2.6 0 0 1 22.4 12"
           transform="rotate(-18 12 12)"
           fill="none"
           stroke={`url(#${idRing})`}
-          strokeWidth="1.4"
+          strokeWidth="1.5"
           strokeLinecap="round"
         />
       </svg>
