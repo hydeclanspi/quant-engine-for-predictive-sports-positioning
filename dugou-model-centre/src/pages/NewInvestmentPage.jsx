@@ -17,7 +17,7 @@ import {
 import { parseNaturalInput } from '../lib/naturalInputParser'
 import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
-import { useDisplayMode, PREVIEW_MODE } from '../lib/displayMode'
+import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
 // Quick Input 首屏「秀一下」：首次进入（演示态）时面板自动下拉展示再收回，
 // 每会话仅一次。静息态保持折叠——克制、精致才是首屏的第一印象。
@@ -1077,13 +1077,23 @@ export default function NewInvestmentPage() {
   const persistInvestmentFromPayload = (payload) => {
     if (!payload) return null
     const { newInvestment, normalizedMatches } = payload
-    saveInvestment(newInvestment)
+    let saved = null
+    try {
+      saved = saveInvestment(newInvestment)
+    } catch (err) {
+      // 落库失败（容量超限 / 存储不可用等）——保留草稿与表单供重试，
+      // 绝不静默清空确认过的录入。
+      console.error('[DuGou] 投资落库失败，已保留草稿待恢复：', err)
+      return null
+    }
     bumpTeamSamples(normalizedMatches.flatMap((item) => [item.home_team, item.away_team]))
     setProfilesVersion((prev) => prev + 1)
     setComboName('')
     resetForm()
-    clearInvestmentDraft()
-    return newInvestment
+    // 仅当确认写进真实本地存储（FULL 模式落库成功）才清草稿。
+    // 预览 / 降级态下保留草稿，确认过的单子绝不凭空消失。
+    if (saved && isFullMode()) clearInvestmentDraft()
+    return saved
   }
 
   const persistCurrentInvestment = () => {

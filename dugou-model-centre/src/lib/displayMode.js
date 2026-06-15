@@ -17,6 +17,12 @@ import { useEffect, useState } from 'react'
  */
 
 const TOKEN_KEY = 'dugou.preview_unlock_token.v1'
+// Once a tab unlocks with a valid token we latch FULL mode for the tab's
+// lifetime. The token's exp still gates the *initial* unlock, but a later
+// expiry must never silently downgrade an active session — that previously
+// rerouted confirmed writes into the in-memory demo store, so anything
+// entered after the token quietly expired vanished on the next refresh.
+const UNLOCK_LATCH_KEY = 'dugou.full_session_latch.v1'
 const DISPLAY_MODE_EVENT = 'dugou:display-mode-changed'
 
 const MOCK_TOKEN_PREFIX = 'dev.mock.'
@@ -73,7 +79,16 @@ const isTokenLive = (token) => {
 
 export const getStoredToken = () => safeGetSession(TOKEN_KEY)
 
+// True once this tab has been unlocked with a valid token. Lives in
+// sessionStorage so it survives in-tab reloads but resets when the tab/
+// browser closes — same boundary as the token itself.
+const isSessionUnlocked = () => safeGetSession(UNLOCK_LATCH_KEY) === '1'
+
 export const getDisplayMode = () => {
+  // Sticky: an already-unlocked tab stays FULL even if the token's exp has
+  // since passed. Only an explicit relock (lockToPreview) or closing the
+  // tab drops back to preview — see UNLOCK_LATCH_KEY note above.
+  if (isSessionUnlocked()) return FULL_MODE
   const token = getStoredToken()
   return isTokenLive(token) ? FULL_MODE : PREVIEW_MODE
 }
@@ -88,6 +103,7 @@ const dispatchModeChanged = (mode) => {
 
 export const lockToPreview = () => {
   safeSetSession(TOKEN_KEY, null)
+  safeSetSession(UNLOCK_LATCH_KEY, null)
   dispatchModeChanged(PREVIEW_MODE)
 }
 
@@ -96,6 +112,7 @@ export const unlockWithToken = (token) => {
     return { ok: false, reason: 'invalid_or_expired_token' }
   }
   safeSetSession(TOKEN_KEY, token)
+  safeSetSession(UNLOCK_LATCH_KEY, '1')
   dispatchModeChanged(FULL_MODE)
   return { ok: true }
 }
