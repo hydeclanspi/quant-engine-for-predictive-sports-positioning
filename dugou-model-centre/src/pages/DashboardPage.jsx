@@ -256,11 +256,10 @@ export default function DashboardPage({ openModal }) {
   const navigate = useNavigate()
   const maskMode = useModeLabelMap()
   const maskText = usePreviewTextMask()
-  // In preview mode, default to 'all' so visitors immediately see the
-  // full 4-month equity curve trajectory rather than just the last 2
-  // weeks. Owner experience (full mode) keeps the conservative 2-week
-  // default they're used to.
-  const [timePeriod, setTimePeriod] = useState(() => isPreviewMode() ? 'all' : '2w')
+  // Default to 'all' in both modes: preview visitors see the full equity
+  // curve immediately, and the owner (full/live mode) also lands on all-time
+  // data rather than just the last 2 weeks.
+  const [timePeriod, setTimePeriod] = useState('all')
   const [showChartPicker, setShowChartPicker] = useState(false)
   const [showExportPicker, setShowExportPicker] = useState(false)
   const [chartKey, setChartKey] = useState('rating')
