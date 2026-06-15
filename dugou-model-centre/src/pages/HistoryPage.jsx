@@ -333,7 +333,7 @@ const HitBadge = () => {
   const starPath = 'M12 3 Q12 12 21 12 Q12 12 12 21 Q12 12 3 12 Q12 12 12 3 Z'
   return (
     <span className="dugou-hit-badge ml-1.5 shrink-0" title="整体命中" aria-label="整体命中">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <svg width="17.14" height="17.14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
         <defs>
           <radialGradient id={idGlow} cx="50%" cy="50%" r="50%">
             <stop offset="0%" stopColor="#34d399" stopOpacity="0.4" />
