@@ -349,8 +349,8 @@ const HitBadge = () => {
             <stop offset="0%" stopColor="#ffffff" stopOpacity="0.92" />
             <stop offset="100%" stopColor="#ffffff" stopOpacity="0" />
           </linearGradient>
-          {/* 沿光环长轴：浓厚的祖母绿落在「左下方」端（offset 0% 经 rotate(-18) 映射到左下），
-              向「右上方」端渐次变浅、透明化 → 经典逆时针土星环带的纵深感。 */}
+          {/* 沿光环长轴的浓淡：浓厚祖母绿集中在左端（offset 14%），右端渐隐透明。
+              两段弧用 rotate(-18)+对调的 sweep 做整体「垂直镜像」，令浓厚端落在视觉左下、向右上渐隐。 */}
           <linearGradient id={idRing} x1="1.6" y1="12" x2="22.4" y2="12" gradientUnits="userSpaceOnUse">
             <stop offset="0%" stopColor="#047857" stopOpacity="0" />
             <stop offset="14%" stopColor="#059669" stopOpacity="1" />
@@ -363,7 +363,7 @@ const HitBadge = () => {
         <circle cx="12" cy="12" r="11" fill={`url(#${idGlow})`} />
         {/* 土星环 · 后半（绕到星芒身后，纤细略淡） */}
         <path
-          d="M1.6 12 A10.4 2.6 0 0 0 22.4 12"
+          d="M1.6 12 A10.4 2.6 0 0 1 22.4 12"
           transform="rotate(-18 12 12)"
           fill="none"
           stroke={`url(#${idRing})`}
@@ -377,7 +377,7 @@ const HitBadge = () => {
         <path d={starPath} fill={`url(#${idSheen})`} opacity="0.6" />
         {/* 土星环 · 前半（横跨星芒身前；浓厚端在左下，向右上渐隐） */}
         <path
-          d="M1.6 12 A10.4 2.6 0 0 1 22.4 12"
+          d="M1.6 12 A10.4 2.6 0 0 0 22.4 12"
           transform="rotate(-18 12 12)"
           fill="none"
           stroke={`url(#${idRing})`}
