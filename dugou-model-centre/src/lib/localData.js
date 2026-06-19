@@ -1095,6 +1095,35 @@ const applyManualDataPatchV20260206 = () => {
 
 const toArray = (value) => (Array.isArray(value) ? value : [])
 
+// Pool settlements & capital injections are append-only ledgers that live
+// INSIDE system_config. They must be union-merged by id, never overwritten
+// wholesale — otherwise merging an empty/stale remote config (e.g. a fresh
+// device's defaults, or the initial empty git seed) silently wipes them.
+// This was the cause of cycle settlements vanishing on every reload once
+// git sync went live.
+const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections']
+
+const unionLedgerById = (localList, incomingList) => {
+  const map = new Map()
+  ;(Array.isArray(localList) ? localList : []).forEach((item) => {
+    if (item && item.id != null) map.set(String(item.id), item)
+  })
+  ;(Array.isArray(incomingList) ? incomingList : []).forEach((item) => {
+    if (item && item.id != null) map.set(String(item.id), item)
+  })
+  return [...map.values()]
+}
+
+// Flat-merge config (incoming wins per key) EXCEPT the ledger arrays, which
+// are unioned so neither side's entries are dropped.
+const mergeSystemConfig = (localCfg, incomingCfg) => {
+  const merged = { ...(localCfg || {}), ...(incomingCfg || {}) }
+  LEDGER_CONFIG_KEYS.forEach((key) => {
+    merged[key] = unionLedgerById(localCfg?.[key], incomingCfg?.[key])
+  })
+  return merged
+}
+
 const applyDataBundle = (bundle, mode = 'replace') => {
   if (!bundle || typeof bundle !== 'object') return false
 
@@ -1143,7 +1172,7 @@ const applyDataBundle = (bundle, mode = 'replace') => {
       .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
       .slice(0, ACCESS_LOG_MAX_ROWS)
 
-    writeJSON(STORAGE_KEYS.systemConfig, { ...getSystemConfig(), ...incomingConfig })
+    writeJSON(STORAGE_KEYS.systemConfig, mergeSystemConfig(getSystemConfig(), incomingConfig))
     writeJSON(STORAGE_KEYS.teamProfiles, [...teamMap.values()])
     writeJSON(STORAGE_KEYS.investments, [...investmentMap.values()])
     writeJSON(STORAGE_KEYS.accessLogs, mergedAccessLogs)
@@ -1357,7 +1386,7 @@ const mergeGitBundleIntoLocal = (bundle) => {
     .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
     .slice(0, ACCESS_LOG_MAX_ROWS)
 
-  writeJSON(STORAGE_KEYS.systemConfig, { ...getSystemConfig(), ...incomingConfig })
+  writeJSON(STORAGE_KEYS.systemConfig, mergeSystemConfig(getSystemConfig(), incomingConfig))
   writeJSON(STORAGE_KEYS.teamProfiles, [...teamMap.values()])
   writeJSON(STORAGE_KEYS.investments, [...investmentMap.values()])
   writeJSON(STORAGE_KEYS.accessLogs, mergedAccessLogs)

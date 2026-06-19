@@ -164,6 +164,26 @@ const indexById = (arr) => {
   return map
 }
 
+// Pool settlements & capital injections are append-only ledgers stored
+// inside system_config — union them by id so an empty/stale config can
+// never drop them (mirrors mergeSystemConfig on the client).
+const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections']
+
+const mergeSystemConfig = (baseCfg, nextCfg) => {
+  const merged = { ...(baseCfg || {}), ...(nextCfg || {}) }
+  for (const key of LEDGER_CONFIG_KEYS) {
+    const map = new Map()
+    ;(Array.isArray(baseCfg?.[key]) ? baseCfg[key] : []).forEach((x) => {
+      if (x && x.id != null) map.set(String(x.id), x)
+    })
+    ;(Array.isArray(nextCfg?.[key]) ? nextCfg[key] : []).forEach((x) => {
+      if (x && x.id != null) map.set(String(x.id), x)
+    })
+    merged[key] = [...map.values()]
+  }
+  return merged
+}
+
 export const mergeBundles = (stored, incoming) => {
   const base = stored && typeof stored === 'object' ? stored : {}
   const next = incoming && typeof incoming === 'object' ? incoming : {}
@@ -194,7 +214,7 @@ export const mergeBundles = (stored, incoming) => {
   return {
     version: Number(next.version) || Number(base.version) || 1,
     exported_at: new Date().toISOString(),
-    system_config: { ...(base.system_config || {}), ...(next.system_config || {}) },
+    system_config: mergeSystemConfig(base.system_config, next.system_config),
     team_profiles: [...teamMap.values()],
     investments: [...investmentMap.values()],
     access_logs: accessLogs,
