@@ -1,9 +1,4 @@
 import {
-  fetchLatestSnapshot,
-  getCloudSyncState,
-  saveCloudSyncState,
-  scheduleSnapshotSync,
-  syncSnapshotNow,
   getTimeMachineSession,
   startTimeMachineSession,
   exitTimeMachineSession,
@@ -15,6 +10,14 @@ import {
   ensureMonthlyTimeMachineSnapshot,
   deleteTimeMachineSnapshotById,
 } from './cloudSync'
+import {
+  scheduleGitCommit,
+  commitBundleNow,
+  pullGitBundle,
+  getGitSyncState,
+  setGitSyncEnabled,
+  saveGitSyncState,
+} from './gitSync'
 import { getPrimaryEntryMarket, normalizeEntries } from './entryParsing'
 import { calcAtomicEquivalentOdds } from './atomicParlay'
 import genesisBundle from '../data/genesisBundle.json'
@@ -372,7 +375,7 @@ const writeJSON = (key, value) => {
       key === STORAGE_KEYS.accessLogs
     )
   ) {
-    scheduleSnapshotSync(() => exportDataBundle())
+    scheduleGitCommit(() => exportDataBundle())
   }
 }
 
@@ -386,11 +389,17 @@ if (typeof window !== 'undefined') {
   if (typeof window[DISPLAY_MODE_HANDLER_KEY] === 'function') {
     window.removeEventListener(DISPLAY_MODE_CHANGE_EVENT, window[DISPLAY_MODE_HANDLER_KEY])
   }
-  const handler = () => {
+  const handler = (event) => {
     resetPreviewStore()
     window.dispatchEvent(
       new CustomEvent('dugou:data-changed', { detail: { key: '__display_mode__' } }),
     )
+    // On unlock (→ full) adopt the latest git-synced snapshot so a fresh
+    // device shows the owner's real data right after entering the password.
+    const mode = event?.detail?.mode
+    if (mode === 'full' || (mode == null && !isPreviewMode())) {
+      syncFromGitOnUnlock()
+    }
   }
   window[DISPLAY_MODE_HANDLER_KEY] = handler
   window.addEventListener(DISPLAY_MODE_CHANGE_EVENT, handler)
@@ -1290,28 +1299,104 @@ export const restoreGenesisData = () => {
   return ok
 }
 
-export const getCloudSyncStatus = () => getCloudSyncState()
+// ── Live cross-device sync (git-backed) ──
+// The live snapshot now syncs through the repo's `data` branch via the
+// /api/commit-bundle + /api/bundle serverless endpoints (see gitSync.js).
+// Time Machine snapshots still live in Supabase (see cloudSync.js). These
+// keep their historical "cloud sync" names so the settings UI is unchanged.
 
-export const setCloudSyncEnabled = (enabled) =>
-  saveCloudSyncState({
-    enabled: Boolean(enabled),
-    lastError: '',
+export const getCloudSyncStatus = () => getGitSyncState()
+
+export const setCloudSyncEnabled = (enabled) => setGitSyncEnabled(enabled)
+
+// Merge a git-sourced bundle into local state: git is authoritative for any
+// record both sides know about, but local-only records (not yet committed)
+// are preserved — so adopting the remote can never wipe un-synced edits.
+// Returns the count of local-only records kept, so the caller can push them.
+const mergeGitBundleIntoLocal = (bundle) => {
+  if (!bundle || typeof bundle !== 'object') return { applied: false, localExtras: 0 }
+
+  const incomingConfig =
+    bundle.system_config && typeof bundle.system_config === 'object' ? bundle.system_config : {}
+  const incomingTeams = toArray(bundle.team_profiles).map(withTeamDefaults)
+  const incomingInvestments = toArray(bundle.investments)
+    .filter((item) => item && typeof item === 'object' && item.id)
+    .map((item) => normalizeInvestmentRecord(item))
+  const incomingAccessLogs = toArray(bundle.access_logs)
+    .filter((item) => item && typeof item === 'object')
+    .map((item) => normalizeAccessLogRecord(item))
+
+  // investments — git wins for shared ids, keep local-only extras.
+  const investmentMap = new Map(incomingInvestments.map((item) => [item.id, item]))
+  let localExtras = 0
+  getInvestments().forEach((item) => {
+    if (item && item.id != null && !investmentMap.has(item.id)) {
+      investmentMap.set(item.id, item)
+      localExtras += 1
+    }
   })
 
+  // teams — git wins by name, keep local-only extras.
+  const teamMap = new Map(incomingTeams.map((team) => [normalize(team.teamName), team]))
+  getTeamProfiles().forEach((team) => {
+    const key = normalize(team.teamName)
+    if (!teamMap.has(key)) teamMap.set(key, team)
+  })
+
+  // access logs — union, newest wins, capped.
+  const accessMap = new Map(getAccessLogs().map((item) => [item.id, item]))
+  incomingAccessLogs.forEach((item) => {
+    const existing = accessMap.get(item.id)
+    const incomingTime = new Date(item.created_at || 0).getTime()
+    const existingTime = new Date(existing?.created_at || 0).getTime()
+    if (!existing || incomingTime >= existingTime) {
+      accessMap.set(item.id, item)
+    }
+  })
+  const mergedAccessLogs = [...accessMap.values()]
+    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())
+    .slice(0, ACCESS_LOG_MAX_ROWS)
+
+  writeJSON(STORAGE_KEYS.systemConfig, { ...getSystemConfig(), ...incomingConfig })
+  writeJSON(STORAGE_KEYS.teamProfiles, [...teamMap.values()])
+  writeJSON(STORAGE_KEYS.investments, [...investmentMap.values()])
+  writeJSON(STORAGE_KEYS.accessLogs, mergedAccessLogs)
+  markGenesisApplied()
+  return { applied: true, localExtras }
+}
+
+// Pull + adopt the latest git snapshot on unlock, so a freshly-unlocked tab
+// (e.g. a new device) immediately shows the owner's real synced data.
+const syncFromGitOnUnlock = async () => {
+  if (isPreviewMode()) return
+  const pulled = await pullGitBundle()
+  if (!pulled.ok || !pulled.bundle) return
+  cloudBootstrapInProgress = true
+  let result
+  try {
+    result = mergeGitBundleIntoLocal(pulled.bundle)
+  } finally {
+    cloudBootstrapInProgress = false
+  }
+  if (isBrowser) {
+    window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key: 'all' } }))
+  }
+  if (result?.localExtras > 0) {
+    commitBundleNow(exportDataBundle())
+  }
+}
+
 export const bootstrapCloudSnapshotOnLoad = async () => {
-  // In preview mode we never reach out to Supabase — the demo bundle
-  // is fully self-contained and reaching the cloud would either leak
-  // real owner snapshots into the demo or churn cloud bandwidth for
-  // anonymous visitors.
+  // Preview/public visitors never touch the owner's git store.
   if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked', applied: false }
   cloudBootstrapInProgress = true
-  const status = getCloudSyncState()
-  if (!status.hasEnv) {
-    cloudBootstrapInProgress = false
-    return { ok: false, reason: 'missing_env', applied: false }
-  }
   try {
-    return await pullCloudSnapshotNow('replace')
+    const pulled = await pullGitBundle()
+    if (!pulled.ok || !pulled.bundle) return { ...pulled, applied: false }
+    const result = mergeGitBundleIntoLocal(pulled.bundle)
+    // Push back any local-only records so they aren't stranded on-device.
+    if (result.localExtras > 0) commitBundleNow(exportDataBundle())
+    return { ok: true, applied: result.applied, localExtras: result.localExtras }
   } finally {
     cloudBootstrapInProgress = false
   }
@@ -1319,34 +1404,28 @@ export const bootstrapCloudSnapshotOnLoad = async () => {
 
 export const runCloudSyncNow = async () => {
   if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked' }
-  const snapshot = exportDataBundle()
-  return syncSnapshotNow(snapshot)
+  return commitBundleNow(exportDataBundle())
 }
 
 export const pullCloudSnapshotNow = async (mode = 'merge') => {
   if (isPreviewMode()) return { ok: false, reason: 'preview_mode_blocked', applied: false }
-  const result = await fetchLatestSnapshot()
-  if (!result?.ok || !result?.snapshot) return { ...result, applied: false }
+  const pulled = await pullGitBundle()
+  if (!pulled.ok) return { ...pulled, applied: false }
+  if (!pulled.bundle) return { ok: false, reason: 'empty_remote', applied: false }
 
   const normalizedMode = mode === 'replace' ? 'replace' : 'merge'
-  const applied = applyDataBundle(result.snapshot, normalizedMode)
+  const applied =
+    normalizedMode === 'replace'
+      ? applyDataBundle(pulled.bundle, 'replace')
+      : mergeGitBundleIntoLocal(pulled.bundle).applied
   if (!applied) {
-    const state = saveCloudSyncState({
-      lastError: '云端快照结构不符合 DUGOU 模板，未应用。',
-    })
-    return {
-      ok: false,
-      reason: 'invalid_snapshot',
-      state,
-      applied: false,
-    }
+    const state = saveGitSyncState({ lastError: '云端快照结构不符合 DUGOU 模板，未应用。' })
+    return { ok: false, reason: 'invalid_snapshot', state, applied: false }
   }
-
-  return {
-    ...result,
-    applied: true,
-    mode: normalizedMode,
+  if (isBrowser) {
+    window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key: 'all' } }))
   }
+  return { ok: true, applied: true, mode: normalizedMode, updatedAt: pulled.updatedAt }
 }
 
 // ── Time Machine Public API ──

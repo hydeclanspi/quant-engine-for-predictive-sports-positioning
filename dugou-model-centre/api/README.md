@@ -84,3 +84,76 @@ the JWT. The endpoint exists to keep the proprietary parameter naming
 out of casual recruiters' first-glance view, not to protect financial
 data. Constant-time comparison is used to prevent password-length
 leaks via response timing.
+
+---
+
+# Git-as-sync · `/api/commit-bundle` + `/api/bundle`
+
+The **live** cross-device snapshot syncs through git instead of Supabase.
+(Time Machine snapshots still use Supabase — see `src/lib/cloudSync.js`.)
+Client side lives in `src/lib/gitSync.js`; the live-sync entry points in
+`src/lib/localData.js` (`bootstrapCloudSnapshotOnLoad`, `runCloudSyncNow`,
+`pullCloudSnapshotNow`) are wired to these endpoints.
+
+## How it works
+
+```
+owner edits (any device, FULL mode)
+  → debounced/threshold trigger (gitSync.scheduleGitCommit)
+  → POST /api/commit-bundle  { snapshot }   (Bearer = unlock JWT)
+  → server: read data branch → decrypt → union-merge → encrypt → commit
+  → other devices: GET /api/bundle on load / on unlock → decrypt → merge
+```
+
+- The snapshot is stored **AES-256-GCM encrypted** at
+  `data/liveBundle.enc.json` on a dedicated **`data` branch**. The repo is
+  public, so the ciphertext is world-readable but the plaintext bet log
+  never is. Only a request bearing a valid **FULL-scope JWT** gets the
+  decrypted data back from `/api/bundle`.
+- The `data` branch is excluded from Vercel deploys (`vercel.json` →
+  `git.deploymentEnabled.data = false`), so data commits **don't trigger
+  redeploys or burn build minutes**. Reads are always live from GitHub.
+- The branch + file are **created on first write** — no manual git setup.
+- Writes **union-merge** server-side (incoming wins per record id, but
+  nothing already stored is ever dropped), with blob-SHA optimistic
+  locking + retry. Two devices committing at once can't lose each other's
+  records — strictly safer than the old last-write-wins upsert.
+
+## Endpoints
+
+| Method | Route                 | Auth                | Purpose                          |
+| ------ | --------------------- | ------------------- | -------------------------------- |
+| POST   | `/api/commit-bundle`  | Bearer full JWT     | Union-merge + commit a snapshot  |
+| GET    | `/api/bundle`         | Bearer full JWT     | Return latest decrypted snapshot |
+
+## Required environment variables (Vercel project settings)
+
+| Variable              | Required | Description                                                                  |
+| --------------------- | -------- | ---------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`        | ✅       | Fine-grained PAT, **Contents: Read and write** on this repo only.            |
+| `DATA_ENCRYPTION_KEY` | ✅       | Any random string (hashed to the AES-256 key). Rotating it orphans old data. |
+| `JWT_SECRET`          | ✅       | Already set for `/api/unlock` — reused to verify the owner token.            |
+| `GITHUB_REPO`         | optional | `owner/repo`. Defaults to the Vercel-injected repo, so usually unneeded.     |
+| `GITHUB_DATA_BRANCH`  | optional | Defaults to `data`.                                                          |
+| `GITHUB_BUNDLE_PATH`  | optional | Defaults to `data/liveBundle.enc.json`.                                      |
+
+### One-time setup
+
+1. Create a fine-grained PAT at GitHub → Settings → Developer settings →
+   Fine-grained tokens. Repository access = **only this repo**, Permissions
+   → **Contents: Read and write**. Copy the token.
+2. Vercel → project → Settings → Environment Variables (Production): add
+   `GITHUB_TOKEN` and `DATA_ENCRYPTION_KEY` (e.g. `openssl rand -base64 36`).
+   `JWT_SECRET` is already there.
+3. Redeploy (env changes don't auto-redeploy).
+
+## Caveats
+
+- **Hard deletes don't propagate.** Union-merge never drops a stored
+  record, so removing a bet on one device won't remove it elsewhere — it
+  reappears on next sync. Use **archive** (`is_archived`) instead, which
+  syncs cleanly. (Safer failure mode: data resurrected, never lost.)
+- **Key rotation** orphans the existing encrypted bundle — `/api/bundle`
+  returns `decrypt_failed` and the next commit re-seeds from local data.
+- `vite dev` doesn't run these functions; `gitSync` detects the 404 and
+  silently disables for the session (local data still works).

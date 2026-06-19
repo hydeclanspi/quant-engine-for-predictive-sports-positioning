@@ -4913,7 +4913,7 @@ export default function ParamsPage({ openModal }) {
       <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-medium text-stone-700 flex items-center gap-2">
-            <ConsoleCardIcon IconComp={Cloud} /> 云端同步（Supabase）
+            <ConsoleCardIcon IconComp={Cloud} /> 云端同步（Git）
           </h3>
           <span className="text-xs text-stone-400">{syncStatus.enabled ? '已启用' : '未启用'}</span>
         </div>
@@ -4924,7 +4924,7 @@ export default function ParamsPage({ openModal }) {
             <p className={`text-sm font-medium mt-1 ${syncStatus.hasEnv ? 'text-emerald-600' : 'text-rose-500'}`}>
               {syncStatus.hasEnv ? '已配置' : '未配置'}
             </p>
-            <p className="text-[11px] text-stone-400 mt-1">需要 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`</p>
+            <p className="text-[11px] text-stone-400 mt-1">需在 Vercel 配置 `GITHUB_TOKEN` 与 `DATA_ENCRYPTION_KEY`</p>
           </div>
           <div className="p-3 bg-stone-50 rounded-xl">
             <p className="text-xs text-stone-400">最近同步</p>
