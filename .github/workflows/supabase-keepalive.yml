@@ -1,13 +1,15 @@
 name: Supabase Keepalive
 
 # ---------------------------------------------------------------
-# Keeps the free-tier Supabase project alive by sending lightweight
-# SELECT queries at random-ish intervals throughout the week.
+# Keeps the free-tier Supabase project alive by sending a lightweight
+# SELECT query several times a day. Supabase pauses a free project after
+# 7 days of inactivity, so a few successful pings/day keeps it warm.
 #
-# Cron runs 6 times per day (every 4 hours), but each run sleeps a
-# random 0-90 min before querying, so actual request times are
-# naturally scattered.  ≈ 42 requests / week — well within the
-# 7-day inactivity window and the free-tier API quota.
+# IMPORTANT: GitHub auto-disables scheduled workflows after 60 days with
+# no commits to the repo ("disabled_inactivity") — which already happened
+# once. So treat this cron as the best-effort layer; the always-on
+# UptimeRobot monitor (every 5 min, independent of GitHub) is the
+# reliable safety net. Keep that set up.
 # ---------------------------------------------------------------
 
 on:
@@ -24,22 +26,31 @@ on:
 jobs:
   keepalive:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
     steps:
-      - name: Random sleep (0-90 min jitter)
+      # Tiny jitter only. The previous version slept up to 90 min while the
+      # job timeout was 10 min, so ~89% of runs were KILLED before reaching
+      # the ping step — that's why the project drifted into a pause. Keep
+      # jitter well under the timeout so every run actually pings.
+      - name: Small random jitter (0-120s)
         run: |
-          JITTER=$(( RANDOM % 5400 ))
-          echo "Sleeping ${JITTER}s (~$(( JITTER / 60 ))m) for jitter..."
-          sleep $JITTER
+          JITTER=$(( RANDOM % 120 ))
+          echo "Sleeping ${JITTER}s for jitter..."
+          sleep "$JITTER"
 
       - name: Ping Supabase with SELECT query
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          if [ -z "${SUPABASE_URL}" ] || [ -z "${SUPABASE_ANON_KEY}" ]; then
+            echo "::error::SUPABASE_URL / SUPABASE_ANON_KEY secrets are not set."
+            exit 1
+          fi
+
           echo "Sending keepalive query at $(date -u +'%Y-%m-%d %H:%M:%S UTC')"
 
-          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+          HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
             "${SUPABASE_URL}/rest/v1/dugou_sync_snapshots?select=id&limit=1" \
             -H "apikey: ${SUPABASE_ANON_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_ANON_KEY}")
