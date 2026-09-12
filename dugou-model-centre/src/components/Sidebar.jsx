@@ -47,9 +47,9 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
         label: 'Dashboard',
         iconChar: '◐',
         children: [
+          { id: 'report', path: '/dashboard/report', label: 'Seasons', iconChar: '⚔', featured: true },
           { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', iconChar: '◇' },
           { id: 'metrics', path: '/dashboard/metrics', label: '数据总览', iconChar: '▤' },
-          { id: 'report', path: '/dashboard/report', label: '战报', iconChar: '⚔' },
         ],
       },
       {
@@ -209,9 +209,13 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
                     key={child.id}
                     onClick={() => navigate(child.path)}
                     className={`sidebar-item w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all
-                      ${location.pathname === child.path 
-                        ? 'bg-amber-50 text-amber-700' 
-                        : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50'}`}
+                      ${child.featured
+                        ? location.pathname === child.path
+                          ? 'bg-sky-100/90 text-sky-800 shadow-sm ring-1 ring-inset ring-sky-200/80'
+                          : 'bg-sky-50/80 text-sky-700 ring-1 ring-inset ring-sky-100 hover:bg-sky-100/80'
+                        : location.pathname === child.path
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50'}`}
                   >
                     <span>{child.iconChar}</span>
                     <span>{child.label}</span>

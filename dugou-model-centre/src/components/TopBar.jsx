@@ -36,9 +36,9 @@ const NAV_ITEMS = [
     label: 'Dashboard',
     Icon: BarChart3,
     children: [
+      { id: 'report', path: '/dashboard/report', label: 'Seasons', Icon: Swords, featured: true },
       { id: 'metrics', path: '/dashboard/metrics', label: '数据总览', Icon: FileText },
       { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', Icon: TrendingUp },
-      { id: 'report', path: '/dashboard/report', label: '战报', Icon: Swords },
     ],
   },
   {
@@ -61,7 +61,7 @@ const PAGE_SUBTITLES = {
   '/dashboard': 'Performance overview & fund tracking',
   '/dashboard/analysis': 'Deep calibration & prediction analysis',
   '/dashboard/metrics': 'Comprehensive data metrics overview',
-  '/dashboard/report': 'Per-cycle campaign report & settlement recap',
+  '/dashboard/report': 'Season performance archive & settlement recap',
   '/history': 'Historical investment records & outcomes',
   '/history/teams': 'Team profile archive & performance data',
   '/params': 'System configuration & calibration parameters',
@@ -202,6 +202,8 @@ export default function TopBar() {
           const active = isGroupActive(item)
           const badge = getBadge(item)
           const hasChildren = item.children && item.children.length > 0
+          const featuredChildren = item.children?.filter((child) => child.featured) || []
+          const regularChildren = item.children?.filter((child) => !child.featured) || []
 
           return (
             <div key={item.id} className="topbar-v2-nav-group">
@@ -238,6 +240,17 @@ export default function TopBar() {
               {/* Dropdown for children */}
               {hasChildren && openDropdown === item.id && (
                 <div className="topbar-v2-dropdown">
+                  {featuredChildren.map(child => (
+                    <button
+                      key={child.id}
+                      onClick={() => { navigate(child.path); setOpenDropdown(null) }}
+                      className={`topbar-v2-dropdown-item topbar-v2-dropdown-featured ${isActive(child.path) ? 'topbar-v2-dropdown-active' : ''}`}
+                    >
+                      <child.Icon size={14} strokeWidth={1.5} />
+                      <span>{child.label}</span>
+                    </button>
+                  ))}
+                  {featuredChildren.length > 0 && <div className="topbar-v2-dropdown-divider" />}
                   {/* Parent link at top of dropdown */}
                   <button
                     onClick={() => { navigate(item.path); setOpenDropdown(null) }}
@@ -247,7 +260,7 @@ export default function TopBar() {
                     <span>{item.label} Overview</span>
                   </button>
                   <div className="topbar-v2-dropdown-divider" />
-                  {item.children.map(child => (
+                  {regularChildren.map(child => (
                     <button
                       key={child.id}
                       onClick={() => { navigate(child.path); setOpenDropdown(null) }}
