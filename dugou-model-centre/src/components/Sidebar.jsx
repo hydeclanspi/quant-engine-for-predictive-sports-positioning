@@ -211,14 +211,15 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
                     className={`sidebar-item w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs transition-all
                       ${child.featured
                         ? location.pathname === child.path
-                          ? 'bg-sky-100/90 text-sky-800 shadow-sm ring-1 ring-inset ring-sky-200/80'
-                          : 'bg-sky-50/80 text-sky-700 ring-1 ring-inset ring-sky-100 hover:bg-sky-100/80'
+                          ? 'bg-sky-100/60 text-sky-800 shadow-sm ring-1 ring-inset ring-sky-200/60'
+                          : 'bg-sky-50/45 text-sky-700 ring-1 ring-inset ring-sky-100/70 hover:bg-sky-100/55'
                         : location.pathname === child.path
                           ? 'bg-amber-50 text-amber-700'
                           : 'text-stone-400 hover:text-stone-600 hover:bg-stone-50'}`}
                   >
                     <span>{child.iconChar}</span>
                     <span>{child.label}</span>
+                    {child.featured && <span className="seasons-star-orbit" aria-hidden="true" />}
                   </button>
                 ))}
               </div>

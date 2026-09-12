@@ -88,6 +88,29 @@ describe('mergeBundles — system_config ledgers', () => {
     expect(merged.system_config.poolSettlements).toHaveLength(1)
   })
 
+  it('keeps the original bankroll stable when a stale client is missing newer allocation injections', () => {
+    const stored = {
+      system_config: {
+        initialCapital: 1700,
+        capitalInjections: [
+          { id: 'may-allocation', amount: 600 },
+          { id: 'june-allocation', amount: 500 },
+        ],
+      },
+    }
+    const staleIncoming = {
+      system_config: {
+        initialCapital: 600,
+        capitalInjections: [{ id: 'june-allocation', amount: 500 }],
+      },
+    }
+
+    const merged = mergeBundles(stored, staleIncoming)
+
+    expect(merged.system_config.capitalInjections).toHaveLength(2)
+    expect(merged.system_config.initialCapital).toBe(1700)
+  })
+
   it('still unions investments by id — incoming wins per id, stored survives', () => {
     const stored = { investments: [{ id: 'a', v: 1 }, { id: 'b', v: 1 }] }
     const incoming = { investments: [{ id: 'a', v: 2 }] }

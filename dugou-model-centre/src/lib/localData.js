@@ -569,12 +569,12 @@ export const getCycleTitles = () => {
   return Array.isArray(config.cycleTitles) ? config.cycleTitles : []
 }
 
-// 给某个周期命名。空字符串 = 取消自定义名（回落到「第 N 期」）。
+// 给某个周期写标题。空字符串 = 取消自定义标题（界面仅显示序数 S1 / S2…）。
 // id 由 warReport 的 cycleIdForSettlement / GENESIS_CYCLE_ID 给出，故是稳定键。
-export const setCycleTitle = (cycleId, name) => {
+export const setCycleTitle = (cycleId, title) => {
   const id = String(cycleId || '').trim()
   if (!id) return null
-  const clean = String(name || '').trim().slice(0, CYCLE_TITLE_MAX_LEN)
+  const clean = String(title || '').trim().slice(0, CYCLE_TITLE_MAX_LEN)
   const titles = getCycleTitles()
   const now = new Date().toISOString()
 
@@ -585,8 +585,8 @@ export const setCycleTitle = (cycleId, name) => {
 
   const existing = titles.find((item) => item.id === id)
   const next = existing
-    ? titles.map((item) => (item.id === id ? { ...item, name: clean, updated_at: now } : item))
-    : [...titles, { id, name: clean, created_at: now, updated_at: now }]
+    ? titles.map((item) => (item.id === id ? { ...item, title: clean, name: clean, updated_at: now } : item))
+    : [...titles, { id, title: clean, name: clean, created_at: now, updated_at: now }]
   saveSystemConfig({ cycleTitles: next })
   return next.find((item) => item.id === id) || null
 }
@@ -640,7 +640,7 @@ export const settlePool = ({
     patch.initialCapital = Number(config.initialCapital || 0) + allocation
   }
 
-  // 新周期命名：结算这一刀同时开启下一个周期，此处顺手给它落一个标题。
+  // 新周期标题：结算这一刀同时开启下一个周期，此处顺手给它落一个标题。
   // 周期 id 与 warReport.cycleIdForSettlement 保持同一套推导，避免两边各说各话。
   const cycleName = String(nextCycleName || '').trim().slice(0, CYCLE_TITLE_MAX_LEN)
   if (cycleName) {
@@ -648,7 +648,7 @@ export const settlePool = ({
     const nextCycleId = `cycle_${settlement.id}`
     patch.cycleTitles = [
       ...titles.filter((item) => item.id !== nextCycleId),
-      { id: nextCycleId, name: cycleName, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
+      { id: nextCycleId, title: cycleName, name: cycleName, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
     ]
   }
 

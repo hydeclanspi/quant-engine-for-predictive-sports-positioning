@@ -114,21 +114,32 @@ describe('本金口径 —— 与 getReservoirState 对齐', () => {
 })
 
 describe('周期命名', () => {
-  it('无自定义名时回落到「第 N 期」', () => {
+  it('无自定义标题时只显示 S 序数', () => {
     const { periods } = getCyclePeriods()
-    expect(periods[0].name).toBe('第 1 期')
+    expect(periods[0].name).toBe('S1')
+    expect(periods[0].title).toBe('')
     expect(periods[0].isCustomName).toBe(false)
   })
 
-  it('命名台账按周期 id 生效', () => {
+  it('标题台账按周期 id 生效，序数始终由界面追加', () => {
     state.config.poolSettlements = [{ id: 's1', created_at: iso('2026-03-01T00:00:00Z'), newCapital: 0 }]
-    state.titles = [{ id: 'cycle_s1', name: '春季战役' }]
+    state.titles = [{ id: 'cycle_s1', title: '春季战役' }]
 
     const { periods } = getCyclePeriods()
 
-    expect(periods[0].name).toBe('春季战役')
+    expect(periods[0].name).toBe('S2 春季战役')
+    expect(periods[0].title).toBe('春季战役')
     expect(periods[0].isCustomName).toBe(true)
-    expect(periods[1].name).toBe('第 1 期') // 创世周期未命名
+    expect(periods[1].name).toBe('S1') // 创世周期未命名
+  })
+
+  it('兼容旧数据里的 name 字段，但不把序数写入 title', () => {
+    state.titles = [{ id: 'cycle_genesis', name: 'Hello World' }]
+
+    const { periods } = getCyclePeriods()
+
+    expect(periods[0].title).toBe('Hello World')
+    expect(periods[0].name).toBe('S1 Hello World')
   })
 })
 

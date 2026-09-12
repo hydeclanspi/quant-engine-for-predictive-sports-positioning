@@ -198,7 +198,11 @@ export const getCyclePeriods = () => {
     (a, b) => ts(a.created_at) - ts(b.created_at),
   )
   const injections = Array.isArray(config.capitalInjections) ? config.capitalInjections : []
-  const titleMap = new Map(getCycleTitles().map((row) => [row.id, row.name]))
+  // `title` is the user-authored part only. `name` remains a read fallback for
+  // bundles written by older builds, where the title field was called name.
+  const titleMap = new Map(
+    getCycleTitles().map((row) => [row.id, String(row.title ?? row.name ?? '').trim()]),
+  )
 
   const initialCapital = toNumber(config.initialCapital)
   const totalInjected = injections.reduce((sum, item) => sum + toNumber(item.amount), 0)
@@ -230,12 +234,17 @@ export const getCyclePeriods = () => {
 
     const id = openedBy ? cycleIdForSettlement(openedBy.id) : GENESIS_CYCLE_ID
     const ordinal = index + 1
+    const title = titleMap.get(id) || ''
 
     periods.push({
       id,
       ordinal,
-      name: titleMap.get(id) || `第 ${ordinal} 期`,
-      isCustomName: titleMap.has(id),
+      title,
+      // The sequence belongs to the product, not the editable title. Users
+      // type only "Hello World"; every surface consistently renders
+      // "S1 Hello World" and an untitled open period simply renders "S3".
+      name: `S${ordinal}${title ? ` ${title}` : ''}`,
+      isCustomName: Boolean(title),
       isOpen: !closedBy,
       isGenesis: !openedBy,
       startTs,

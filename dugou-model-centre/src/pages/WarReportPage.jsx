@@ -70,7 +70,7 @@ function PeriodCard({ period, active, onSelect }) {
       aria-label={`${period.name}，${period.isOpen ? '进行中' : '已归档'}，净盈亏 ${toSigned(period.profit)} 元`}
     >
       <div className="wr-period-card__top">
-        <span className="wr-period-card__ordinal">CYCLE {String(period.ordinal).padStart(2, '0')}</span>
+        <span className="wr-period-card__ordinal">SEASON {String(period.ordinal).padStart(2, '0')}</span>
         <span className={`wr-period-card__state ${period.isOpen ? 'is-live' : ''}`}>
           <i aria-hidden="true" />
           {period.isOpen ? '进行中' : '已归档'}
@@ -93,13 +93,13 @@ function PeriodCard({ period, active, onSelect }) {
 function VerdictBanner({ report, runKey, onRename, children }) {
   const { period, kpi } = report
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(period.name)
+  const [draft, setDraft] = useState(period.title)
   const inputRef = useRef(null)
 
   useEffect(() => {
     setEditing(false)
-    setDraft(period.name)
-  }, [period.id, period.name])
+    setDraft(period.title)
+  }, [period.id, period.title])
 
   useEffect(() => {
     if (editing) inputRef.current?.focus()
@@ -108,7 +108,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
   const commit = () => {
     const next = draft.trim()
     setEditing(false)
-    if (next !== period.name) onRename(period.id, next)
+    if (next !== period.title) onRename(period.id, next)
   }
 
   const tone = toneOf(kpi.profit)
@@ -131,26 +131,27 @@ function VerdictBanner({ report, runKey, onRename, children }) {
         <div className="wr-banner__main">
           <div className="wr-banner__eyebrow">
             <Swords size={13} />
-            <span>Period {String(period.ordinal).padStart(2, '0')} · Summary</span>
+            <span>Season {String(period.ordinal).padStart(2, '0')} · Summary</span>
             {period.isOpen && <em className="wr-banner__live">进行中</em>}
           </div>
 
           {editing ? (
             <div className="wr-rename">
+              <span className="wr-rename__prefix" aria-hidden="true">S{period.ordinal}</span>
               <input
                 ref={inputRef}
                 value={draft}
                 maxLength={24}
                 onChange={(event) => setDraft(event.target.value)}
-                aria-label="周期名称"
+                aria-label={`S${period.ordinal} 周期标题`}
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') commit()
                   if (event.key === 'Escape') {
-                    setDraft(period.name)
+                    setDraft(period.title)
                     setEditing(false)
                   }
                 }}
-                placeholder="为这个周期命名"
+                placeholder="输入标题 · 序号自动添加"
                 className="wr-rename__input"
               />
               <button type="button" onClick={commit} className="wr-rename__btn is-ok" title="保存">
@@ -159,7 +160,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
               <button
                 type="button"
                 onClick={() => {
-                  setDraft(period.name)
+                  setDraft(period.title)
                   setEditing(false)
                 }}
                 className="wr-rename__btn"
@@ -171,7 +172,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
           ) : (
             <h2 className="wr-banner__title">
               {period.name}
-              <button type="button" onClick={() => setEditing(true)} className="wr-banner__edit" title="重命名周期">
+              <button type="button" onClick={() => setEditing(true)} className="wr-banner__edit" title="编辑周期标题">
                 <Pencil size={13} />
               </button>
             </h2>
@@ -662,7 +663,7 @@ export default function WarReportPage() {
             <Cloud size={17} />
             <div>
               <span>Cloud archive</span>
-              <strong>周期名称与数据同步</strong>
+              <strong>周期标题与数据同步</strong>
             </div>
           </div>
         </div>

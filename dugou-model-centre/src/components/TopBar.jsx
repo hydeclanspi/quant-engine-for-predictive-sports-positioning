@@ -248,6 +248,7 @@ export default function TopBar() {
                     >
                       <child.Icon size={14} strokeWidth={1.5} />
                       <span>{child.label}</span>
+                      <span className="seasons-star-orbit" aria-hidden="true" />
                     </button>
                   ))}
                   {featuredChildren.length > 0 && <div className="topbar-v2-dropdown-divider" />}
