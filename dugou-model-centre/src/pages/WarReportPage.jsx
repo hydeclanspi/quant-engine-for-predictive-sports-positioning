@@ -30,8 +30,8 @@ import { isPreviewMode } from '../lib/displayMode'
  * 周期沿用蓄水池那条分界线（见 lib/warReport.js），所以这里看到的每一期
  * 与「蓄水池余额 · 历史明细」里的止盈/止损刀口一一对应，不是另一套时间轴。
  *
- * 视觉取的是游戏结算界面的骨架 —— 裁决横幅 + 评级徽章 + 数字滚入 + 分项战果，
- * 但配色与质感沿用系统既有的克制语汇（玻璃、金线、蓝为主调），不做霓虹。
+ * 视觉以 Apple 式信息产品为基准：暖白底、柔和材质、清晰的大数字层级，
+ * 让周期数据本身成为主角，只用少量系统蓝提示交互与状态。
  */
 
 const LEDGER_PAGE_SIZE = 10
@@ -131,7 +131,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
         <div className="wr-banner__main">
           <div className="wr-banner__eyebrow">
             <Swords size={13} />
-            <span>Campaign {String(period.ordinal).padStart(2, '0')} · Final Report</span>
+            <span>Period {String(period.ordinal).padStart(2, '0')} · Summary</span>
             {period.isOpen && <em className="wr-banner__live">进行中</em>}
           </div>
 
@@ -336,8 +336,8 @@ function OutcomeDigest({ entries, kpi }) {
       <div className="wr-panel__head">
         <Activity size={14} />
         <div>
-          <p className="wr-panel__eyebrow">Battle rhythm</p>
-          <h3>战绩节奏</h3>
+          <p className="wr-panel__eyebrow">Outcome sequence</p>
+          <h3>结果序列</h3>
         </div>
         <span className="wr-panel__count">按发生顺序</span>
       </div>
@@ -494,8 +494,8 @@ function EntryLedger({ entries, modeLabel }) {
       <div className="wr-panel__head">
         <Layers size={14} />
         <div>
-          <p className="wr-panel__eyebrow">Campaign ledger</p>
-          <h3>逐笔战果</h3>
+          <p className="wr-panel__eyebrow">Investment history</p>
+          <h3>下注明细</h3>
         </div>
         <span className="wr-panel__fresh"><ShieldCheck size={12} /> 结果实时匹配</span>
       </div>
@@ -643,18 +643,18 @@ export default function WarReportPage() {
       {/* 页头 */}
       <div className="wr-page-head">
         <div className="wr-page-head__copy">
-          <p className="wr-page-head__eyebrow"><span /> Campaign Archive</p>
+          <p className="wr-page-head__eyebrow"><span /> Performance archive</p>
           <h1>周期战报 <em>/ War Report</em></h1>
           <p>
-            把每一轮资金周期封存成可回看的战役档案
+            每个周期，都值得一次清晰的回看。
             {isPreviewMode() && <span>· 演示数据</span>}
           </p>
         </div>
         <div className="wr-sync-note">
           <Cloud size={17} />
           <div>
-            <span>周期档案</span>
-            <strong>命名随数据同步</strong>
+            <span>云端同步</span>
+            <strong>周期名称与数据已纳入同步</strong>
           </div>
         </div>
       </div>
@@ -663,7 +663,7 @@ export default function WarReportPage() {
       <div className="wr-cycle-browser">
         <div className="wr-cycle-browser__head">
           <div>
-            <span>战役档案</span>
+            <span>所有周期</span>
             <strong>{periods.length} 个周期</strong>
           </div>
           <div className="wr-cycle-browser__nav">
