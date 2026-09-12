@@ -925,6 +925,7 @@ export const getDemoSystemConfig = () => ({
   cycleTitles: [
     {
       id: 'cycle_stl_demo_20260110',
+      title: '蓝潮实验 · 第一章',
       name: '蓝潮实验 · 第一章',
       created_at: '2026-01-10T12:00:00.000Z',
       updated_at: '2026-01-10T12:00:00.000Z',

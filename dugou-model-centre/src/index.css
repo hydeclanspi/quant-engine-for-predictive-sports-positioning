@@ -2443,14 +2443,16 @@
 .topbar-v2-dropdown-featured {
   color: #1769aa;
   font-weight: 600;
-  background: rgba(230, 244, 255, 0.82);
-  box-shadow: inset 0 0 0 1px rgba(118, 190, 242, 0.18);
+  background: rgba(234, 247, 255, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(118, 190, 242, 0.13);
 }
 
 .topbar-v2-dropdown-featured:hover,
 .topbar-v2-dropdown-featured.topbar-v2-dropdown-active {
   color: #075985;
-  background: rgba(214, 238, 255, 0.94);
+  background: rgba(220, 242, 255, 0.72);
 }
 
 .topbar-v2-dropdown-divider {
@@ -2891,14 +2893,49 @@
 .mn-dropdown-featured {
   color: #1769aa;
   font-weight: 600;
-  background: rgba(230, 244, 255, 0.82);
-  box-shadow: inset 0 0 0 1px rgba(118, 190, 242, 0.18);
+  background: rgba(234, 247, 255, 0.48);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.78),
+    inset 0 0 0 1px rgba(118, 190, 242, 0.13);
 }
 
 .mn-dropdown-featured:hover,
 .mn-dropdown-featured.mn-dropdown-active {
   color: #075985;
-  background: rgba(214, 238, 255, 0.94);
+  background: rgba(220, 242, 255, 0.72);
+}
+
+/* Seasons 彩蛋标记：极轻的玻璃蓝里，只有一颗金色星沿细环慢慢巡游。 */
+.seasons-star-orbit {
+  position: relative;
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  margin-left: auto;
+  border: 1px solid rgba(199, 151, 55, 0.34);
+  border-radius: 50%;
+  box-shadow: 0 0 7px rgba(226, 177, 69, 0.13);
+  animation: seasonsStarOrbit 5.2s linear infinite;
+}
+
+.seasons-star-orbit::before {
+  content: '✦';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  color: #c9952f;
+  font-size: 6px;
+  line-height: 1;
+  text-shadow: 0 0 5px rgba(229, 181, 75, 0.38);
+  transform: translateX(-50%);
+}
+
+@keyframes seasonsStarOrbit {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seasons-star-orbit { animation: none; }
 }
 
 .mn-dropdown-label {
@@ -11039,6 +11076,14 @@ html .h-screen {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
+}
+
+.wr-showcase .wr-rename__prefix {
+  flex: 0 0 auto;
+  color: rgba(29, 29, 31, 0.82);
+  font-size: 20px;
+  font-weight: 680;
+  letter-spacing: -0.03em;
 }
 
 /* 水滴状评级组件 */

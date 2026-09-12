@@ -176,6 +176,10 @@ const indexById = (arr) => {
 // config can never drop them (mirrors mergeSystemConfig on the client).
 const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections', 'cycleTitles']
 
+const injectionTotal = (config) =>
+  (Array.isArray(config?.capitalInjections) ? config.capitalInjections : [])
+    .reduce((sum, item) => sum + (Number(item?.amount) || 0), 0)
+
 const mergeSystemConfig = (baseCfg, nextCfg) => {
   const merged = { ...(baseCfg || {}), ...(nextCfg || {}) }
   for (const key of LEDGER_CONFIG_KEYS) {
@@ -187,6 +191,21 @@ const mergeSystemConfig = (baseCfg, nextCfg) => {
       if (x && x.id != null) map.set(String(x.id), x)
     })
     merged[key] = [...map.values()]
+  }
+
+  // `initialCapital` contains the original bankroll plus every allocation
+  // injection. A stale client used to overwrite that scalar while the union
+  // correctly retained newer injections, making the inferred original bankroll
+  // shrink after sync. Preserve the largest valid original-capital baseline,
+  // then rebuild the scalar from the fully merged injection ledger.
+  if (merged.capitalInjections.length > 0) {
+    const originalCapitalCandidates = [baseCfg, nextCfg]
+      .filter((config) => Number.isFinite(Number(config?.initialCapital)))
+      .map((config) => Number(config.initialCapital) - injectionTotal(config))
+    if (originalCapitalCandidates.length > 0) {
+      const originalCapital = Math.max(...originalCapitalCandidates)
+      merged.initialCapital = Math.round((originalCapital + injectionTotal(merged)) * 100) / 100
+    }
   }
   return merged
 }

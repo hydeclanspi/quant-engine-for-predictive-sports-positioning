@@ -246,6 +246,7 @@ export default function ModernTopBar() {
                     >
                       <child.Icon size={14} strokeWidth={1.5} />
                       <span>{child.label}</span>
+                      {child.featured && <span className="seasons-star-orbit" aria-hidden="true" />}
                     </button>
                   ))}
                 </div>

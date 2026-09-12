@@ -261,11 +261,11 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
                 <FlowChip label="新周期" value={allocation > 0 ? toRmb(allocation) : '¥0'} tone="emerald" />
               </div>
 
-              {/* 新周期命名（可留空 = 战报里回落为「第 N 期」，之后仍可改） */}
+              {/* 只输入 title；S1 / S2… 序数由 Seasons 自动添加。 */}
               <div className="mx-6 mt-5">
                 <div className="flex items-center justify-between text-xs font-medium text-stone-500">
-                  <span>新周期命名</span>
-                  <span className="text-stone-300">可留空 · 战报中随时可改</span>
+                  <span>新周期标题</span>
+                  <span className="text-stone-300">序号自动添加 · 可留空</span>
                 </div>
                 <div className="mt-1.5 flex items-center rounded-xl border border-stone-200 bg-stone-50/50 px-3 transition focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
                   <Flag size={14} className="shrink-0 text-stone-400" />
@@ -274,7 +274,7 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
                     maxLength={24}
                     value={cycleNameInput}
                     onChange={(e) => setCycleNameInput(e.target.value)}
-                    placeholder="例：春季战役"
+                    placeholder="例：Hello World"
                     className="w-full bg-transparent px-2 py-2.5 text-sm text-stone-800 outline-none focus-visible:!outline-none placeholder:text-stone-300"
                   />
                 </div>
