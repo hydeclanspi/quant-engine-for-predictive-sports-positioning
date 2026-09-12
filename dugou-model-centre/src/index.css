@@ -2440,6 +2440,19 @@
   background: #fef3c7;
 }
 
+.topbar-v2-dropdown-featured {
+  color: #1769aa;
+  font-weight: 600;
+  background: rgba(230, 244, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(118, 190, 242, 0.18);
+}
+
+.topbar-v2-dropdown-featured:hover,
+.topbar-v2-dropdown-featured.topbar-v2-dropdown-active {
+  color: #075985;
+  background: rgba(214, 238, 255, 0.94);
+}
+
 .topbar-v2-dropdown-divider {
   height: 1px;
   background: #f5f5f4;
@@ -2873,6 +2886,19 @@
   color: #4f46e5;
   font-weight: 500;
   background: #eef2ff;
+}
+
+.mn-dropdown-featured {
+  color: #1769aa;
+  font-weight: 600;
+  background: rgba(230, 244, 255, 0.82);
+  box-shadow: inset 0 0 0 1px rgba(118, 190, 242, 0.18);
+}
+
+.mn-dropdown-featured:hover,
+.mn-dropdown-featured.mn-dropdown-active {
+  color: #075985;
+  background: rgba(214, 238, 255, 0.94);
 }
 
 .mn-dropdown-label {
@@ -4981,6 +5007,11 @@
 
 .app-main-content {
   padding-bottom: clamp(136px, 18vh, 184px);
+}
+
+/* Seasons 自带完整的页面收尾，不再叠加全局的大段底部呼吸区。 */
+.app-main-content--seasons {
+  padding-bottom: 0;
 }
 
 .app-main-flow > .app-bottom-bar {
@@ -10804,6 +10835,7 @@ html .h-screen {
 }
 
 .warreport-scope::before {
+  bottom: 0;
   background: #f5f5f7;
 }
 

@@ -124,6 +124,7 @@ function App() {
   const ambientToneCandidate = ambientThemes[ambientPageKey] || PAGE_AMBIENT_THEME_DEFAULTS[ambientPageKey] || 'classic_white'
   const ambientTone = VALID_AMBIENT_TONES.includes(ambientToneCandidate) ? ambientToneCandidate : 'classic_white'
   const ambientClassName = `app-ambient-scope app-ambient-tone-${ambientTone}`
+  const mainContentClassName = `page-enter app-main-content ${location.pathname === '/dashboard/report' ? 'app-main-content--seasons' : ''} ${ambientClassName}`
 
   // Demo nudge — bottom-right glass bubble, preview mode + homepage only.
   const isHomeRoute = location.pathname === '/' || location.pathname === '/new'
@@ -155,7 +156,7 @@ function App() {
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"
         >
           <div className="app-main-flow">
-            <div key={location.pathname} className={`page-enter app-main-content ${ambientClassName}`}>
+            <div key={location.pathname} className={mainContentClassName}>
               {pageRoutes}
             </div>
             <BottomBar />
@@ -177,7 +178,7 @@ function App() {
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"
         >
           <div className="app-main-flow">
-            <div key={location.pathname} className={`page-enter app-main-content ${ambientClassName}`}>
+            <div key={location.pathname} className={mainContentClassName}>
               {pageRoutes}
             </div>
             <BottomBar />
@@ -201,7 +202,7 @@ function App() {
         className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"
       >
         <div className="app-main-flow">
-          <div key={location.pathname} className={`page-enter app-main-content ${ambientClassName}`}>
+          <div key={location.pathname} className={mainContentClassName}>
             {pageRoutes}
           </div>
           <BottomBar />

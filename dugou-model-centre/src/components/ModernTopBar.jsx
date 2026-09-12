@@ -31,10 +31,10 @@ const NAV_ITEMS = [
     label: 'Dashboard',
     Icon: BarChart3,
     children: [
+      { id: 'report', path: '/dashboard/report', label: 'Seasons', Icon: Swords, featured: true },
       { id: 'dashboard-main', path: '/dashboard', label: 'Overview', Icon: BarChart3 },
       { id: 'metrics', path: '/dashboard/metrics', label: 'Metrics', Icon: FileText },
       { id: 'analysis', path: '/dashboard/analysis', label: 'Analysis', Icon: TrendingUp },
-      { id: 'report', path: '/dashboard/report', label: 'War Report', Icon: Swords },
     ],
   },
   {
@@ -57,7 +57,7 @@ const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
   '/dashboard/analysis': 'Deep Analysis',
   '/dashboard/metrics': 'Metrics',
-  '/dashboard/report': 'War Report',
+  '/dashboard/report': 'Seasons',
   '/history': 'History',
   '/history/teams': 'Team Archive',
   '/params': 'Console',
@@ -242,7 +242,7 @@ export default function ModernTopBar() {
                     <button
                       key={child.id}
                       onClick={() => { navigate(child.path); setOpenDropdown(null) }}
-                      className={`mn-dropdown-item ${isActive(child.path) ? 'mn-dropdown-active' : ''}`}
+                      className={`mn-dropdown-item ${child.featured ? 'mn-dropdown-featured' : ''} ${isActive(child.path) ? 'mn-dropdown-active' : ''}`}
                     >
                       <child.Icon size={14} strokeWidth={1.5} />
                       <span>{child.label}</span>
