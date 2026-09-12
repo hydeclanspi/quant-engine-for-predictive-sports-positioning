@@ -111,6 +111,36 @@ describe('mergeBundles — system_config ledgers', () => {
     expect(merged.system_config.initialCapital).toBe(1700)
   })
 
+  it('accepts an explicitly newer cycle-capital edit, including a lower bankroll', () => {
+    const stored = {
+      system_config: {
+        initialCapital: 1700,
+        capitalLedgerUpdatedAt: '2026-09-12T10:00:00.000Z',
+        capitalInjections: [
+          { id: 's2-allocation', amount: 600 },
+          { id: 's3-allocation', amount: 500 },
+        ],
+      },
+    }
+    const intentionalEdit = {
+      system_config: {
+        initialCapital: 1600,
+        capitalLedgerUpdatedAt: '2026-09-13T10:00:00.000Z',
+        capitalInjections: [
+          { id: 's2-allocation', amount: 600 },
+          { id: 's3-allocation', amount: 400 },
+        ],
+      },
+    }
+
+    const merged = mergeBundles(stored, intentionalEdit)
+    const s3 = merged.system_config.capitalInjections.find((item) => item.id === 's3-allocation')
+
+    expect(s3.amount).toBe(400)
+    expect(merged.system_config.initialCapital).toBe(1600)
+    expect(merged.system_config.capitalLedgerUpdatedAt).toBe('2026-09-13T10:00:00.000Z')
+  })
+
   it('still unions investments by id — incoming wins per id, stored survives', () => {
     const stored = { investments: [{ id: 'a', v: 1 }, { id: 'b', v: 1 }] }
     const incoming = { investments: [{ id: 'a', v: 2 }] }

@@ -180,6 +180,11 @@ const injectionTotal = (config) =>
   (Array.isArray(config?.capitalInjections) ? config.capitalInjections : [])
     .reduce((sum, item) => sum + (Number(item?.amount) || 0), 0)
 
+const capitalRevision = (config) => {
+  const value = new Date(config?.capitalLedgerUpdatedAt || 0).getTime()
+  return Number.isFinite(value) ? value : 0
+}
+
 const mergeSystemConfig = (baseCfg, nextCfg) => {
   const merged = { ...(baseCfg || {}), ...(nextCfg || {}) }
   for (const key of LEDGER_CONFIG_KEYS) {
@@ -199,11 +204,22 @@ const mergeSystemConfig = (baseCfg, nextCfg) => {
   // shrink after sync. Preserve the largest valid original-capital baseline,
   // then rebuild the scalar from the fully merged injection ledger.
   if (merged.capitalInjections.length > 0) {
+    const baseRevision = capitalRevision(baseCfg)
+    const nextRevision = capitalRevision(nextCfg)
     const originalCapitalCandidates = [baseCfg, nextCfg]
       .filter((config) => Number.isFinite(Number(config?.initialCapital)))
       .map((config) => Number(config.initialCapital) - injectionTotal(config))
     if (originalCapitalCandidates.length > 0) {
-      const originalCapital = Math.max(...originalCapitalCandidates)
+      // A newer explicit capital-ledger revision is an intentional edit, not a
+      // stale scalar. This lets the owner lower a historical cycle base while
+      // the old max-baseline safeguard still protects ordinary stale clients.
+      const baseOriginal = Number(baseCfg?.initialCapital) - injectionTotal(baseCfg)
+      const nextOriginal = Number(nextCfg?.initialCapital) - injectionTotal(nextCfg)
+      const originalCapital = nextRevision > baseRevision && Number.isFinite(nextOriginal)
+        ? nextOriginal
+        : baseRevision > nextRevision && Number.isFinite(baseOriginal)
+          ? baseOriginal
+          : Math.max(...originalCapitalCandidates)
       merged.initialCapital = Math.round((originalCapital + injectionTotal(merged)) * 100) / 100
     }
   }

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import {
   Activity,
   Award,
@@ -22,7 +23,7 @@ import {
   X,
 } from 'lucide-react'
 import { getCyclePeriods, getWarReport } from '../lib/warReport'
-import { getSystemConfig, saveSystemConfig, setCycleTitle } from '../lib/localData'
+import { getSystemConfig, runCloudSyncNow, saveSystemConfig, setCycleTitle } from '../lib/localData'
 import CountUp from '../components/CountUp'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { isPreviewMode } from '../lib/displayMode'
@@ -38,6 +39,7 @@ import { isPreviewMode } from '../lib/displayMode'
  */
 
 const LEDGER_PAGE_SIZE = 10
+const DETAIL_PAGE_SIZE = 7
 
 const toRmb = (value) => `¥${Math.round(Number(value) || 0).toLocaleString('zh-CN')}`
 const toSigned = (value, digits = 0) => {
@@ -49,6 +51,21 @@ const toSignedPct = (value, digits = 1) => {
   return `${num > 0 ? '+' : num < 0 ? '−' : ''}${Math.abs(num).toFixed(digits)}%`
 }
 const toneOf = (value) => (value > 0 ? 'win' : value < 0 ? 'lose' : 'flat')
+
+const medianOf = (values) => {
+  const sorted = values.filter(Number.isFinite).slice().sort((a, b) => a - b)
+  if (sorted.length === 0) return 0
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
+}
+
+const entryTitle = (entry) => {
+  const matches = Array.isArray(entry?.matches) ? entry.matches : []
+  if (matches.length === 0) return '未命名投注'
+  const first = matches[0]
+  const base = `${first.homeTeam || '—'} vs ${first.awayTeam || '—'}`
+  return matches.length > 1 ? `${base} +${matches.length - 1}` : base
+}
 
 const GRADE_TONE = {
   S: 'is-grade-s',
@@ -246,9 +263,23 @@ function VerdictBanner({ report, runKey, onRename, children }) {
 
 /* ── KPI 格 ───────────────────────────────────────────────────────────── */
 
-function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0, action = null, children = null }) {
+function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0, action = null, children = null, onOpen }) {
+  const handleKeyDown = (event) => {
+    if (!onOpen || (event.key !== 'Enter' && event.key !== ' ')) return
+    event.preventDefault()
+    onOpen()
+  }
+
   return (
-    <div className={`wr-kpi is-${tone}`} style={{ '--wr-delay': `${index * 55}ms` }}>
+    <div
+      className={`wr-kpi is-${tone} ${onOpen ? 'is-interactive' : ''}`}
+      style={{ '--wr-delay': `${index * 55}ms` }}
+      role={onOpen ? 'button' : undefined}
+      tabIndex={onOpen ? 0 : undefined}
+      aria-label={onOpen ? `查看${label}明细` : undefined}
+      onClick={onOpen}
+      onKeyDown={handleKeyDown}
+    >
       <div className="wr-kpi__head">
         {Icon && <Icon size={13} />}
         <span>{label}</span>
@@ -264,9 +295,10 @@ function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0, action = n
   )
 }
 
-function BaseCapitalTile({ period, onSave, index = 0 }) {
+function BaseCapitalTile({ period, onSave, onOpen, index = 0 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(String(period.baseCapital))
+  const [saveState, setSaveState] = useState('idle')
   const inputRef = useRef(null)
 
   useEffect(() => {
@@ -283,14 +315,22 @@ function BaseCapitalTile({ period, onSave, index = 0 }) {
     setEditing(false)
   }
 
-  const commit = () => {
+  const commit = async () => {
     const amount = Number.parseFloat(draft)
     if (!Number.isFinite(amount) || amount <= 0) {
       cancel()
       return
     }
-    onSave(Number(amount.toFixed(2)))
     setEditing(false)
+    setSaveState('syncing')
+    let result
+    try {
+      result = await onSave(Number(amount.toFixed(2)))
+    } catch {
+      result = { ok: false }
+    }
+    setSaveState(result?.ok === false ? 'error' : result?.preview ? 'preview' : 'saved')
+    window.setTimeout(() => setSaveState('idle'), 2400)
   }
 
   return (
@@ -298,14 +338,23 @@ function BaseCapitalTile({ period, onSave, index = 0 }) {
       index={index}
       Icon={Wallet}
       label="周期本金"
+      onOpen={editing ? undefined : onOpen}
       action={!editing ? (
-        <button type="button" className="wr-kpi__edit" onClick={() => setEditing(true)} aria-label="编辑周期本金">
+        <button
+          type="button"
+          className="wr-kpi__edit"
+          onClick={(event) => {
+            event.stopPropagation()
+            setEditing(true)
+          }}
+          aria-label="编辑周期本金"
+        >
           <Pencil size={11} />
         </button>
       ) : null}
     >
       {editing ? (
-        <div className="wr-capital-edit">
+        <div className="wr-capital-edit" onClick={(event) => event.stopPropagation()}>
           <span>¥</span>
           <input
             ref={inputRef}
@@ -327,11 +376,347 @@ function BaseCapitalTile({ period, onSave, index = 0 }) {
         <>
           <p className="wr-kpi__value">{toRmb(period.baseCapital)}</p>
           <p className="wr-kpi__sub">
-            {period.allocation > 0 ? `含开局划拨 ${toRmb(period.allocation)}` : '期内注资合计'}
+            {saveState === 'syncing'
+              ? '正在写入并同步…'
+              : saveState === 'saved'
+                ? '已写入 · 云端同步完成'
+                : saveState === 'preview'
+                  ? '演示数据已更新'
+                  : saveState === 'error'
+                    ? '本地已写入 · 云同步失败'
+                    : period.allocation > 0
+                      ? `含开局划拨 ${toRmb(period.allocation)}`
+                      : '期内注资合计'}
           </p>
         </>
       )}
     </KpiTile>
+  )
+}
+
+const buildMetricDetail = (metricId, report) => {
+  const { period, kpi } = report
+  const settled = report.entries.filter((entry) => entry.settled)
+  const chronological = settled.slice().sort((a, b) => a.createdTs - b.createdTs)
+  const latest = chronological.slice().reverse()
+  const wins = settled.filter((entry) => entry.profit > 0)
+  const roiValues = settled.map((entry) => entry.roi).filter(Number.isFinite)
+  const winningRois = wins.map((entry) => entry.roi).filter(Number.isFinite)
+  const stakeValues = settled.map((entry) => entry.inputs).filter(Number.isFinite)
+  const periodLabel = period.name
+  const pctOfBase = (value) => period.baseCapital > 0 ? (value / period.baseCapital) * 100 : 0
+
+  const common = {
+    periodLabel,
+    count: settled.length,
+    records: latest,
+  }
+
+  const definitions = {
+    baseCapital: {
+      ...common,
+      Icon: Wallet,
+      label: '周期本金',
+      value: toRmb(period.baseCapital),
+      tone: 'flat',
+      kicker: 'Capital foundation',
+      description: '周期本金是本期所有回报率与风险刻度的资金基准。编辑会同时校准周期划拨台账与总资金，并立即同步云端。',
+      stats: [
+        { label: '开局划拨', value: toRmb(period.allocation) },
+        { label: '期内注资', value: toRmb(period.injected) },
+        { label: '结束余额', value: toRmb(period.endBalance), tone: toneOf(period.endBalance - period.baseCapital) },
+      ],
+      events: period.injections.map((item) => ({
+        id: item.id,
+        date: new Date(item.created_at).toLocaleDateString('zh-CN'),
+        label: item.note || '资金注入',
+        value: toRmb(item.amount),
+      })),
+      records: [],
+    },
+    hitRate: {
+      ...common,
+      Icon: CheckCircle2,
+      label: '命中率',
+      value: `${kpi.hitRate.toFixed(1)}%`,
+      tone: kpi.hitRate >= 50 ? 'win' : 'lose',
+      kicker: 'Outcome accuracy',
+      description: '以已结算投资单为单位计算；串关只要整单盈利即记为命中，待结算单不进入分母。',
+      stats: [
+        { label: '命中', value: `${kpi.wins} 笔`, tone: 'win' },
+        { label: '失手', value: `${kpi.losses} 笔`, tone: 'lose' },
+        { label: '待结算', value: `${kpi.pendingCount} 笔` },
+      ],
+    },
+    totalInputs: {
+      ...common,
+      Icon: Layers,
+      label: '投入总额',
+      value: toRmb(kpi.totalInputs),
+      tone: 'flat',
+      kicker: 'Capital deployed',
+      description: '汇总本周期全部已结算投资的实际投入；待结算资金单独列示，不污染已实现收益口径。',
+      stats: [
+        { label: '结算笔数', value: `${kpi.settledCount} 笔` },
+        { label: '均注', value: toRmb(kpi.avgStake) },
+        { label: '中位注额', value: toRmb(medianOf(stakeValues)) },
+      ],
+      records: settled.slice().sort((a, b) => b.inputs - a.inputs),
+    },
+    totalRevenue: {
+      ...common,
+      Icon: ReceiptText,
+      label: '收入总额',
+      value: toRmb(kpi.totalRevenue),
+      tone: toneOf(kpi.profit),
+      kicker: 'Gross proceeds',
+      description: '收入总额是所有已结算投注返还金额之和；减去投入总额后，得到本周期净利润。',
+      stats: [
+        { label: '投入', value: toRmb(kpi.totalInputs) },
+        { label: '净利润', value: `${toSigned(kpi.profit)} rmb`, tone: toneOf(kpi.profit) },
+        { label: '加权 ROI', value: toSignedPct(kpi.roi), tone: toneOf(kpi.roi) },
+      ],
+      records: settled.slice().sort((a, b) => b.revenues - a.revenues),
+    },
+    maxDrawdown: {
+      ...common,
+      Icon: TrendingDown,
+      label: '最大回撤',
+      value: toRmb(kpi.maxDrawdown),
+      tone: kpi.maxDrawdown > 0 ? 'lose' : 'flat',
+      kicker: 'Peak-to-trough risk',
+      description: '净值从阶段峰值向后跌至谷值的最大距离，用来观察本周期实际承受过的最深资金压力。',
+      stats: [
+        { label: '占本金', value: toSignedPct(-pctOfBase(kpi.maxDrawdown)), tone: 'lose' },
+        { label: '最差单笔', value: kpi.worstEntry ? `${toSigned(kpi.worstEntry.profit)} rmb` : '—', tone: 'lose' },
+        { label: '结束余额', value: toRmb(period.endBalance), tone: toneOf(kpi.profit) },
+      ],
+      records: chronological,
+    },
+    maxRunup: {
+      ...common,
+      Icon: TrendingUp,
+      label: '最大升幅',
+      value: toRmb(kpi.maxRunup),
+      tone: kpi.maxRunup > 0 ? 'win' : 'flat',
+      kicker: 'Trough-to-peak expansion',
+      description: '累计盈亏从阶段谷值回升至后续峰值的最大距离；资金注入不计入表现升幅。',
+      stats: [
+        { label: '占本金', value: toSignedPct(pctOfBase(kpi.maxRunup)), tone: 'win' },
+        { label: '最佳单笔', value: kpi.bestEntry ? `${toSigned(kpi.bestEntry.profit)} rmb` : '—', tone: 'win' },
+        { label: '盈利单', value: `${kpi.wins} 笔` },
+      ],
+      records: wins.slice().sort((a, b) => b.profit - a.profit),
+    },
+    streak: {
+      ...common,
+      Icon: TrendingUp,
+      label: '最长连胜',
+      value: `${kpi.bestWinStreak} 连`,
+      tone: kpi.bestWinStreak >= kpi.worstLoseStreak ? 'win' : 'lose',
+      kicker: 'Outcome momentum',
+      description: '按投注发生顺序统计连续盈利与连续亏损，走盘不会打断也不会延长序列。',
+      stats: [
+        { label: '最长连胜', value: `${kpi.bestWinStreak} 连`, tone: 'win' },
+        { label: '最长连败', value: `${kpi.worstLoseStreak} 连`, tone: 'lose' },
+        { label: '样本', value: `${kpi.settledCount} 笔` },
+      ],
+      records: chronological,
+    },
+    bestEntry: {
+      ...common,
+      Icon: Award,
+      label: '单笔最佳',
+      value: kpi.bestEntry ? `${toSigned(kpi.bestEntry.profit)} rmb` : '—',
+      tone: 'win',
+      kicker: 'Best single result',
+      description: '按单笔已实现盈亏排序，展示本周期收益贡献最高与最低的投资。',
+      stats: [
+        { label: '最佳 ROI', value: kpi.bestEntry ? toSignedPct(kpi.bestEntry.roi) : '—', tone: 'win' },
+        { label: '最差盈亏', value: kpi.worstEntry ? `${toSigned(kpi.worstEntry.profit)} rmb` : '—', tone: 'lose' },
+        { label: '盈亏差', value: kpi.bestEntry && kpi.worstEntry ? toRmb(kpi.bestEntry.profit - kpi.worstEntry.profit) : '—' },
+      ],
+      records: [kpi.bestEntry, kpi.worstEntry].filter(Boolean),
+    },
+    medianRoi: {
+      ...common,
+      Icon: Percent,
+      label: '中位数 ROI',
+      value: toSignedPct(kpi.medianRoi),
+      tone: toneOf(kpi.medianRoi),
+      kicker: 'Median ticket return',
+      description: '将每笔已结算投资的 ROI 从低到高排列后取中间值，比平均数更不容易被极端大赔率单扭曲。',
+      stats: [
+        { label: '最低', value: roiValues.length ? toSignedPct(Math.min(...roiValues)) : '—', tone: 'lose' },
+        { label: '中位', value: toSignedPct(kpi.medianRoi), tone: toneOf(kpi.medianRoi) },
+        { label: '最高', value: roiValues.length ? toSignedPct(Math.max(...roiValues)) : '—', tone: 'win' },
+      ],
+      records: settled.slice().sort((a, b) => a.roi - b.roi),
+    },
+    medianWinningRoi: {
+      ...common,
+      Icon: BarChart3,
+      label: '中位数盈利 ROI',
+      value: toSignedPct(kpi.medianWinningRoi),
+      tone: wins.length ? 'win' : 'flat',
+      kicker: 'Median winning return',
+      description: '只保留盈利投资，再取单笔 ROI 的中位数，用来观察一张典型盈利单的回报强度。',
+      stats: [
+        { label: '盈利样本', value: `${wins.length} 笔` },
+        { label: '最低盈利 ROI', value: winningRois.length ? toSignedPct(Math.min(...winningRois)) : '—', tone: 'win' },
+        { label: '最高盈利 ROI', value: winningRois.length ? toSignedPct(Math.max(...winningRois)) : '—', tone: 'win' },
+      ],
+      records: wins.slice().sort((a, b) => a.roi - b.roi),
+    },
+    averageRoi: {
+      ...common,
+      Icon: Percent,
+      label: '平均 ROI',
+      value: toSignedPct(kpi.averageRoi),
+      tone: toneOf(kpi.averageRoi),
+      kicker: 'Mean ticket return',
+      description: '每笔投资 ROI 的算术平均；它让每张单拥有相同权重，与按投入加权的“投注 ROI”并非同一指标。',
+      stats: [
+        { label: '算术平均', value: toSignedPct(kpi.averageRoi), tone: toneOf(kpi.averageRoi) },
+        { label: '投入加权', value: toSignedPct(kpi.roi), tone: toneOf(kpi.roi) },
+        { label: '两者差值', value: toSignedPct(kpi.averageRoi - kpi.roi), tone: toneOf(kpi.averageRoi - kpi.roi) },
+      ],
+    },
+    averageWinningRoi: {
+      ...common,
+      Icon: Activity,
+      label: '平均盈利 ROI',
+      value: toSignedPct(kpi.averageWinningRoi),
+      tone: wins.length ? 'win' : 'flat',
+      kicker: 'Mean winning return',
+      description: '只在盈利投资中计算单笔 ROI 的算术平均，用来识别盈利尾部是否显著拉高整体收益。',
+      stats: [
+        { label: '盈利样本', value: `${wins.length} 笔` },
+        { label: '平均', value: toSignedPct(kpi.averageWinningRoi), tone: 'win' },
+        { label: '中位', value: toSignedPct(kpi.medianWinningRoi), tone: 'win' },
+      ],
+      records: wins.slice().sort((a, b) => b.roi - a.roi),
+    },
+  }
+
+  return definitions[metricId] || null
+}
+
+function MetricDetailCard({ detail, onClose }) {
+  const [page, setPage] = useState(0)
+
+  useEffect(() => {
+    setPage(0)
+  }, [detail])
+
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') onClose()
+    }
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.body.style.overflow = previousOverflow
+      window.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [onClose])
+
+  if (!detail) return null
+
+  const records = Array.isArray(detail.records) ? detail.records : []
+  const totalPages = Math.max(1, Math.ceil(records.length / DETAIL_PAGE_SIZE))
+  const safePage = Math.min(page, totalPages - 1)
+  const visibleRecords = records.slice(safePage * DETAIL_PAGE_SIZE, (safePage + 1) * DETAIL_PAGE_SIZE)
+  const Icon = detail.Icon
+
+  return createPortal(
+    <div className="wr-detail-backdrop" role="presentation" onMouseDown={onClose}>
+      <section
+        className={`wr-detail-card is-${detail.tone}`}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="wr-detail-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="wr-detail-card__aurora" aria-hidden="true"><i /><i /><i /></div>
+        <button type="button" className="wr-detail-card__close" onClick={onClose} aria-label="关闭指标明细">
+          <X size={16} />
+        </button>
+
+        <header className="wr-detail-hero">
+          <div className="wr-detail-hero__icon"><Icon size={20} /></div>
+          <div className="wr-detail-hero__copy">
+            <p>{detail.kicker}</p>
+            <h2 id="wr-detail-title">{detail.label}</h2>
+            <span>{detail.periodLabel} · {detail.count} 笔已结算</span>
+          </div>
+          <strong className={`is-${detail.tone}`}>{detail.value}</strong>
+        </header>
+
+        <p className="wr-detail-card__description">{detail.description}</p>
+
+        <div className="wr-detail-stats">
+          {detail.stats.map((item) => (
+            <div key={item.label} className={`is-${item.tone || 'flat'}`}>
+              <span>{item.label}</span>
+              <strong>{item.value}</strong>
+            </div>
+          ))}
+        </div>
+
+        {Array.isArray(detail.events) && detail.events.length > 0 && (
+          <div className="wr-detail-events">
+            <div className="wr-detail-section-head"><span>资金事件</span><em>{detail.events.length} 条</em></div>
+            {detail.events.map((event) => (
+              <div key={event.id} className="wr-detail-event">
+                <span>{event.date}</span>
+                <strong>{event.label}</strong>
+                <em>{event.value}</em>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {records.length > 0 && (
+          <div className="wr-detail-ledger">
+            <div className="wr-detail-section-head">
+              <span>支撑明细</span>
+              <em>{safePage * DETAIL_PAGE_SIZE + 1}–{Math.min(records.length, (safePage + 1) * DETAIL_PAGE_SIZE)} / {records.length}</em>
+            </div>
+            <div className="wr-detail-ledger__rows">
+              {visibleRecords.map((entry) => (
+                <div key={`${detail.label}-${entry.id}`} className={`wr-detail-row is-${toneOf(entry.profit)}`}>
+                  <span className="wr-detail-row__date">{entry.dateLabel}</span>
+                  <div className="wr-detail-row__main">
+                    <strong>{entryTitle(entry)}</strong>
+                    <span>{entry.matches.map((match) => match.entryText).filter(Boolean).join(' + ') || '—'} · 投入 {toRmb(entry.inputs)}</span>
+                  </div>
+                  <div className="wr-detail-row__result">
+                    <strong>{toSigned(entry.profit)} rmb</strong>
+                    <span>{toSignedPct(entry.roi)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {totalPages > 1 && (
+              <div className="wr-detail-pager">
+                <span>{safePage + 1} / {totalPages}</span>
+                <div>
+                  <button type="button" disabled={safePage === 0} onClick={() => setPage((value) => Math.max(0, value - 1))} aria-label="上一页明细">
+                    <ChevronLeft size={15} />
+                  </button>
+                  <button type="button" disabled={safePage >= totalPages - 1} onClick={() => setPage((value) => Math.min(totalPages - 1, value + 1))} aria-label="下一页明细">
+                    <ChevronRight size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </section>
+    </div>,
+    document.body,
   )
 }
 
@@ -735,6 +1120,7 @@ function EntryLedger({ entries, modeLabel }) {
 export default function WarReportPage() {
   const [dataVersion, setDataVersion] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
+  const [activeMetricId, setActiveMetricId] = useState(null)
   const railRef = useRef(null)
   const modeLabel = useModeLabelMap()
 
@@ -753,43 +1139,70 @@ export default function WarReportPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const report = useMemo(() => getWarReport(activeId), [activeId, dataVersion])
+  const activeMetricDetail = useMemo(
+    () => report && activeMetricId ? buildMetricDetail(activeMetricId, report) : null,
+    [activeMetricId, report],
+  )
 
   const handleRename = useCallback((cycleId, name) => {
     setCycleTitle(cycleId, name)
     setDataVersion((v) => v + 1)
+    if (!isPreviewMode()) runCloudSyncNow()
   }, [])
 
-  const handleBaseCapitalSave = useCallback((nextBase) => {
-    if (!report) return
+  const handleBaseCapitalSave = useCallback(async (nextBase) => {
+    if (!report) return { ok: false, reason: 'missing_report' }
     const delta = Number((nextBase - report.period.baseCapital).toFixed(2))
-    if (Math.abs(delta) < 0.01) return
+    if (Math.abs(delta) < 0.01) return { ok: true, unchanged: true, preview: isPreviewMode() }
 
     const config = getSystemConfig()
     const nextInitialCapital = Number(((Number(config.initialCapital) || 0) + delta).toFixed(2))
+    const capitalLedgerUpdatedAt = new Date().toISOString()
 
     if (report.period.isGenesis) {
-      saveSystemConfig({ initialCapital: nextInitialCapital })
+      saveSystemConfig({ initialCapital: nextInitialCapital, capitalLedgerUpdatedAt })
       setDataVersion((version) => version + 1)
-      return
+      if (isPreviewMode()) return { ok: true, preview: true }
+      return runCloudSyncNow()
     }
 
     const linkedInjectionId = report.period.openedBy?.linkedInjectionId
     const targetInjection = report.period.injections.find((item) => item.id === linkedInjectionId)
       || report.period.injections[0]
-    if (!targetInjection) return
+    if (!targetInjection) return { ok: false, reason: 'missing_cycle_injection' }
 
-    const nextInjectionAmount = Number(((Number(targetInjection.amount) || 0) + delta).toFixed(2))
-    if (nextInjectionAmount <= 0) return
+    const periodInjectionIds = new Set(report.period.injections.map((item) => item.id))
+    const adjustedAmounts = new Map(report.period.injections.map((item) => [item.id, Number(item.amount) || 0]))
+    if (delta > 0) {
+      adjustedAmounts.set(targetInjection.id, Number((adjustedAmounts.get(targetInjection.id) + delta).toFixed(2)))
+    } else {
+      let remainingReduction = Math.abs(delta)
+      const reductionOrder = [
+        targetInjection,
+        ...report.period.injections.filter((item) => item.id !== targetInjection.id).slice().reverse(),
+      ]
+      reductionOrder.forEach((item) => {
+        if (remainingReduction <= 0) return
+        const currentAmount = adjustedAmounts.get(item.id) || 0
+        const reduction = Math.min(currentAmount, remainingReduction)
+        adjustedAmounts.set(item.id, Number((currentAmount - reduction).toFixed(2)))
+        remainingReduction = Number((remainingReduction - reduction).toFixed(2))
+      })
+      if (remainingReduction > 0) return { ok: false, reason: 'invalid_cycle_injection' }
+    }
 
     const capitalInjections = (Array.isArray(config.capitalInjections) ? config.capitalInjections : [])
-      .map((item) => item.id === targetInjection.id ? { ...item, amount: nextInjectionAmount } : item)
+      .map((item) => periodInjectionIds.has(item.id) ? { ...item, amount: adjustedAmounts.get(item.id) } : item)
+    const nextAllocation = linkedInjectionId ? adjustedAmounts.get(linkedInjectionId) : null
     const poolSettlements = (Array.isArray(config.poolSettlements) ? config.poolSettlements : [])
       .map((item) => item.id === report.period.openedBy?.id
-        ? { ...item, newCapital: Number(((Number(item.newCapital) || 0) + delta).toFixed(2)) }
+        ? { ...item, newCapital: Number.isFinite(nextAllocation) ? nextAllocation : item.newCapital }
         : item)
 
-    saveSystemConfig({ initialCapital: nextInitialCapital, capitalInjections, poolSettlements })
+    saveSystemConfig({ initialCapital: nextInitialCapital, capitalInjections, poolSettlements, capitalLedgerUpdatedAt })
     setDataVersion((version) => version + 1)
+    if (isPreviewMode()) return { ok: true, preview: true }
+    return runCloudSyncNow()
   }, [report])
 
   const runKey = `${activeId}:${dataVersion}`
@@ -842,6 +1255,7 @@ export default function WarReportPage() {
             index={0}
             period={report.period}
             onSave={handleBaseCapitalSave}
+            onOpen={() => setActiveMetricId('baseCapital')}
           />
           <KpiTile
             index={1}
@@ -850,6 +1264,7 @@ export default function WarReportPage() {
             value={`${kpi.hitRate.toFixed(1)}%`}
             sub={`${kpi.wins} 中 / ${kpi.losses} 失`}
             tone={kpi.hitRate >= 50 ? 'win' : 'lose'}
+            onOpen={() => setActiveMetricId('hitRate')}
           />
           <KpiTile
             index={2}
@@ -857,6 +1272,7 @@ export default function WarReportPage() {
             label="投入总额"
             value={toRmb(kpi.totalInputs)}
             sub={kpi.pendingCount > 0 ? `另有 ${toRmb(kpi.pendingInputs)} 在途` : `均注 ${toRmb(kpi.avgStake)}`}
+            onOpen={() => setActiveMetricId('totalInputs')}
           />
           <KpiTile
             index={3}
@@ -865,6 +1281,7 @@ export default function WarReportPage() {
             value={toRmb(kpi.totalRevenue)}
             sub={`利润 ${toSigned(kpi.profit)} rmb`}
             tone={toneOf(kpi.profit)}
+            onOpen={() => setActiveMetricId('totalRevenue')}
           />
           <KpiTile
             index={4}
@@ -873,6 +1290,7 @@ export default function WarReportPage() {
             value={toRmb(kpi.maxDrawdown)}
             sub="期内峰谷差"
             tone={kpi.maxDrawdown > 0 ? 'lose' : 'flat'}
+            onOpen={() => setActiveMetricId('maxDrawdown')}
           />
           <KpiTile
             index={5}
@@ -881,6 +1299,7 @@ export default function WarReportPage() {
             value={toRmb(kpi.maxRunup)}
             sub="累计盈亏谷峰差"
             tone={kpi.maxRunup > 0 ? 'win' : 'flat'}
+            onOpen={() => setActiveMetricId('maxRunup')}
           />
           <KpiTile
             index={6}
@@ -889,6 +1308,7 @@ export default function WarReportPage() {
             value={`${kpi.bestWinStreak} 连`}
             sub={`最长连败 ${kpi.worstLoseStreak} 连`}
             tone={kpi.bestWinStreak >= kpi.worstLoseStreak ? 'win' : 'lose'}
+            onOpen={() => setActiveMetricId('streak')}
           />
           <KpiTile
             index={7}
@@ -897,6 +1317,7 @@ export default function WarReportPage() {
             value={kpi.bestEntry ? toSigned(kpi.bestEntry.profit) : '—'}
             sub={kpi.worstEntry ? `最差 ${toSigned(kpi.worstEntry.profit)}` : '尚无已结算'}
             tone="win"
+            onOpen={() => setActiveMetricId('bestEntry')}
           />
           <KpiTile
             index={8}
@@ -905,6 +1326,7 @@ export default function WarReportPage() {
             value={toSignedPct(kpi.medianRoi)}
             sub="全部已结算单"
             tone={toneOf(kpi.medianRoi)}
+            onOpen={() => setActiveMetricId('medianRoi')}
           />
           <KpiTile
             index={9}
@@ -913,6 +1335,7 @@ export default function WarReportPage() {
             value={toSignedPct(kpi.medianWinningRoi)}
             sub={`${kpi.wins} 笔盈利单`}
             tone={kpi.wins > 0 ? 'win' : 'flat'}
+            onOpen={() => setActiveMetricId('medianWinningRoi')}
           />
           <KpiTile
             index={10}
@@ -921,6 +1344,7 @@ export default function WarReportPage() {
             value={toSignedPct(kpi.averageRoi)}
             sub="单笔 ROI 算术平均"
             tone={toneOf(kpi.averageRoi)}
+            onOpen={() => setActiveMetricId('averageRoi')}
           />
           <KpiTile
             index={11}
@@ -929,6 +1353,7 @@ export default function WarReportPage() {
             value={toSignedPct(kpi.averageWinningRoi)}
             sub={`${kpi.wins} 笔盈利单`}
             tone={kpi.wins > 0 ? 'win' : 'flat'}
+            onOpen={() => setActiveMetricId('averageWinningRoi')}
           />
         </VerdictBanner>
 
@@ -1035,6 +1460,10 @@ export default function WarReportPage() {
           故分项之和与总计一致。结算界面填回的比分与命中状态实时反映在逐笔战果中。
         </span>
       </p>
+
+      {activeMetricDetail && (
+        <MetricDetailCard detail={activeMetricDetail} onClose={() => setActiveMetricId(null)} />
+      )}
     </div>
   )
 }
