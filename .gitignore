@@ -13,3 +13,6 @@
 /*.png
 /*.pdf
 !/README.md
+# CLAUDE.md 是给 Claude Code 读的项目约定（交付流程 / 命令 / 架构概述），
+# 属于工具配置而非个人笔记，需要随仓库走才能跨机器、跨会话生效。
+!/CLAUDE.md
