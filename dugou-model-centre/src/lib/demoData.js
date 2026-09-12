@@ -1,8 +1,8 @@
 /**
  * Demo Data Bundle — what visitors see in preview mode.
  *
- * Hand-curated synthetic dataset: 40 investments over a 92-day window
- * (2025-10-01 → 2025-12-31), spanning all six strategy modes, parlay
+ * Hand-curated synthetic dataset: a historical base plus a populated report
+ * cycle (2025-09-01 → 2026-02-11), spanning all six strategy modes, parlay
  * sizes from 1 to 5 legs, and a realistic ~55% hit rate with a gently
  * positive ROI trajectory and one mild drawdown phase to make the
  * dashboard charts read naturally.
@@ -724,6 +724,57 @@ const buildPendingPresets = () => {
   ]
 }
 
+// ── Current-cycle report showcase ──────────────────────────────────
+// The report opens on the latest cycle. Keep that cycle populated so a
+// preview visitor sees the complete product (curve, splits and pagination)
+// instead of an empty post-settlement state.
+const buildCurrentCycleReportDemo = () => {
+  const specs = [
+    ['2026-01-12T19:30:00.000Z', 38, 1.95, true],
+    ['2026-01-14T20:00:00.000Z', 64, 2.10, false],
+    ['2026-01-16T19:45:00.000Z', 46, 2.15, true],
+    ['2026-01-18T18:30:00.000Z', 112, 1.72, true],
+    ['2026-01-21T20:15:00.000Z', 88, 2.25, false],
+    ['2026-01-23T19:30:00.000Z', 156, 2.05, true],
+    ['2026-01-25T17:45:00.000Z', 72, 1.84, true],
+    ['2026-01-28T20:00:00.000Z', 215, 1.78, false],
+    ['2026-01-30T19:30:00.000Z', 128, 2.22, true],
+    ['2026-02-01T18:00:00.000Z', 184, 1.92, false],
+    ['2026-02-03T20:00:00.000Z', 42, 2.55, true],
+    ['2026-02-05T19:45:00.000Z', 96, 1.76, true],
+    ['2026-02-07T18:30:00.000Z', 265, 1.88, false],
+    ['2026-02-09T20:15:00.000Z', 138, 2.15, true],
+    ['2026-02-11T19:30:00.000Z', 325, 1.68, true],
+  ]
+
+  return specs.map(([dateIso, inputs, combinedOdds, isWin], index) => {
+    const investment = buildInvestment(900 + index, dateIso)
+    const revenues = isWin ? round2(inputs * combinedOdds) : 0
+    const legOdds = roundOdds(combinedOdds ** (1 / Math.max(1, investment.matches.length)))
+    const matches = investment.matches.map((match, matchIndex) => ({
+      ...match,
+      odds: legOdds,
+      entries: [{ name: match.entry_text, odds: legOdds }],
+      is_correct: isWin ? true : matchIndex !== 0,
+      match_rating: isWin ? round2(randRange(0.58, 0.76)) : round2(randRange(0.18, 0.48)),
+    }))
+
+    return {
+      ...investment,
+      id: `demo_report_current_${String(index + 1).padStart(2, '0')}`,
+      inputs,
+      suggested_amount: inputs,
+      combined_odds: combinedOdds,
+      status: isWin ? 'win' : 'lose',
+      revenues,
+      profit: round2(revenues - inputs),
+      actual_rating: round2(matches.reduce((sum, match) => sum + match.match_rating, 0) / matches.length),
+      remarks: '战报演示周期 · 已自动匹配赛果',
+      matches,
+    }
+  })
+}
+
 // ── Top-level bundle builder ───────────────────────────────────────
 const TOTAL_GENERATED = 72 // + 3 showcase + 3 settled marquee + 3 pending bundles = 81 total
 
@@ -751,6 +802,10 @@ const buildBundle = () => {
   // become the three Settle rows (4-leg first, then two 2-legs) and
   // flatten into ComboPage's candidate leg pool.
   investments.push(...buildPendingPresets())
+
+  // Populate the latest report cycle with enough settled data to exercise
+  // every major report surface, including the second ledger page.
+  investments.push(...buildCurrentCycleReportDemo())
 
   // Sort chronologically.
   investments.sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
@@ -816,7 +871,7 @@ export const getDemoTeamProfiles = () => {
 }
 
 export const getDemoSystemConfig = () => ({
-  initialCapital: 600,
+  initialCapital: 1500,
   riskCapRatio: 0.12,
   defaultOdds: 2.5,
   kellyDivisor: 4,
@@ -839,16 +894,20 @@ export const getDemoSystemConfig = () => ({
   // 二者被那 3 条待结算行隔开，呈现「分开来、止盈在上、注资在下」。把原始
   // 本金 600 拆成「原始 300 + 注资 300」，故 initialCapital 维持 600、不影响
   // 其它口径与资金曲线。
-  // 注：止盈是最新事件、会把当前周期清零，故 demo「当前余额」显示 ¥0、新建
-  // 下注建议金额≈¥0（组合页有 Math.max(1,…) 兜底不会崩）。这是「刚止盈、新
-  // 周期尚未注资」的真实蓄水池口径；若要非零小余额，把两条流水下移到 12 月
-  // 即可（止盈仍在注资之上、余额≈¥98，但会落到第 10/12 行需轻微下滑）。
+  // 止盈后立即划拨 900 开启「蓝潮实验」周期，并配入 15 条已结算演示记录，
+  // 让战报默认打开时能够完整展示净值、分项、结果序列与分页明细。
   capitalInjections: [
     {
       id: 'inj_demo_20260104',
       amount: 300,
       note: '',
       created_at: '2026-01-04T12:00:00.000Z',
+    },
+    {
+      id: 'inj_demo_20260110_allocation',
+      amount: 900,
+      note: '周期结算划拨',
+      created_at: '2026-01-10T12:00:00.001Z',
     },
   ],
   poolSettlements: [
@@ -858,9 +917,17 @@ export const getDemoSystemConfig = () => ({
       realizedProfit: 960,
       poolBefore: 1560,
       cycleBase: 600,
-      newCapital: 0,
-      linkedInjectionId: null,
+      newCapital: 900,
+      linkedInjectionId: 'inj_demo_20260110_allocation',
       created_at: '2026-01-10T12:00:00.000Z',
+    },
+  ],
+  cycleTitles: [
+    {
+      id: 'cycle_stl_demo_20260110',
+      name: '蓝潮实验 · 第一章',
+      created_at: '2026-01-10T12:00:00.000Z',
+      updated_at: '2026-01-10T12:00:00.000Z',
     },
   ],
   adaptiveWeights: {
@@ -904,7 +971,7 @@ export const getDemoSystemConfig = () => ({
 
 export const getDemoAccessLogs = () => []
 
-export const DEMO_BUNDLE_REVISION = `step4-curated-v1-${SEED.toString(36)}`
+export const DEMO_BUNDLE_REVISION = `war-report-showcase-v2-${SEED.toString(36)}`
 
 // Diagnostic helper — exposed for the console so the user can sanity
 // check the generated distribution while crafting the bundle.
