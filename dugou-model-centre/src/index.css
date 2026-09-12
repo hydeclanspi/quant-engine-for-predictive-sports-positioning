@@ -11224,6 +11224,69 @@ html .h-screen {
 .wr-ledger { border: none; background: rgba(255, 255, 255, 0.68); }
 .wr-ledger__table thead th { background: rgba(118, 118, 128, 0.045); }
 
+/* ── 战报字号校准 ────────────────────────────────────────────────────
+   保留当前主标题 / 主数字的上限，只把过度微缩的说明、标签和流水字号
+   恢复到 Apple 式界面更舒适的阅读层级。 */
+.wr-showcase .wr-page-head__eyebrow { font-size: 10px; }
+.wr-showcase .wr-page-head__copy > p:last-child { font-size: 13px; }
+.wr-showcase .wr-sync-note span { font-size: 10px; }
+.wr-showcase .wr-sync-note strong { font-size: 11.5px; }
+
+.wr-showcase .wr-banner__eyebrow { font-size: 10px; }
+.wr-showcase .wr-banner__live { font-size: 10px; }
+.wr-showcase .wr-banner__span { font-size: 11.5px; }
+.wr-showcase .wr-figure__label { font-size: 10px; }
+.wr-showcase .wr-figure__value em { font-size: 10px; }
+.wr-showcase .wr-emblem__caption { font-size: 9.5px; }
+.wr-showcase .wr-emblem__title { font-size: 10.5px; }
+
+.wr-showcase .wr-kpi__head { font-size: 10px; }
+.wr-showcase .wr-kpi__value { font-size: 18px; }
+.wr-showcase .wr-kpi__sub { font-size: 10px; }
+
+.wr-showcase .wr-cycle-browser__head span { font-size: 11px; }
+.wr-showcase .wr-cycle-browser__head strong { font-size: 10px; }
+.wr-showcase .wr-period-card__ordinal,
+.wr-showcase .wr-period-card__state { font-size: 10px; }
+.wr-showcase .wr-period-card__name { font-size: 12px; }
+.wr-showcase .wr-period-card__profit { font-size: 18px; }
+.wr-showcase .wr-period-card__profit em { font-size: 10px; }
+.wr-showcase .wr-period-card__meta { font-size: 10px; }
+
+.wr-section-lead span { font-size: 12px; }
+.wr-panel__eyebrow { font-size: 10px; }
+.wr-panel__head h3 { font-size: 13.5px; }
+.wr-panel__count { font-size: 10.5px; }
+.wr-panel__count strong { font-size: 12px; }
+.wr-empty { font-size: 12.5px; }
+.wr-curve__axis { font-size: 10.5px; }
+
+.wr-outcome__score span { font-size: 10px; }
+.wr-outcome__sequence span { font-size: 10px; }
+.wr-outcome__hint { font-size: 10px; }
+.wr-outcome__split span { font-size: 10px; }
+.wr-outcome__split strong { font-size: 11.5px; }
+
+.wr-bar__label { font-size: 12px; }
+.wr-bar__label > i { font-size: 9.5px; }
+.wr-bar__metric { font-size: 12px; }
+.wr-bar__foot { font-size: 10px; }
+
+.wr-panel__fresh { font-size: 10px; }
+.wr-ledger__table { font-size: 12px; }
+.wr-ledger__table thead th { font-size: 10px; }
+.wr-ledger__date { font-size: 11px; }
+.wr-leg__teams { font-size: 12px; }
+.wr-leg__entry { font-size: 11.5px; }
+.wr-leg__score { font-size: 10.5px; }
+.wr-leg__flag { font-size: 9.5px; }
+.wr-tag { font-size: 10px; }
+.wr-status { font-size: 10.5px; }
+.wr-ledger__profit { font-size: 12px; }
+.wr-ledger__profit em { font-size: 9.5px; }
+.wr-pager { font-size: 10.5px; }
+.wr-footnote { font-size: 10.5px; }
+
 @keyframes wrLiquidOne {
   0% { transform: translate3d(0, 0, 0) rotate(-4deg) scale(1); border-radius: 44% 56% 62% 38% / 52% 42% 58% 48%; }
   100% { transform: translate3d(-30px, 24px, 0) rotate(7deg) scale(1.05); border-radius: 58% 42% 43% 57% / 44% 60% 40% 56%; }

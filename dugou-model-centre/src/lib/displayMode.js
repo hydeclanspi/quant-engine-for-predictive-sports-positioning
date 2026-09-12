@@ -29,6 +29,21 @@ const MOCK_TOKEN_PREFIX = 'dev.mock.'
 
 export const PREVIEW_MODE = 'preview'
 export const FULL_MODE = 'full'
+export const OWNER_ROUTE_BASENAME = '/arsenal'
+
+/**
+ * Hidden owner route. Visiting `/arsenal` or anything below it is a permanent
+ * FULL-mode context with no password, token lifetime or session latch.
+ * The route itself is the switch; ordinary URLs keep the existing preview /
+ * password flow and this shortcut never writes an unlock flag to storage.
+ */
+export const isOwnerRoutePath = (pathname = '') => {
+  const path = String(pathname || '')
+  return path === OWNER_ROUTE_BASENAME || path.startsWith(`${OWNER_ROUTE_BASENAME}/`)
+}
+
+export const isOwnerRoute = () =>
+  typeof window !== 'undefined' && isOwnerRoutePath(window.location?.pathname)
 
 const safeGetSession = (key) => {
   if (typeof window === 'undefined') return null
@@ -85,6 +100,7 @@ export const getStoredToken = () => safeGetSession(TOKEN_KEY)
 const isSessionUnlocked = () => safeGetSession(UNLOCK_LATCH_KEY) === '1'
 
 export const getDisplayMode = () => {
+  if (isOwnerRoute()) return FULL_MODE
   // Sticky: an already-unlocked tab stays FULL even if the token's exp has
   // since passed. Only an explicit relock (lockToPreview) or closing the
   // tab drops back to preview — see UNLOCK_LATCH_KEY note above.
@@ -104,7 +120,9 @@ const dispatchModeChanged = (mode) => {
 export const lockToPreview = () => {
   safeSetSession(TOKEN_KEY, null)
   safeSetSession(UNLOCK_LATCH_KEY, null)
-  dispatchModeChanged(PREVIEW_MODE)
+  // `/arsenal` is intentionally permanent-full; the only way back to preview
+  // there is to leave the hidden route and use the ordinary site URL.
+  dispatchModeChanged(isOwnerRoute() ? FULL_MODE : PREVIEW_MODE)
 }
 
 export const unlockWithToken = (token) => {

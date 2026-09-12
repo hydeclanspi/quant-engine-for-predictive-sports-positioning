@@ -18,7 +18,7 @@ import {
  * POST /api/commit-bundle — persist the owner's live snapshot to git.
  *
  * Body:    { snapshot: <DUGOU data bundle> }
- * Auth:    Bearer <full-scope JWT from /api/unlock>
+ * Auth:    Bearer <full-scope JWT> or the intentional `/arsenal` marker
  * Effect:  union-merges `snapshot` into the encrypted bundle on the
  *          `data` branch and commits it. The branch + file are created on
  *          first write, so there is no manual git setup.

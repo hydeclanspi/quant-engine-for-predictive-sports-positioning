@@ -11,7 +11,7 @@ import {
 /**
  * GET /api/bundle — return the owner's latest decrypted snapshot.
  *
- * Auth:    Bearer <full-scope JWT from /api/unlock>
+ * Auth:    Bearer <full-scope JWT> or the intentional `/arsenal` marker
  * Returns: { ok: true, bundle, updated_at } | { ok: true, bundle: null }
  *
  * The plaintext bet log is only ever assembled server-side and handed to
