@@ -2,6 +2,11 @@ name: CI
 
 # 在推送到主分支以及针对主分支的 PR 上运行质量门禁：
 # 代码规范（ESLint） → 单元测试（Vitest） → 生产构建（Vite）。
+#
+# 必须待在仓库根目录的 .github/workflows/ 下 —— GitHub Actions 只扫描根目录这一处。
+# 本文件此前放在 dugou-model-centre/.github/workflows/ 里，低了一层，于是从未被
+# 注册、从未运行过一次（仓库里唯一活着的 workflow 只有 Supabase 保活）。
+# 前端代码在 dugou-model-centre/ 子目录，故所有 run 步骤统一设 working-directory。
 on:
   push:
     branches: [main, master]
@@ -18,6 +23,10 @@ jobs:
     name: Lint · Test · Build
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: dugou-model-centre
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,6 +36,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          # setup-node 的 cache 不吃 defaults.working-directory，要显式指到 lockfile
+          cache-dependency-path: dugou-model-centre/package-lock.json
 
       - name: Install dependencies
         run: npm ci
