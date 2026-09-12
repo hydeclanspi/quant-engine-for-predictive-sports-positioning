@@ -1,4 +1,4 @@
-import { getStoredToken, isFullMode } from './displayMode'
+import { getStoredToken, isFullMode, isOwnerRoute } from './displayMode'
 
 /**
  * Git-as-sync client — the cross-device live-sync layer.
@@ -12,8 +12,8 @@ import { getStoredToken, isFullMode } from './displayMode'
  * (coalescing bursts), but once COMMIT_THRESHOLD changes have piled up we
  * flush immediately so other devices never lag too far behind.
  *
- * All writes/reads require FULL mode (the owner unlocked this tab) and a
- * live token — preview/public visitors never touch the owner's store.
+ * All writes/reads require FULL mode plus either a live token or the hidden
+ * owner route marker — preview/public visitors never touch the owner's store.
  */
 
 const COMMIT_ENDPOINT = '/api/commit-bundle'
@@ -75,6 +75,9 @@ export const saveGitSyncState = (patch) => {
 export const setGitSyncEnabled = (enabled) => saveGitSyncState({ enabled: Boolean(enabled), lastError: '' })
 
 const authHeaders = () => {
+  // The hidden `/arsenal` mount deliberately bypasses password/JWT auth. Its
+  // route marker is forwarded to the server so pull + save remain fully live.
+  if (isOwnerRoute()) return { 'X-Dugou-Arsenal': '1' }
   const token = getStoredToken()
   return token ? { Authorization: `Bearer ${token}` } : null
 }

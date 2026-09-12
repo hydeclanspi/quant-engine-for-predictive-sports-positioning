@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FULL_MODE, lockToPreview, useDisplayMode } from '../lib/displayMode'
+import { FULL_MODE, isOwnerRoute, lockToPreview, useDisplayMode } from '../lib/displayMode'
 import UnlockModal from './UnlockModal'
 
 /**
@@ -18,9 +18,11 @@ import UnlockModal from './UnlockModal'
 
 export default function PreviewModeToggle() {
   const mode = useDisplayMode()
+  const ownerRoute = isOwnerRoute()
   const [modalOpen, setModalOpen] = useState(false)
 
   const handleClick = () => {
+    if (ownerRoute) return
     if (mode === FULL_MODE) {
       lockToPreview()
       return
@@ -33,9 +35,10 @@ export default function PreviewModeToggle() {
       <button
         type="button"
         onClick={handleClick}
+        disabled={ownerRoute}
         className={mode === FULL_MODE ? 'pm-toggle pm-toggle-full' : 'pm-toggle pm-toggle-preview'}
-        title={mode === FULL_MODE ? '点击锁回预览模式' : '点击解锁完整模式'}
-        aria-label={mode === FULL_MODE ? 'Lock to preview mode' : 'Unlock full mode'}
+        title={ownerRoute ? '完整数据模式' : mode === FULL_MODE ? '点击锁回预览模式' : '点击解锁完整模式'}
+        aria-label={ownerRoute ? 'Full data mode' : mode === FULL_MODE ? 'Lock to preview mode' : 'Unlock full mode'}
       >
         {mode === FULL_MODE ? (
           <>
