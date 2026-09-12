@@ -64,6 +64,15 @@ const calcRoi = (profit, inputs) => (inputs > 0 ? (profit / inputs) * 100 : 0)
 
 const round2 = (value) => Number((Number(value) || 0).toFixed(2))
 
+const median = (values) => {
+  const sorted = values.filter(Number.isFinite).slice().sort((a, b) => a - b)
+  if (sorted.length === 0) return 0
+  const middle = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 0
+    ? (sorted[middle - 1] + sorted[middle]) / 2
+    : sorted[middle]
+}
+
 /* ── 缓存（revision 前缀，与 analytics 同构） ──────────────────────────── */
 
 const CACHE_EVENT = 'dugou:data-changed'
@@ -319,7 +328,11 @@ const buildEntryRow = (investment) => {
     modes: [...new Set(matches.map((match) => match.mode || '常规'))],
     combinedOdds: round2(toNumber(investment.combined_odds)),
     inputs,
-    revenues: round2(toNumber(investment.revenues)),
+    revenues: round2(
+      Number.isFinite(Number.parseFloat(investment.revenues))
+        ? toNumber(investment.revenues)
+        : inputs + profit,
+    ),
     profit,
     roi: settled ? round2(calcRoi(profit, inputs)) : null,
     expectedRating: Number.isFinite(Number.parseFloat(investment.expected_rating))
@@ -372,6 +385,7 @@ export const getWarReport = (periodId = null) => {
 
   /* — KPI — */
   const totalInputs = settledEntries.reduce((sum, row) => sum + row.inputs, 0)
+  const totalRevenue = settledEntries.reduce((sum, row) => sum + row.revenues, 0)
   const totalProfit = settledEntries.reduce((sum, row) => sum + row.profit, 0)
   const wins = settledEntries.filter((row) => row.profit > 0).length
   const losses = settledEntries.filter((row) => row.profit < 0).length
@@ -398,7 +412,9 @@ export const getWarReport = (periodId = null) => {
       ts: row.createdTs,
       kind: 'bet',
       amount: row.profit,
-      label: row.matches.map((m) => `${m.homeTeam}·${m.entryText}`).join(' + ') || '投注',
+      label: row.matches
+        .map((m) => `${m.homeTeam} vs ${m.awayTeam}${m.entryText ? ` · ${m.entryText}` : ''}`)
+        .join(' + ') || '投注',
       entry: row,
     })),
   ].sort((a, b) => a.ts - b.ts)
@@ -407,8 +423,16 @@ export const getWarReport = (periodId = null) => {
   let running = period.isGenesis ? period.baseCapital - period.injected : 0
   let peak = running
   let maxDrawdown = 0
-  const curve = [{ ts: period.startTs, balance: round2(running), kind: 'start', label: '开局' }]
+  let investmentNumber = 0
+  const curve = [{
+    ts: period.startTs,
+    balance: round2(running),
+    kind: 'start',
+    label: '开局',
+    investmentNumber,
+  }]
   timeline.forEach((point) => {
+    if (point.kind === 'bet') investmentNumber += 1
     running += point.amount
     peak = Math.max(peak, running)
     maxDrawdown = Math.max(maxDrawdown, peak - running)
@@ -419,8 +443,24 @@ export const getWarReport = (periodId = null) => {
       label: point.label,
       delta: round2(point.amount),
       dateLabel: formatDay(point.ts),
+      fullDateLabel: formatFullDay(point.ts),
+      investmentNumber,
     })
   })
+
+  // Maximum run-up is the largest trough-to-peak rise on the cumulative P&L
+  // path. Cash injections are deliberately excluded: they are funding events,
+  // not performance.
+  let cumulativeProfit = 0
+  let profitTrough = 0
+  let maxRunup = 0
+  ;[...settledEntries]
+    .sort((a, b) => a.createdTs - b.createdTs)
+    .forEach((row) => {
+      cumulativeProfit += row.profit
+      maxRunup = Math.max(maxRunup, cumulativeProfit - profitTrough)
+      profitTrough = Math.min(profitTrough, cumulativeProfit)
+    })
 
   /* — 连胜 / 连败 — */
   let currentStreak = 0
@@ -521,6 +561,14 @@ export const getWarReport = (periodId = null) => {
     .sort((a, b) => b.profit - a.profit)
 
   const roi = round2(calcRoi(totalProfit, totalInputs))
+  const entryRois = settledEntries.map((row) => row.roi).filter(Number.isFinite)
+  const winningRois = settledEntries.filter((row) => row.profit > 0).map((row) => row.roi).filter(Number.isFinite)
+  const averageRoi = entryRois.length > 0
+    ? round2(entryRois.reduce((sum, value) => sum + value, 0) / entryRois.length)
+    : 0
+  const averageWinningRoi = winningRois.length > 0
+    ? round2(winningRois.reduce((sum, value) => sum + value, 0) / winningRois.length)
+    : 0
   const returnOnBase = period.baseCapital > 0 ? round2((totalProfit / period.baseCapital) * 100) : 0
   const grade = gradeForRoi(roi, settledEntries.length)
 
@@ -529,6 +577,7 @@ export const getWarReport = (periodId = null) => {
     kpi: {
       profit: round2(totalProfit),
       totalInputs: round2(totalInputs),
+      totalRevenue: round2(totalRevenue),
       pendingInputs: round2(pendingInputs),
       roi,
       returnOnBase,
@@ -540,6 +589,11 @@ export const getWarReport = (periodId = null) => {
       hitRate: settledEntries.length > 0 ? round2((wins / settledEntries.length) * 100) : 0,
       avgStake: settledEntries.length > 0 ? round2(totalInputs / settledEntries.length) : 0,
       maxDrawdown: round2(maxDrawdown),
+      maxRunup: round2(maxRunup),
+      medianRoi: round2(median(entryRois)),
+      medianWinningRoi: round2(median(winningRois)),
+      averageRoi,
+      averageWinningRoi,
       bestWinStreak,
       worstLoseStreak,
       bestEntry,

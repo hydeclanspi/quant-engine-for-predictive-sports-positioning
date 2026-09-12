@@ -278,6 +278,24 @@ describe('战报统计', () => {
     expect(report.kpi.worstLoseStreak).toBe(2)
     expect(report.kpi.bestWinStreak).toBe(1)
   })
+
+  it('汇总收入、最大升幅与单笔 ROI 的均值/中位数', () => {
+    state.investments = [
+      makeInvestment('m1', '2026-05-01T00:00:00Z', { inputs: 100, profit: 50, status: 'win' }), // ROI 50%
+      makeInvestment('m2', '2026-05-02T00:00:00Z', { inputs: 50, profit: -50, status: 'lose' }), // ROI -100%
+      makeInvestment('m3', '2026-05-03T00:00:00Z', { inputs: 100, profit: 100, status: 'win' }), // ROI 100%
+    ]
+
+    const report = getWarReport()
+
+    expect(report.kpi.totalRevenue).toBe(350)
+    expect(report.kpi.maxRunup).toBe(100)
+    expect(report.kpi.medianRoi).toBe(50)
+    expect(report.kpi.medianWinningRoi).toBe(75)
+    expect(report.kpi.averageRoi).toBe(16.67)
+    expect(report.kpi.averageWinningRoi).toBe(75)
+    expect(report.curve.filter((point) => point.kind === 'bet').map((point) => point.investmentNumber)).toEqual([1, 2, 3])
+  })
 })
 
 describe('战绩评级', () => {

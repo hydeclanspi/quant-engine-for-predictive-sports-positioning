@@ -11364,6 +11364,156 @@ html .h-screen {
 .wr-pager { font-size: 10.5px; }
 .wr-footnote { font-size: 10.5px; }
 
+/* ── 战报交互与统计扩展 ─────────────────────────────────────────────── */
+.wr-showcase .wr-banner__kpis { overflow: hidden; }
+.wr-showcase .wr-kpi:nth-child(6n + 1) { border-left: none; }
+.wr-showcase .wr-kpi:nth-child(n + 7) { border-top: 1px solid rgba(255, 255, 255, 0.35); }
+
+.wr-kpi__edit {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  margin-left: auto;
+  border: 0;
+  border-radius: 999px;
+  color: rgba(0, 113, 227, 0.78);
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.68);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.wr-kpi__edit:hover { transform: scale(1.06); background: rgba(255, 255, 255, 0.68); }
+
+.wr-capital-edit {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 22px 22px;
+  align-items: center;
+  gap: 4px;
+  margin-top: 9px;
+}
+.wr-capital-edit > span { color: #1d1d1f; font-size: 14px; font-weight: 650; }
+.wr-capital-edit input {
+  width: 100%;
+  min-width: 0;
+  height: 27px;
+  padding: 0 7px;
+  border: 1px solid rgba(0, 113, 227, 0.18);
+  border-radius: 8px;
+  outline: none;
+  color: #1d1d1f;
+  background: rgba(255, 255, 255, 0.48);
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.wr-capital-edit input:focus { border-color: rgba(0, 113, 227, 0.48); box-shadow: 0 0 0 3px rgba(0, 113, 227, 0.08); }
+.wr-capital-edit button {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 0;
+  border-radius: 7px;
+  color: #636366;
+  background: rgba(255, 255, 255, 0.46);
+}
+.wr-capital-edit button:first-of-type { color: #087cff; }
+
+.wr-curve__plot { position: relative; }
+.wr-curve__hover-target {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: crosshair;
+  outline: none;
+}
+.wr-curve__hover-target:hover,
+.wr-curve__hover-target:focus,
+.wr-curve__hover-target.is-active {
+  fill: var(--wr-curve-stroke);
+  stroke: rgba(255, 255, 255, 0.96);
+  filter: drop-shadow(0 2px 4px color-mix(in srgb, var(--wr-curve-stroke) 28%, transparent));
+}
+.wr-curve__tooltip {
+  position: absolute;
+  z-index: 3;
+  width: max-content;
+  max-width: min(250px, 72%);
+  padding: 8px 10px 9px;
+  border: 1px solid rgba(255, 255, 255, 0.78);
+  border-radius: 11px;
+  color: #1d1d1f;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 12px 30px -16px rgba(28, 48, 78, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 9px));
+}
+.wr-curve__tooltip span,
+.wr-curve__tooltip strong,
+.wr-curve__tooltip em { display: block; }
+.wr-curve__tooltip span { color: #8e8e93; font-size: 8px; font-weight: 560; letter-spacing: 0.02em; }
+.wr-curve__tooltip strong {
+  margin-top: 3px;
+  overflow: hidden;
+  color: #2c2c2e;
+  font-size: 10px;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wr-curve__tooltip em { margin-top: 3px; font-size: 9px; font-style: normal; font-weight: 650; }
+.wr-curve__tooltip em.is-win { color: #248a3d; }
+.wr-curve__tooltip em.is-lose { color: #d70015; }
+.wr-curve__tooltip em.is-flat { color: #636366; }
+.wr-curve__tooltip.is-left-edge { transform: translate(0, calc(-100% - 9px)); }
+.wr-curve__tooltip.is-right-edge { transform: translate(-100%, calc(-100% - 9px)); }
+
+.wr-curve__number-axis {
+  position: relative;
+  height: 18px;
+  margin-top: -12px;
+  color: #a1a1a6;
+  font-size: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.wr-curve__number-axis::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 1.84%;
+  left: 1.84%;
+  height: 1px;
+  background: rgba(60, 60, 67, 0.12);
+}
+.wr-curve__number-axis span {
+  position: absolute;
+  top: 4px;
+  transform: translateX(-50%);
+}
+.wr-curve__number-axis span::before {
+  content: '';
+  position: absolute;
+  top: -4px;
+  left: 50%;
+  width: 1px;
+  height: 3px;
+  background: rgba(60, 60, 67, 0.2);
+}
+.wr-curve__number-axis small {
+  position: absolute;
+  top: -10px;
+  left: 1.84%;
+  color: #b5b5ba;
+  font-size: 6.5px;
+}
+
+.wr-panel--weeks .wr-bar__foot span:empty { display: none; }
+.wr-panel--weeks .wr-bar__foot span:only-child { width: 100%; color: #86868b; }
+
 @keyframes wrLiquidOne {
   0% { transform: translate3d(0, 0, 0) rotate(-4deg) scale(1); border-radius: 44% 56% 62% 38% / 52% 42% 58% 48%; }
   100% { transform: translate3d(-30px, 24px, 0) rotate(7deg) scale(1.05); border-radius: 58% 42% 43% 57% / 44% 60% 40% 56%; }

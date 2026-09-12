@@ -2,24 +2,27 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Activity,
   Award,
+  BarChart3,
   CalendarDays,
   Check,
+  CheckCircle2,
   ChevronLeft,
   ChevronRight,
   Cloud,
   Flag,
   Layers,
   Pencil,
+  Percent,
+  ReceiptText,
   ShieldCheck,
   Swords,
-  Target,
   TrendingDown,
   TrendingUp,
   Wallet,
   X,
 } from 'lucide-react'
 import { getCyclePeriods, getWarReport } from '../lib/warReport'
-import { setCycleTitle } from '../lib/localData'
+import { getSystemConfig, saveSystemConfig, setCycleTitle } from '../lib/localData'
 import CountUp from '../components/CountUp'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { isPreviewMode } from '../lib/displayMode'
@@ -137,7 +140,6 @@ function VerdictBanner({ report, runKey, onRename, children }) {
 
           {editing ? (
             <div className="wr-rename">
-              <span className="wr-rename__prefix" aria-hidden="true">S{period.ordinal}</span>
               <input
                 ref={inputRef}
                 value={draft}
@@ -151,7 +153,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
                     setEditing(false)
                   }
                 }}
-                placeholder="输入标题 · 序号自动添加"
+                placeholder="输入周期标题"
                 className="wr-rename__input"
               />
               <button type="button" onClick={commit} className="wr-rename__btn is-ok" title="保存">
@@ -244,16 +246,92 @@ function VerdictBanner({ report, runKey, onRename, children }) {
 
 /* ── KPI 格 ───────────────────────────────────────────────────────────── */
 
-function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0 }) {
+function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0, action = null, children = null }) {
   return (
     <div className={`wr-kpi is-${tone}`} style={{ '--wr-delay': `${index * 55}ms` }}>
       <div className="wr-kpi__head">
         {Icon && <Icon size={13} />}
         <span>{label}</span>
+        {action}
       </div>
-      <p className="wr-kpi__value">{value}</p>
-      {sub && <p className="wr-kpi__sub">{sub}</p>}
+      {children || (
+        <>
+          <p className="wr-kpi__value">{value}</p>
+          {sub && <p className="wr-kpi__sub">{sub}</p>}
+        </>
+      )}
     </div>
+  )
+}
+
+function BaseCapitalTile({ period, onSave, index = 0 }) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(period.baseCapital))
+  const inputRef = useRef(null)
+
+  useEffect(() => {
+    setEditing(false)
+    setDraft(String(period.baseCapital))
+  }, [period.id, period.baseCapital])
+
+  useEffect(() => {
+    if (editing) inputRef.current?.select()
+  }, [editing])
+
+  const cancel = () => {
+    setDraft(String(period.baseCapital))
+    setEditing(false)
+  }
+
+  const commit = () => {
+    const amount = Number.parseFloat(draft)
+    if (!Number.isFinite(amount) || amount <= 0) {
+      cancel()
+      return
+    }
+    onSave(Number(amount.toFixed(2)))
+    setEditing(false)
+  }
+
+  return (
+    <KpiTile
+      index={index}
+      Icon={Wallet}
+      label="周期本金"
+      action={!editing ? (
+        <button type="button" className="wr-kpi__edit" onClick={() => setEditing(true)} aria-label="编辑周期本金">
+          <Pencil size={11} />
+        </button>
+      ) : null}
+    >
+      {editing ? (
+        <div className="wr-capital-edit">
+          <span>¥</span>
+          <input
+            ref={inputRef}
+            type="number"
+            min="0.01"
+            step="0.01"
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') commit()
+              if (event.key === 'Escape') cancel()
+            }}
+            aria-label="周期本金金额"
+          />
+          <button type="button" onClick={commit} aria-label="保存周期本金"><Check size={12} /></button>
+          <button type="button" onClick={cancel} aria-label="取消编辑"><X size={12} /></button>
+        </div>
+      ) : (
+        <>
+          <p className="wr-kpi__value">{toRmb(period.baseCapital)}</p>
+          <p className="wr-kpi__sub">
+            {period.allocation > 0 ? `含开局划拨 ${toRmb(period.allocation)}` : '期内注资合计'}
+          </p>
+        </>
+      )}
+    </KpiTile>
   )
 }
 
@@ -261,6 +339,12 @@ function KpiTile({ label, value, sub, tone = 'flat', Icon, index = 0 }) {
 
 function CampaignCurve({ curve }) {
   const points = Array.isArray(curve) ? curve : []
+  const [activePoint, setActivePoint] = useState(null)
+
+  useEffect(() => {
+    setActivePoint(null)
+  }, [curve])
+
   if (points.length < 2) {
     return <div className="wr-empty">本周期尚无已结算流水，曲线待战果填充。</div>
   }
@@ -275,46 +359,95 @@ function CampaignCurve({ curve }) {
   const min = Math.min(...values)
   const max = Math.max(...values)
   const span = max - min || Math.max(1, Math.abs(max) || 1)
-  const x = (i) => padX + (i / (points.length - 1)) * (W - padX * 2)
+  const investmentCount = Math.max(0, ...points.map((point) => Number(point.investmentNumber) || 0))
+  const x = (investmentNumber) => padX + (investmentCount > 0 ? investmentNumber / investmentCount : 0) * (W - padX * 2)
   const y = (v) => padTop + (1 - (v - min) / span) * (H - padTop - padBottom)
-
-  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.balance).toFixed(1)}`).join(' ')
-  const area = `${line} L${x(points.length - 1).toFixed(1)},${H - padBottom} L${x(0).toFixed(1)},${H - padBottom} Z`
-  const zeroY = min <= 0 && max >= 0 ? y(0) : null
   const last = points[points.length - 1]
+
+  const line = points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(p.investmentNumber).toFixed(1)},${y(p.balance).toFixed(1)}`).join(' ')
+  const area = `${line} L${x(last.investmentNumber).toFixed(1)},${H - padBottom} L${x(0).toFixed(1)},${H - padBottom} Z`
+  const zeroY = min <= 0 && max >= 0 ? y(0) : null
   const tone = last.balance >= points[0].balance ? 'win' : 'lose'
+  const betPoints = points.filter((point) => point.kind === 'bet')
+  const ticks = []
+  for (let value = 0; value <= investmentCount; value += 10) ticks.push(value)
+  if (ticks[ticks.length - 1] !== investmentCount) ticks.push(investmentCount)
 
   return (
     <div className={`wr-curve is-${tone}`}>
-      <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="wr-curve__svg">
-        <defs>
-          <linearGradient id="wrCurveFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--wr-curve-stroke)" stopOpacity="0.34" />
-            <stop offset="100%" stopColor="var(--wr-curve-stroke)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0.25, 0.5, 0.75].map((ratio) => (
-          <line
-            key={ratio}
-            x1={padX}
-            y1={padTop + ratio * (H - padTop - padBottom)}
-            x2={W - padX}
-            y2={padTop + ratio * (H - padTop - padBottom)}
-            className="wr-curve__guide"
-          />
+      <div className="wr-curve__plot" onMouseLeave={() => setActivePoint(null)}>
+        <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="wr-curve__svg">
+          <defs>
+            <linearGradient id="wrCurveFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--wr-curve-stroke)" stopOpacity="0.34" />
+              <stop offset="100%" stopColor="var(--wr-curve-stroke)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {[0.25, 0.5, 0.75].map((ratio) => (
+            <line
+              key={ratio}
+              x1={padX}
+              y1={padTop + ratio * (H - padTop - padBottom)}
+              x2={W - padX}
+              y2={padTop + ratio * (H - padTop - padBottom)}
+              className="wr-curve__guide"
+            />
+          ))}
+          {zeroY !== null && (
+            <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} className="wr-curve__zero" />
+          )}
+          <path d={area} fill="url(#wrCurveFill)" />
+          <path d={line} className="wr-curve__line" />
+          {points.map((point, index) => point.kind === 'injection' ? (
+            <circle
+              key={`inj-${index}`}
+              cx={x(point.investmentNumber)}
+              cy={y(point.balance)}
+              r="3.4"
+              className="wr-curve__inject"
+            />
+          ) : null)}
+          {betPoints.map((point) => (
+            <circle
+              key={`${point.ts}-${point.investmentNumber}`}
+              cx={x(point.investmentNumber)}
+              cy={y(point.balance)}
+              r="8"
+              tabIndex="0"
+              className={`wr-curve__hover-target ${activePoint === point ? 'is-active' : ''}`}
+              onMouseEnter={() => setActivePoint(point)}
+              onFocus={() => setActivePoint(point)}
+              onBlur={() => setActivePoint(null)}
+              onPointerDown={() => setActivePoint(point)}
+              aria-label={`${point.fullDateLabel}，${point.label}，盈亏 ${toSigned(point.delta)} 元`}
+            />
+          ))}
+          <circle cx={x(last.investmentNumber)} cy={y(last.balance)} r="4" className="wr-curve__head" />
+        </svg>
+        {activePoint && (
+          <div
+            className={`wr-curve__tooltip ${activePoint.investmentNumber / Math.max(1, investmentCount) < 0.12
+              ? 'is-left-edge'
+              : activePoint.investmentNumber / Math.max(1, investmentCount) > 0.88
+                ? 'is-right-edge'
+                : ''}`}
+            style={{
+              left: `${(x(activePoint.investmentNumber) / W) * 100}%`,
+              top: `${(y(activePoint.balance) / H) * 100}%`,
+            }}
+          >
+            <span>{activePoint.fullDateLabel} · 第 {activePoint.investmentNumber} 笔</span>
+            <strong>{activePoint.label}</strong>
+            <em className={`is-${toneOf(activePoint.delta)}`}>盈亏 {toSigned(activePoint.delta)} rmb</em>
+          </div>
+        )}
+      </div>
+      <div className="wr-curve__number-axis" aria-label={`投资笔数 0 至 ${investmentCount}`}>
+        <small>投资笔数</small>
+        {ticks.map((tick) => (
+          <span key={tick} style={{ left: `${(x(tick) / W) * 100}%` }}>{tick}</span>
         ))}
-        {zeroY !== null && (
-          <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} className="wr-curve__zero" />
-        )}
-        <path d={area} fill="url(#wrCurveFill)" />
-        <path d={line} className="wr-curve__line" />
-        {points.map((p, i) =>
-          p.kind === 'injection' ? (
-            <circle key={`inj-${i}`} cx={x(i)} cy={y(p.balance)} r="3.4" className="wr-curve__inject" />
-          ) : null,
-        )}
-        <circle cx={x(points.length - 1)} cy={y(last.balance)} r="4" className="wr-curve__head" />
-      </svg>
+      </div>
       <div className="wr-curve__axis">
         <span>{points[0].dateLabel || '开局'}</span>
         <span className="wr-curve__legend">
@@ -407,6 +540,7 @@ function BreakdownList({
   renderLabel,
   metric = 'profit',
   showEmpty = false,
+  includeRoiInDetails = false,
   className = '',
 }) {
   const visible = showEmpty ? rows : rows.filter((row) => row.settled > 0)
@@ -456,6 +590,8 @@ function BreakdownList({
                   <span>
                     {row.settled === 0
                       ? '本期无样本'
+                      : includeRoiInDetails
+                        ? ''
                       : metric === 'roi'
                         ? `${toSigned(row.profit)} rmb`
                         : `ROI ${toSignedPct(row.roi)}`}
@@ -463,7 +599,7 @@ function BreakdownList({
                   <span>
                     {row.settled === 0
                       ? ''
-                      : `${Math.round(row.count)} 笔 · 投入 ${toRmb(row.inputs)} · 命中 ${row.hitRate.toFixed(0)}%`}
+                      : `${Math.round(row.count)} 笔 · 投入 ${toRmb(row.inputs)} · 命中 ${row.hitRate.toFixed(0)}%${includeRoiInDetails ? ` · ROI ${toSignedPct(row.roi)}` : ''}`}
                   </span>
                 </div>
               </li>
@@ -623,6 +759,39 @@ export default function WarReportPage() {
     setDataVersion((v) => v + 1)
   }, [])
 
+  const handleBaseCapitalSave = useCallback((nextBase) => {
+    if (!report) return
+    const delta = Number((nextBase - report.period.baseCapital).toFixed(2))
+    if (Math.abs(delta) < 0.01) return
+
+    const config = getSystemConfig()
+    const nextInitialCapital = Number(((Number(config.initialCapital) || 0) + delta).toFixed(2))
+
+    if (report.period.isGenesis) {
+      saveSystemConfig({ initialCapital: nextInitialCapital })
+      setDataVersion((version) => version + 1)
+      return
+    }
+
+    const linkedInjectionId = report.period.openedBy?.linkedInjectionId
+    const targetInjection = report.period.injections.find((item) => item.id === linkedInjectionId)
+      || report.period.injections[0]
+    if (!targetInjection) return
+
+    const nextInjectionAmount = Number(((Number(targetInjection.amount) || 0) + delta).toFixed(2))
+    if (nextInjectionAmount <= 0) return
+
+    const capitalInjections = (Array.isArray(config.capitalInjections) ? config.capitalInjections : [])
+      .map((item) => item.id === targetInjection.id ? { ...item, amount: nextInjectionAmount } : item)
+    const poolSettlements = (Array.isArray(config.poolSettlements) ? config.poolSettlements : [])
+      .map((item) => item.id === report.period.openedBy?.id
+        ? { ...item, newCapital: Number(((Number(item.newCapital) || 0) + delta).toFixed(2)) }
+        : item)
+
+    saveSystemConfig({ initialCapital: nextInitialCapital, capitalInjections, poolSettlements })
+    setDataVersion((version) => version + 1)
+  }, [report])
+
   const runKey = `${activeId}:${dataVersion}`
 
   const scrollRail = (direction) => {
@@ -669,16 +838,14 @@ export default function WarReportPage() {
         </div>
 
         <VerdictBanner report={report} runKey={runKey} onRename={handleRename}>
-          <KpiTile
+          <BaseCapitalTile
             index={0}
-            Icon={Wallet}
-            label="周期本金"
-            value={toRmb(report.period.baseCapital)}
-            sub={report.period.allocation > 0 ? `含开局划拨 ${toRmb(report.period.allocation)}` : '期内注资合计'}
+            period={report.period}
+            onSave={handleBaseCapitalSave}
           />
           <KpiTile
             index={1}
-            Icon={Target}
+            Icon={CheckCircle2}
             label="命中率"
             value={`${kpi.hitRate.toFixed(1)}%`}
             sub={`${kpi.wins} 中 / ${kpi.losses} 失`}
@@ -693,6 +860,14 @@ export default function WarReportPage() {
           />
           <KpiTile
             index={3}
+            Icon={ReceiptText}
+            label="收入总额"
+            value={toRmb(kpi.totalRevenue)}
+            sub={`利润 ${toSigned(kpi.profit)} rmb`}
+            tone={toneOf(kpi.profit)}
+          />
+          <KpiTile
+            index={4}
             Icon={TrendingDown}
             label="最大回撤"
             value={toRmb(kpi.maxDrawdown)}
@@ -700,7 +875,15 @@ export default function WarReportPage() {
             tone={kpi.maxDrawdown > 0 ? 'lose' : 'flat'}
           />
           <KpiTile
-            index={4}
+            index={5}
+            Icon={TrendingUp}
+            label="最大升幅"
+            value={toRmb(kpi.maxRunup)}
+            sub="累计盈亏谷峰差"
+            tone={kpi.maxRunup > 0 ? 'win' : 'flat'}
+          />
+          <KpiTile
+            index={6}
             Icon={TrendingUp}
             label="最长连胜"
             value={`${kpi.bestWinStreak} 连`}
@@ -708,12 +891,44 @@ export default function WarReportPage() {
             tone={kpi.bestWinStreak >= kpi.worstLoseStreak ? 'win' : 'lose'}
           />
           <KpiTile
-            index={5}
+            index={7}
             Icon={Award}
             label="单笔最佳"
             value={kpi.bestEntry ? toSigned(kpi.bestEntry.profit) : '—'}
             sub={kpi.worstEntry ? `最差 ${toSigned(kpi.worstEntry.profit)}` : '尚无已结算'}
             tone="win"
+          />
+          <KpiTile
+            index={8}
+            Icon={Percent}
+            label="中位数 ROI"
+            value={toSignedPct(kpi.medianRoi)}
+            sub="全部已结算单"
+            tone={toneOf(kpi.medianRoi)}
+          />
+          <KpiTile
+            index={9}
+            Icon={BarChart3}
+            label="中位数盈利 ROI"
+            value={toSignedPct(kpi.medianWinningRoi)}
+            sub={`${kpi.wins} 笔盈利单`}
+            tone={kpi.wins > 0 ? 'win' : 'flat'}
+          />
+          <KpiTile
+            index={10}
+            Icon={Percent}
+            label="平均 ROI"
+            value={toSignedPct(kpi.averageRoi)}
+            sub="单笔 ROI 算术平均"
+            tone={toneOf(kpi.averageRoi)}
+          />
+          <KpiTile
+            index={11}
+            Icon={Activity}
+            label="平均盈利 ROI"
+            value={toSignedPct(kpi.averageWinningRoi)}
+            sub={`${kpi.wins} 笔盈利单`}
+            tone={kpi.wins > 0 ? 'win' : 'flat'}
           />
         </VerdictBanner>
 
@@ -803,6 +1018,7 @@ export default function WarReportPage() {
         rows={report.weeks}
         emptyHint="本周期尚无已结算样本。"
         className="wr-panel--weeks"
+        includeRoiInDetails
       />
 
       {/* 逐笔流水 */}
