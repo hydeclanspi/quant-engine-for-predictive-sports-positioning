@@ -16,6 +16,7 @@ import {
   Flag,
   Upload,
   Download,
+  Swords,
 } from 'lucide-react'
 import { exportDataBundle, getInvestments, getSystemConfig, importDataBundle } from '../lib/localData'
 import { BACKUP_IMPORT_ACCEPT, exportDataBundleAsExcel, readDataBundleFromImportFile } from '../lib/excel'
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
     children: [
       { id: 'metrics', path: '/dashboard/metrics', label: '数据总览', Icon: FileText },
       { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', Icon: TrendingUp },
+      { id: 'report', path: '/dashboard/report', label: '战报', Icon: Swords },
     ],
   },
   {
@@ -59,6 +61,7 @@ const PAGE_SUBTITLES = {
   '/dashboard': 'Performance overview & fund tracking',
   '/dashboard/analysis': 'Deep calibration & prediction analysis',
   '/dashboard/metrics': 'Comprehensive data metrics overview',
+  '/dashboard/report': 'Per-cycle campaign report & settlement recap',
   '/history': 'Historical investment records & outcomes',
   '/history/teams': 'Team profile archive & performance data',
   '/params': 'System configuration & calibration parameters',

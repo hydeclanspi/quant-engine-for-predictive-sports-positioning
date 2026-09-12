@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Coins, ChevronLeft, ChevronRight, ArrowRight, TrendingUp, TrendingDown } from 'lucide-react'
+import { Coins, ChevronLeft, ChevronRight, ArrowRight, Flag, TrendingUp, TrendingDown } from 'lucide-react'
 import { getDashboardSnapshot } from '../lib/analytics'
 
 const PAGE_SIZE = 12
@@ -32,6 +32,7 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
   const [page, setPage] = useState(0)
   const [confirming, setConfirming] = useState(false)
   const [allocInput, setAllocInput] = useState('')
+  const [cycleNameInput, setCycleNameInput] = useState('')
 
   // 自刷新：结算 / 撤销 / 注资都会写入 systemConfig 并派发 dugou:data-changed。
   // 由于本面板是 Modal 的静态内容节点（props 不会再被父级更新），自身监听事件来重算 snapshot。
@@ -71,9 +72,12 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
       poolBefore: poolBalance,
       cycleBase: cycleBaseCapital,
       newCapital: allocation,
+      // 结算这一刀同时开启下一个周期 —— 顺手给它起个名，战报按此名归档
+      nextCycleName: cycleNameInput,
     })
     setConfirming(false)
     setAllocInput('')
+    setCycleNameInput('')
   }
 
   return (
@@ -255,6 +259,25 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
                 <FlowChip label="结算清零" value="¥0" tone="amber" />
                 <ArrowRight size={14} className="shrink-0 text-stone-300" />
                 <FlowChip label="新周期" value={allocation > 0 ? toRmb(allocation) : '¥0'} tone="emerald" />
+              </div>
+
+              {/* 新周期命名（可留空 = 战报里回落为「第 N 期」，之后仍可改） */}
+              <div className="mx-6 mt-5">
+                <div className="flex items-center justify-between text-xs font-medium text-stone-500">
+                  <span>新周期命名</span>
+                  <span className="text-stone-300">可留空 · 战报中随时可改</span>
+                </div>
+                <div className="mt-1.5 flex items-center rounded-xl border border-stone-200 bg-stone-50/50 px-3 transition focus-within:border-sky-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-sky-100">
+                  <Flag size={14} className="shrink-0 text-stone-400" />
+                  <input
+                    type="text"
+                    maxLength={24}
+                    value={cycleNameInput}
+                    onChange={(e) => setCycleNameInput(e.target.value)}
+                    placeholder="例：春季战役"
+                    className="w-full bg-transparent px-2 py-2.5 text-sm text-stone-800 outline-none focus-visible:!outline-none placeholder:text-stone-300"
+                  />
+                </div>
               </div>
 
               {/* 新周期启动资金（可留空 = 仅清零，稍后用 +注资 划拨） */}

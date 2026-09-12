@@ -43,6 +43,7 @@ export const PAGE_AMBIENT_THEME_DEFAULTS = {
   dashboard_overview: 'classic_white',
   dashboard_analysis: 'classic_white',
   dashboard_metrics: 'classic_white',
+  dashboard_report: 'classic_white',
   history: 'classic_white',
   teams: 'classic_white',
   params: 'classic_white',
@@ -83,6 +84,9 @@ const DEFAULT_SYSTEM_CONFIG = {
   capitalInjections: [],
   // 周期性结算记录（止盈/止损）—— 仅影响蓄水池当前周期，不影响历史总数据
   poolSettlements: [],
+  // 周期自定义命名台账：[{ id: cycleId, name, created_at, updated_at }]
+  // id 即 warReport 派生出的周期 id，故与 poolSettlements 同生共死（撤销结算一并清除）
+  cycleTitles: [],
   // 自适应权重优化配置
   adaptiveWeights: {
     enabled: false,                    // 是否启用自动应用
@@ -558,6 +562,35 @@ export const addCapitalInjection = (amount, note = '') => {
   return newInjection
 }
 
+const CYCLE_TITLE_MAX_LEN = 24
+
+export const getCycleTitles = () => {
+  const config = getSystemConfig()
+  return Array.isArray(config.cycleTitles) ? config.cycleTitles : []
+}
+
+// 给某个周期命名。空字符串 = 取消自定义名（回落到「第 N 期」）。
+// id 由 warReport 的 cycleIdForSettlement / GENESIS_CYCLE_ID 给出，故是稳定键。
+export const setCycleTitle = (cycleId, name) => {
+  const id = String(cycleId || '').trim()
+  if (!id) return null
+  const clean = String(name || '').trim().slice(0, CYCLE_TITLE_MAX_LEN)
+  const titles = getCycleTitles()
+  const now = new Date().toISOString()
+
+  if (!clean) {
+    saveSystemConfig({ cycleTitles: titles.filter((item) => item.id !== id) })
+    return null
+  }
+
+  const existing = titles.find((item) => item.id === id)
+  const next = existing
+    ? titles.map((item) => (item.id === id ? { ...item, name: clean, updated_at: now } : item))
+    : [...titles, { id, name: clean, created_at: now, updated_at: now }]
+  saveSystemConfig({ cycleTitles: next })
+  return next.find((item) => item.id === id) || null
+}
+
 export const getPoolSettlements = () => {
   const config = getSystemConfig()
   return Array.isArray(config.poolSettlements) ? config.poolSettlements : []
@@ -566,7 +599,14 @@ export const getPoolSettlements = () => {
 // 周期性结算：把蓄水池当前周期清零，并可选地为新周期划拨本金。
 // 历史投资与总数据完全不动 —— 结算只在 poolSettlements 上画一条时间分界线，
 // 蓄水池余额与下注基数从此只统计分界线之后的注资与盈亏。
-export const settlePool = ({ type, realizedProfit = 0, poolBefore = 0, cycleBase = 0, newCapital = 0 } = {}) => {
+export const settlePool = ({
+  type,
+  realizedProfit = 0,
+  poolBefore = 0,
+  cycleBase = 0,
+  newCapital = 0,
+  nextCycleName = '',
+} = {}) => {
   const config = getSystemConfig()
   const settlements = Array.isArray(config.poolSettlements) ? config.poolSettlements : []
   const injections = Array.isArray(config.capitalInjections) ? config.capitalInjections : []
@@ -600,6 +640,18 @@ export const settlePool = ({ type, realizedProfit = 0, poolBefore = 0, cycleBase
     patch.initialCapital = Number(config.initialCapital || 0) + allocation
   }
 
+  // 新周期命名：结算这一刀同时开启下一个周期，此处顺手给它落一个标题。
+  // 周期 id 与 warReport.cycleIdForSettlement 保持同一套推导，避免两边各说各话。
+  const cycleName = String(nextCycleName || '').trim().slice(0, CYCLE_TITLE_MAX_LEN)
+  if (cycleName) {
+    const titles = Array.isArray(config.cycleTitles) ? config.cycleTitles : []
+    const nextCycleId = `cycle_${settlement.id}`
+    patch.cycleTitles = [
+      ...titles.filter((item) => item.id !== nextCycleId),
+      { id: nextCycleId, name: cycleName, created_at: new Date(now).toISOString(), updated_at: new Date(now).toISOString() },
+    ]
+  }
+
   saveSystemConfig(patch)
   return settlement
 }
@@ -612,6 +664,14 @@ export const recallPoolSettlement = (settlementId) => {
   if (!target) return false
 
   const patch = { poolSettlements: settlements.filter((item) => item.id !== settlementId) }
+
+  // 这次结算开启的周期随之消失，它的自定义命名也不该留成孤儿记录
+  const titles = Array.isArray(config.cycleTitles) ? config.cycleTitles : []
+  const orphanCycleId = `cycle_${settlementId}`
+  if (titles.some((item) => item.id === orphanCycleId)) {
+    patch.cycleTitles = titles.filter((item) => item.id !== orphanCycleId)
+  }
+
   if (target.linkedInjectionId) {
     const injections = Array.isArray(config.capitalInjections) ? config.capitalInjections : []
     patch.capitalInjections = injections.filter((item) => item.id !== target.linkedInjectionId)
@@ -1101,7 +1161,7 @@ const toArray = (value) => (Array.isArray(value) ? value : [])
 // device's defaults, or the initial empty git seed) silently wipes them.
 // This was the cause of cycle settlements vanishing on every reload once
 // git sync went live.
-const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections']
+const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections', 'cycleTitles']
 
 const unionLedgerById = (localList, incomingList) => {
   const map = new Map()
@@ -1190,6 +1250,15 @@ const applyDataBundle = (bundle, mode = 'replace') => {
 
 const ensureGenesisApplied = () => {
   if (!isBrowser) return
+  // Preview mode is already fully seeded from `demoData` (see previewStore).
+  // Applying the genesis bundle on top writes through writeJSON → previewWrite
+  // and REPLACES that seed — wiping the demo's poolSettlements /
+  // capitalInjections ledgers. The GENESIS_APPLIED_KEY flag lives in
+  // localStorage while the preview store is per-page-load, so this only bit on
+  // a visitor's very first load: the cycle ledgers (and the War Report periods
+  // derived from them) showed up empty on the first view and correct on every
+  // reload after. Genesis has no business running in preview at all.
+  if (isPreviewMode()) return
   if (window.localStorage.getItem(GENESIS_APPLIED_KEY) === '1') return
   const ok = applyDataBundle(genesisBundle, 'replace')
   if (ok) {

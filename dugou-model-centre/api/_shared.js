@@ -164,10 +164,10 @@ const indexById = (arr) => {
   return map
 }
 
-// Pool settlements & capital injections are append-only ledgers stored
-// inside system_config — union them by id so an empty/stale config can
-// never drop them (mirrors mergeSystemConfig on the client).
-const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections']
+// Pool settlements, capital injections & cycle titles are append-only
+// ledgers stored inside system_config — union them by id so an empty/stale
+// config can never drop them (mirrors mergeSystemConfig on the client).
+const LEDGER_CONFIG_KEYS = ['poolSettlements', 'capitalInjections', 'cycleTitles']
 
 const mergeSystemConfig = (baseCfg, nextCfg) => {
   const merged = { ...(baseCfg || {}), ...(nextCfg || {}) }

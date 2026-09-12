@@ -10,6 +10,7 @@ import {
   TrendingUp,
   FileText,
   Flag,
+  Swords,
 } from 'lucide-react'
 import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode } from '../lib/localData'
 import C15DiamondCutV1Logo from './C15DiamondCutV1Logo'
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
       { id: 'dashboard-main', path: '/dashboard', label: 'Overview', Icon: BarChart3 },
       { id: 'metrics', path: '/dashboard/metrics', label: 'Metrics', Icon: FileText },
       { id: 'analysis', path: '/dashboard/analysis', label: 'Analysis', Icon: TrendingUp },
+      { id: 'report', path: '/dashboard/report', label: 'War Report', Icon: Swords },
     ],
   },
   {
@@ -55,6 +57,7 @@ const PAGE_TITLES = {
   '/dashboard': 'Dashboard',
   '/dashboard/analysis': 'Deep Analysis',
   '/dashboard/metrics': 'Metrics',
+  '/dashboard/report': 'War Report',
   '/history': 'History',
   '/history/teams': 'Team Archive',
   '/params': 'Console',

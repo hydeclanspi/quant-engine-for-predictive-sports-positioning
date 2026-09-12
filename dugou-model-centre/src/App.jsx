@@ -19,6 +19,7 @@ import ParamsPage from './pages/ParamsPage'
 import TeamsPage from './pages/TeamsPage'
 import AnalysisPage from './pages/AnalysisPage'
 import MetricsPage from './pages/MetricsPage'
+import WarReportPage from './pages/WarReportPage'
 
 import { getSystemConfig, PAGE_AMBIENT_THEME_DEFAULTS, isInTimeMachineMode } from './lib/localData'
 import { trackRouteAccess } from './lib/accessTracking'
@@ -35,6 +36,7 @@ const PAGE_AMBIENT_ROUTE_MAP = {
   '/dashboard': 'dashboard_overview',
   '/dashboard/analysis': 'dashboard_analysis',
   '/dashboard/metrics': 'dashboard_metrics',
+  '/dashboard/report': 'dashboard_report',
   '/history': 'history',
   '/history/teams': 'teams',
   '/params': 'params',
@@ -136,6 +138,7 @@ function App() {
       <Route path="/dashboard" element={<DashboardPage openModal={openModal} />} />
       <Route path="/dashboard/analysis" element={<AnalysisPage openModal={openModal} />} />
       <Route path="/dashboard/metrics" element={<MetricsPage openModal={openModal} />} />
+      <Route path="/dashboard/report" element={<WarReportPage openModal={openModal} />} />
       <Route path="/history" element={<HistoryPage openModal={openModal} />} />
       <Route path="/history/teams" element={<TeamsPage openModal={openModal} />} />
       <Route path="/params" element={<ParamsPage openModal={openModal} />} />

@@ -49,6 +49,7 @@ export default function Sidebar({ collapsed, onToggleCollapse }) {
         children: [
           { id: 'analysis', path: '/dashboard/analysis', label: '深度分析', iconChar: '◇' },
           { id: 'metrics', path: '/dashboard/metrics', label: '数据总览', iconChar: '▤' },
+          { id: 'report', path: '/dashboard/report', label: '战报', iconChar: '⚔' },
         ],
       },
       {

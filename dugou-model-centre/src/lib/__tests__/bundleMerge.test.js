@@ -33,6 +33,41 @@ describe('mergeBundles — system_config ledgers', () => {
     expect(merged.system_config.capitalInjections[0].id).toBe('i1')
   })
 
+  it('carries cycle titles across sync — a rename on one device survives a stale writer', () => {
+    const stored = {
+      system_config: {
+        poolSettlements: [{ id: 's1' }],
+        cycleTitles: [{ id: 'cycle_s1', name: '春季战役' }],
+      },
+    }
+    // Another device commits without ever having seen the rename.
+    const incoming = { system_config: { poolSettlements: [{ id: 's1' }], cycleTitles: [] } }
+
+    const merged = mergeBundles(stored, incoming)
+
+    expect(merged.system_config.cycleTitles).toHaveLength(1)
+    expect(merged.system_config.cycleTitles[0].name).toBe('春季战役')
+  })
+
+  it('unions cycle titles by id — incoming rename wins for the same cycle', () => {
+    const stored = { system_config: { cycleTitles: [{ id: 'cycle_s1', name: '旧名' }] } }
+    const incoming = {
+      system_config: {
+        cycleTitles: [
+          { id: 'cycle_s1', name: '新名' },
+          { id: 'cycle_s2', name: '第二战役' },
+        ],
+      },
+    }
+
+    const merged = mergeBundles(stored, incoming)
+    const byId = Object.fromEntries(merged.system_config.cycleTitles.map((row) => [row.id, row.name]))
+
+    expect(merged.system_config.cycleTitles).toHaveLength(2)
+    expect(byId.cycle_s1).toBe('新名')
+    expect(byId.cycle_s2).toBe('第二战役')
+  })
+
   it('unions ledgers by id across both sides', () => {
     const stored = { system_config: { poolSettlements: [{ id: 's1' }] } }
     const incoming = { system_config: { poolSettlements: [{ id: 's2' }] } }
