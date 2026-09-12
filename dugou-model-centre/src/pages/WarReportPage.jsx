@@ -640,104 +640,115 @@ export default function WarReportPage() {
 
   return (
     <div className="page-shell page-content-wide pt-5 space-y-5 motion-v2-scope warreport-scope">
-      {/* 页头 */}
-      <div className="wr-page-head">
-        <div className="wr-page-head__copy">
-          <p className="wr-page-head__eyebrow"><span /> Performance archive</p>
-          <h1>周期战报 <em>/ War Report</em></h1>
-          <p>
-            每个周期，都值得一次清晰的回看。
-            {isPreviewMode() && <span>· 演示数据</span>}
-          </p>
+      {/* 一整块沉浸式液态玻璃舞台：标题、主战果和周期选择不再拆成三张卡 */}
+      <section className="wr-showcase">
+        <div className="wr-liquid-field" aria-hidden="true">
+          <span className="wr-liquid-orb is-one" />
+          <span className="wr-liquid-orb is-two" />
+          <span className="wr-liquid-orb is-three" />
+          <span className="wr-liquid-glint" />
         </div>
-        <div className="wr-sync-note">
-          <Cloud size={17} />
-          <div>
-            <span>云端同步</span>
-            <strong>周期名称与数据已纳入同步</strong>
-          </div>
-        </div>
-      </div>
 
-      {/* 周期选择器 */}
-      <div className="wr-cycle-browser">
-        <div className="wr-cycle-browser__head">
-          <div>
-            <span>所有周期</span>
-            <strong>{periods.length} 个周期</strong>
+        <div className="wr-page-head">
+          <div className="wr-page-head__copy">
+            <p className="wr-page-head__eyebrow"><span /> Performance archive</p>
+            <h1>战报</h1>
+            <p>
+              每个周期，都值得一次清晰的回看。
+              {isPreviewMode() && <span>· 演示数据</span>}
+            </p>
           </div>
-          <div className="wr-cycle-browser__nav">
-            <button type="button" onClick={() => scrollRail(-1)} aria-label="向前浏览周期">
-              <ChevronLeft size={15} />
-            </button>
-            <button type="button" onClick={() => scrollRail(1)} aria-label="向后浏览周期">
-              <ChevronRight size={15} />
-            </button>
+          <div className="wr-sync-note">
+            <Cloud size={17} />
+            <div>
+              <span>Cloud archive</span>
+              <strong>周期名称与数据同步</strong>
+            </div>
           </div>
         </div>
-        <div className="wr-rail" ref={railRef} role="tablist" aria-label="选择战报周期">
-          {periods.map((period) => (
-            <PeriodCard
-              key={period.id}
-              period={period}
-              active={period.id === activeId}
-              onSelect={setSelectedId}
-            />
-          ))}
-        </div>
-      </div>
 
-      {/* 裁决横幅 + KPI —— 合成一整块结算幕 */}
-      <VerdictBanner report={report} runKey={runKey} onRename={handleRename}>
-        <KpiTile
-          index={0}
-          Icon={Wallet}
-          label="周期本金"
-          value={toRmb(report.period.baseCapital)}
-          sub={report.period.allocation > 0 ? `含开局划拨 ${toRmb(report.period.allocation)}` : '期内注资合计'}
-        />
-        <KpiTile
-          index={1}
-          Icon={Target}
-          label="命中率"
-          value={`${kpi.hitRate.toFixed(1)}%`}
-          sub={`${kpi.wins} 中 / ${kpi.losses} 失`}
-          tone={kpi.hitRate >= 50 ? 'win' : 'lose'}
-        />
-        <KpiTile
-          index={2}
-          Icon={Layers}
-          label="投入总额"
-          value={toRmb(kpi.totalInputs)}
-          sub={kpi.pendingCount > 0 ? `另有 ${toRmb(kpi.pendingInputs)} 在途` : `均注 ${toRmb(kpi.avgStake)}`}
-        />
-        <KpiTile
-          index={3}
-          Icon={TrendingDown}
-          label="最大回撤"
-          value={toRmb(kpi.maxDrawdown)}
-          sub="期内峰谷差"
-          tone={kpi.maxDrawdown > 0 ? 'lose' : 'flat'}
-        />
-        <KpiTile
-          index={4}
-          Icon={TrendingUp}
-          label="最长连胜"
-          value={`${kpi.bestWinStreak} 连`}
-          sub={`最长连败 ${kpi.worstLoseStreak} 连`}
-          tone={kpi.bestWinStreak >= kpi.worstLoseStreak ? 'win' : 'lose'}
-        />
-        <KpiTile
-          index={5}
-          Icon={Award}
-          label="单笔最佳"
-          value={kpi.bestEntry ? toSigned(kpi.bestEntry.profit) : '—'}
-          sub={kpi.worstEntry ? `最差 ${toSigned(kpi.worstEntry.profit)}` : '尚无已结算'}
-          tone="win"
-        />
-      </VerdictBanner>
+        <VerdictBanner report={report} runKey={runKey} onRename={handleRename}>
+          <KpiTile
+            index={0}
+            Icon={Wallet}
+            label="周期本金"
+            value={toRmb(report.period.baseCapital)}
+            sub={report.period.allocation > 0 ? `含开局划拨 ${toRmb(report.period.allocation)}` : '期内注资合计'}
+          />
+          <KpiTile
+            index={1}
+            Icon={Target}
+            label="命中率"
+            value={`${kpi.hitRate.toFixed(1)}%`}
+            sub={`${kpi.wins} 中 / ${kpi.losses} 失`}
+            tone={kpi.hitRate >= 50 ? 'win' : 'lose'}
+          />
+          <KpiTile
+            index={2}
+            Icon={Layers}
+            label="投入总额"
+            value={toRmb(kpi.totalInputs)}
+            sub={kpi.pendingCount > 0 ? `另有 ${toRmb(kpi.pendingInputs)} 在途` : `均注 ${toRmb(kpi.avgStake)}`}
+          />
+          <KpiTile
+            index={3}
+            Icon={TrendingDown}
+            label="最大回撤"
+            value={toRmb(kpi.maxDrawdown)}
+            sub="期内峰谷差"
+            tone={kpi.maxDrawdown > 0 ? 'lose' : 'flat'}
+          />
+          <KpiTile
+            index={4}
+            Icon={TrendingUp}
+            label="最长连胜"
+            value={`${kpi.bestWinStreak} 连`}
+            sub={`最长连败 ${kpi.worstLoseStreak} 连`}
+            tone={kpi.bestWinStreak >= kpi.worstLoseStreak ? 'win' : 'lose'}
+          />
+          <KpiTile
+            index={5}
+            Icon={Award}
+            label="单笔最佳"
+            value={kpi.bestEntry ? toSigned(kpi.bestEntry.profit) : '—'}
+            sub={kpi.worstEntry ? `最差 ${toSigned(kpi.worstEntry.profit)}` : '尚无已结算'}
+            tone="win"
+          />
+        </VerdictBanner>
+
+        <div className="wr-cycle-browser">
+          <div className="wr-cycle-browser__head">
+            <div>
+              <span>选择周期</span>
+              <strong>{periods.length} 个周期</strong>
+            </div>
+            <div className="wr-cycle-browser__nav">
+              <button type="button" onClick={() => scrollRail(-1)} aria-label="向前浏览周期">
+                <ChevronLeft size={15} />
+              </button>
+              <button type="button" onClick={() => scrollRail(1)} aria-label="向后浏览周期">
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+          <div className="wr-rail" ref={railRef} role="tablist" aria-label="选择战报周期">
+            {periods.map((period) => (
+              <PeriodCard
+                key={period.id}
+                period={period}
+                active={period.id === activeId}
+                onSelect={setSelectedId}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* 战局走势 */}
+      <div className="wr-section-lead">
+        <span>周期趋势</span>
+        <h2>一次结算，不止一个数字。</h2>
+      </div>
       <div className="wr-battle-grid">
         <div className="wr-panel wr-curve-panel">
           <div className="wr-panel__head">
@@ -756,6 +767,10 @@ export default function WarReportPage() {
       </div>
 
       {/* 分项战果 */}
+      <div className="wr-section-lead">
+        <span>表现拆解</span>
+        <h2>从结果里，找到真正有效的模式。</h2>
+      </div>
       <div className="wr-grid-3">
         <BreakdownList
           title="分联赛战果"
@@ -790,6 +805,10 @@ export default function WarReportPage() {
       />
 
       {/* 逐笔流水 */}
+      <div className="wr-section-lead is-compact">
+        <span>全部记录</span>
+        <h2>每一笔，都有据可循。</h2>
+      </div>
       <EntryLedger entries={report.entries} modeLabel={modeLabel} />
 
       <p className="wr-footnote">

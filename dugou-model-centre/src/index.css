@@ -10789,3 +10789,501 @@ html .h-screen {
   .wr-kpi { min-height: 86px; }
   .wr-panel { padding: 17px; border-radius: 20px; }
 }
+
+/* ─────────────────────────────────────────────────────────────────────
+   战报 · Liquid stage edition
+   Apple 的核心不是「白卡片」，而是沉浸式画布、产品级留白、克制的大字与
+   一块足够有记忆点的主视觉。这里以 CSS 光场 + 多层玻璃模拟液态材质。
+   ───────────────────────────────────────────────────────────────────── */
+
+.warreport-scope {
+  --wr-blue: #087cff;
+  --wr-win: #1f8f55;
+  --wr-lose: #d92d4f;
+  padding-top: clamp(18px, 2.2vw, 32px) !important;
+}
+
+.warreport-scope::before {
+  background: #f5f5f7;
+}
+
+/* ── 沉浸式主舞台 ─────────────────────────────────────────────────── */
+.wr-showcase {
+  position: relative;
+  isolation: isolate;
+  min-height: 610px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.74);
+  border-radius: 36px;
+  background:
+    radial-gradient(90% 115% at 92% -8%, rgba(255, 255, 255, 0.82), transparent 58%),
+    linear-gradient(132deg, #dff5ff 0%, #e9e8ff 41%, #f7e9fa 70%, #eaf8f4 100%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.96) inset,
+    0 32px 80px -54px rgba(41, 73, 120, 0.38);
+}
+
+.wr-showcase::before {
+  content: '';
+  position: absolute;
+  z-index: 4;
+  inset: 1px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.46);
+  border-radius: 35px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(101, 132, 183, 0.08);
+}
+
+.wr-showcase::after {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  background:
+    linear-gradient(116deg, rgba(255, 255, 255, 0.24), transparent 27% 72%, rgba(255, 255, 255, 0.18)),
+    radial-gradient(70% 55% at 50% 102%, rgba(255, 255, 255, 0.56), transparent 72%);
+}
+
+.wr-liquid-field { position: absolute; z-index: 0; inset: 0; overflow: hidden; }
+
+.wr-liquid-orb {
+  position: absolute;
+  display: block;
+  border-radius: 44% 56% 62% 38% / 52% 42% 58% 48%;
+  filter: blur(2px) saturate(118%);
+  mix-blend-mode: multiply;
+  opacity: 0.68;
+  will-change: transform, border-radius;
+}
+
+.wr-liquid-orb::after {
+  content: '';
+  position: absolute;
+  inset: 8%;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.7), transparent 48%);
+  filter: blur(7px);
+}
+
+.wr-liquid-orb.is-one {
+  top: -255px;
+  right: -45px;
+  width: 590px;
+  height: 540px;
+  background: linear-gradient(145deg, rgba(80, 188, 255, 0.4), rgba(151, 116, 255, 0.26) 52%, rgba(255, 147, 213, 0.24));
+  box-shadow: inset 40px 40px 90px rgba(255, 255, 255, 0.5), 0 50px 130px rgba(111, 110, 214, 0.14);
+  animation: wrLiquidOne 13s ease-in-out infinite alternate;
+}
+
+.wr-liquid-orb.is-two {
+  left: -180px;
+  bottom: -225px;
+  width: 570px;
+  height: 500px;
+  background: linear-gradient(125deg, rgba(81, 222, 216, 0.28), rgba(80, 154, 255, 0.28) 58%, rgba(188, 150, 255, 0.2));
+  box-shadow: inset -30px 24px 80px rgba(255, 255, 255, 0.44);
+  animation: wrLiquidTwo 15s ease-in-out infinite alternate;
+}
+
+.wr-liquid-orb.is-three {
+  right: 24%;
+  bottom: -170px;
+  width: 350px;
+  height: 310px;
+  opacity: 0.46;
+  background: linear-gradient(140deg, rgba(255, 171, 216, 0.27), rgba(159, 150, 255, 0.24), rgba(92, 210, 232, 0.25));
+  animation: wrLiquidThree 11s ease-in-out infinite alternate;
+}
+
+.wr-liquid-glint {
+  position: absolute;
+  top: -25%;
+  left: 30%;
+  width: 130px;
+  height: 150%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.34), transparent);
+  filter: blur(20px);
+  opacity: 0.5;
+  transform: rotate(24deg);
+}
+
+/* 页头成为舞台上的一行安静标识 */
+.wr-showcase .wr-page-head {
+  position: relative;
+  z-index: 2;
+  min-height: 0;
+  padding: 34px 40px 0;
+}
+
+.wr-showcase .wr-page-head__eyebrow { margin-bottom: 5px; color: rgba(29, 29, 31, 0.52); font-size: 8px; }
+.wr-showcase .wr-page-head__eyebrow span { width: 14px; background: rgba(0, 113, 227, 0.72); }
+.wr-showcase .wr-page-head__copy h1 { color: #1d1d1f; font-size: 28px; letter-spacing: -0.035em; }
+.wr-showcase .wr-page-head__copy > p:last-child { margin-top: 5px; color: rgba(29, 29, 31, 0.57); font-size: 11px; }
+
+.wr-showcase .wr-sync-note {
+  min-width: 188px;
+  padding: 9px 12px;
+  border-color: rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.48), rgba(255, 255, 255, 0.25));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.75),
+    inset 0 -1px 0 rgba(64, 94, 137, 0.08),
+    0 9px 24px -18px rgba(48, 66, 101, 0.35);
+  backdrop-filter: blur(24px) saturate(155%);
+  -webkit-backdrop-filter: blur(24px) saturate(155%);
+}
+
+.wr-showcase .wr-sync-note span { color: rgba(29, 29, 31, 0.45); font-size: 7px; }
+.wr-showcase .wr-sync-note strong { color: rgba(29, 29, 31, 0.74); font-size: 9.5px; }
+
+/* 主摘要不再是一张卡：直接悬浮在光场中 */
+.wr-showcase .wr-banner {
+  position: relative;
+  z-index: 2;
+  overflow: visible;
+  margin: 8px 18px 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  animation: wrRise 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.wr-showcase .wr-banner__body {
+  grid-template-columns: minmax(0, 1fr) 146px;
+  gap: 34px;
+  padding: 20px 30px 24px;
+}
+
+.wr-showcase .wr-banner__eyebrow { color: rgba(29, 29, 31, 0.48); font-size: 8px; letter-spacing: 0.13em; }
+.wr-showcase .wr-banner__eyebrow svg { color: rgba(0, 113, 227, 0.8); }
+.wr-showcase .wr-banner__live {
+  color: #167b47;
+  border-color: rgba(255, 255, 255, 0.48);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+.wr-showcase .wr-banner__title {
+  margin-top: 7px;
+  color: #171719;
+  font-size: clamp(29px, 3vw, 40px);
+  font-weight: 680;
+  letter-spacing: -0.045em;
+}
+
+.wr-showcase .wr-banner__span { color: rgba(29, 29, 31, 0.5); font-size: 9.5px; }
+
+.wr-showcase .wr-banner__figures { gap: clamp(20px, 2.5vw, 34px); margin-top: 22px; }
+.wr-showcase .wr-figure { min-width: 108px; }
+.wr-showcase .wr-figure.is-primary { min-width: 166px; }
+.wr-showcase .wr-figure__label { color: rgba(29, 29, 31, 0.5); font-size: 8px; }
+.wr-showcase .wr-figure__value { margin-top: 3px; color: #1d1d1f; font-size: clamp(21px, 2vw, 27px); font-weight: 630; }
+.wr-showcase .wr-figure.is-primary .wr-figure__value { font-size: clamp(29px, 3vw, 38px); font-weight: 670; }
+.wr-showcase .wr-figure__value.is-win { color: #137b47; }
+.wr-showcase .wr-figure__value.is-lose { color: #c52343; }
+.wr-showcase .wr-figure__value em { color: rgba(29, 29, 31, 0.38); font-size: 7px; }
+.wr-showcase .wr-figure__sep { background: rgba(29, 29, 31, 0.1); }
+
+.wr-showcase .wr-banner__edit {
+  width: 24px;
+  height: 24px;
+  color: rgba(29, 29, 31, 0.48);
+  background: rgba(255, 255, 255, 0.28);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.wr-showcase .wr-rename__input {
+  color: #1d1d1f;
+  border-color: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.35);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.64);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* 水滴状评级组件 */
+.wr-showcase .wr-emblem { width: 138px; height: 138px; }
+.wr-showcase .wr-emblem__halo {
+  inset: -28%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.72), rgba(100, 178, 255, 0.14) 43%, transparent 68%);
+  animation: wrGlassBreathe 6s ease-in-out infinite;
+}
+.wr-showcase .wr-emblem__ring { display: none; }
+.wr-showcase .wr-emblem__plate {
+  width: 88px;
+  height: 88px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.67);
+  border-radius: 36% 64% 58% 42% / 46% 39% 61% 54%;
+  background:
+    radial-gradient(circle at 32% 20%, rgba(255, 255, 255, 0.86), transparent 34%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.5), rgba(171, 217, 255, 0.3) 58%, rgba(142, 160, 255, 0.24));
+  box-shadow:
+    inset 6px 7px 15px rgba(255, 255, 255, 0.45),
+    inset -7px -8px 18px rgba(75, 111, 172, 0.12),
+    0 22px 36px -23px rgba(52, 82, 134, 0.48);
+  backdrop-filter: blur(28px) saturate(170%);
+  -webkit-backdrop-filter: blur(28px) saturate(170%);
+  animation: wrGlassMorph 9s ease-in-out infinite alternate;
+}
+.wr-showcase .wr-emblem__plate::before {
+  content: '';
+  display: block;
+  position: absolute;
+  inset: 1px;
+  border-radius: inherit;
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.24), transparent 46%);
+}
+.wr-showcase .wr-emblem__grade {
+  z-index: 1;
+  color: #126bc2;
+  font-size: 36px;
+  font-weight: 650;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.75);
+}
+.wr-showcase .wr-emblem__title {
+  bottom: 12px;
+  color: #1267b3;
+  border-color: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 255, 255, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 8px 16px -12px rgba(45, 74, 125, 0.38);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.wr-showcase .wr-emblem__caption { bottom: -2px; color: rgba(29, 29, 31, 0.38); }
+
+/* 一整条液态 KPI dock */
+.wr-showcase .wr-banner__kpis {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0 10px;
+  border-color: rgba(255, 255, 255, 0.54);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.43), rgba(255, 255, 255, 0.2));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    inset 0 -1px 0 rgba(58, 88, 134, 0.07),
+    0 18px 36px -28px rgba(43, 63, 100, 0.35);
+  backdrop-filter: blur(28px) saturate(165%);
+  -webkit-backdrop-filter: blur(28px) saturate(165%);
+}
+.wr-showcase .wr-kpi { min-height: 77px; padding: 12px 14px; border-left-color: rgba(255, 255, 255, 0.42); }
+.wr-showcase .wr-kpi:hover { background: rgba(255, 255, 255, 0.2); }
+.wr-showcase .wr-kpi__head { color: rgba(29, 29, 31, 0.48); font-size: 8px; }
+.wr-showcase .wr-kpi__head svg { color: rgba(0, 113, 227, 0.78); }
+.wr-showcase .wr-kpi__value { margin-top: 5px; color: #252528; font-size: 16px; font-weight: 630; }
+.wr-showcase .wr-kpi.is-win .wr-kpi__value { color: #177d4b; }
+.wr-showcase .wr-kpi.is-lose .wr-kpi__value { color: #c82948; }
+.wr-showcase .wr-kpi__sub { color: rgba(29, 29, 31, 0.4); font-size: 8px; }
+
+/* 周期切换也收进舞台，成为一层玻璃抽屉 */
+.wr-showcase .wr-cycle-browser {
+  position: relative;
+  z-index: 2;
+  margin: 16px 28px 28px;
+  padding: 11px 12px 12px;
+  border-color: rgba(255, 255, 255, 0.5);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0.17));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.68),
+    inset 0 -1px 0 rgba(56, 86, 129, 0.06),
+    0 16px 34px -28px rgba(43, 63, 100, 0.32);
+  backdrop-filter: blur(30px) saturate(170%);
+  -webkit-backdrop-filter: blur(30px) saturate(170%);
+}
+.wr-showcase .wr-cycle-browser__head { padding-bottom: 8px; border-bottom-color: rgba(255, 255, 255, 0.34); }
+.wr-showcase .wr-cycle-browser__head span { color: rgba(29, 29, 31, 0.67); font-size: 9.5px; }
+.wr-showcase .wr-cycle-browser__head strong { color: rgba(29, 29, 31, 0.4); font-size: 8px; }
+.wr-showcase .wr-cycle-browser__nav button { width: 23px; height: 23px; color: rgba(29, 29, 31, 0.55); background: rgba(255, 255, 255, 0.36); }
+.wr-showcase .wr-rail { gap: 8px; padding-top: 9px; }
+
+.wr-showcase .wr-period-card {
+  width: 174px;
+  min-height: 82px;
+  padding: 10px 11px;
+  border-color: rgba(255, 255, 255, 0.38);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+.wr-showcase .wr-period-card:hover { border-color: rgba(255, 255, 255, 0.72); background: rgba(255, 255, 255, 0.34); }
+.wr-showcase .wr-period-card.is-active {
+  border-color: rgba(255, 255, 255, 0.74);
+  background: rgba(255, 255, 255, 0.54);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(58, 90, 139, 0.05),
+    0 12px 24px -18px rgba(48, 68, 108, 0.32);
+}
+.wr-showcase .wr-period-card::before { top: 5px; width: 17px; height: 2px; background: rgba(0, 113, 227, 0.72); }
+.wr-showcase .wr-period-card__top { margin-bottom: 4px; }
+.wr-showcase .wr-period-card__ordinal { font-size: 7px; }
+.wr-showcase .wr-period-card__state { font-size: 7px; }
+.wr-showcase .wr-period-card__name { font-size: 10.5px; }
+.wr-showcase .wr-period-card__profit { margin-top: 2px; font-size: 16px; }
+.wr-showcase .wr-period-card__meta { margin-top: 3px; font-size: 7.5px; }
+
+/* ── Apple 式章节标题 ──────────────────────────────────────────────── */
+.wr-section-lead {
+  max-width: 900px;
+  margin-top: clamp(52px, 6vw, 78px) !important;
+  padding: 0 8px;
+}
+.wr-section-lead span { color: #087cff; font-size: 11px; font-weight: 650; }
+.wr-section-lead h2 {
+  margin-top: 5px;
+  color: #1d1d1f;
+  font-size: clamp(25px, 3vw, 38px);
+  font-weight: 680;
+  line-height: 1.08;
+  letter-spacing: -0.04em;
+}
+.wr-section-lead.is-compact { margin-top: clamp(45px, 5vw, 64px) !important; }
+
+/* ── 内容区域：大块画布，不再像后台小卡片阵列 ─────────────────────── */
+.wr-battle-grid { gap: 16px; }
+.wr-panel {
+  border: none;
+  border-radius: 30px;
+  background: #fff;
+  box-shadow: 0 22px 54px -46px rgba(0, 0, 0, 0.35);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.wr-curve-panel {
+  min-height: 300px;
+  background:
+    radial-gradient(70% 90% at 100% 0%, rgba(139, 213, 255, 0.22), transparent 70%),
+    linear-gradient(145deg, #fbfdff, #edf7ff);
+}
+.wr-outcome {
+  background:
+    radial-gradient(90% 80% at 8% 0%, rgba(193, 179, 255, 0.22), transparent 72%),
+    linear-gradient(150deg, #fdfcff, #f4f0ff);
+}
+.wr-panel__head { border-bottom-color: rgba(60, 60, 67, 0.07); }
+.wr-panel__head > svg { color: #087cff; background: rgba(255, 255, 255, 0.56); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8); }
+.wr-panel__eyebrow { color: rgba(60, 60, 67, 0.43); }
+.wr-panel__head h3 { font-size: 12px; }
+.wr-curve__svg { height: 190px; }
+.wr-curve__line { stroke-width: 2; }
+
+.wr-outcome__score strong { font-size: 23px; }
+.wr-outcome__sequence { border: none; background: rgba(255, 255, 255, 0.42); }
+.wr-outcome__sequence span { background: rgba(255, 255, 255, 0.72); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78); }
+.wr-outcome__split > div { border: none; background: rgba(255, 255, 255, 0.44); }
+
+.wr-grid-3 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.wr-grid-3 > .wr-panel:first-child { grid-column: 1 / -1; }
+.wr-grid-3 > .wr-panel:first-child .wr-bars {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 26px;
+}
+.wr-grid-3 > .wr-panel:nth-child(1) {
+  background:
+    radial-gradient(55% 100% at 100% 0%, rgba(86, 192, 255, 0.16), transparent 72%),
+    linear-gradient(145deg, #fff, #f0f9ff);
+}
+.wr-grid-3 > .wr-panel:nth-child(2) {
+  background:
+    radial-gradient(75% 90% at 0% 0%, rgba(169, 149, 255, 0.16), transparent 72%),
+    linear-gradient(145deg, #fff, #f6f2ff);
+}
+.wr-grid-3 > .wr-panel:nth-child(3) {
+  background:
+    radial-gradient(75% 90% at 100% 0%, rgba(73, 214, 184, 0.14), transparent 72%),
+    linear-gradient(145deg, #fff, #eefaf6);
+}
+.wr-breakdown { min-height: 250px; }
+.wr-bar__track { height: 4px; background: rgba(118, 118, 128, 0.09); }
+.wr-bar__metric { font-size: 10.5px; }
+.wr-bar__foot { font-size: 8px; }
+
+.wr-panel--weeks {
+  background:
+    radial-gradient(70% 100% at 50% 100%, rgba(255, 191, 125, 0.12), transparent 75%),
+    linear-gradient(145deg, #fff, #fff8f1);
+}
+.wr-panel--weeks .wr-bar { border: none; background: rgba(255, 255, 255, 0.58); }
+
+.wr-panel--wide {
+  background: linear-gradient(145deg, #fff, #f9f9fb);
+}
+.wr-ledger { border: none; background: rgba(255, 255, 255, 0.68); }
+.wr-ledger__table thead th { background: rgba(118, 118, 128, 0.045); }
+
+@keyframes wrLiquidOne {
+  0% { transform: translate3d(0, 0, 0) rotate(-4deg) scale(1); border-radius: 44% 56% 62% 38% / 52% 42% 58% 48%; }
+  100% { transform: translate3d(-30px, 24px, 0) rotate(7deg) scale(1.05); border-radius: 58% 42% 43% 57% / 44% 60% 40% 56%; }
+}
+@keyframes wrLiquidTwo {
+  0% { transform: translate3d(0, 0, 0) rotate(2deg) scale(1); }
+  100% { transform: translate3d(34px, -22px, 0) rotate(-7deg) scale(1.04); }
+}
+@keyframes wrLiquidThree {
+  0% { transform: translate3d(0, 0, 0) rotate(-8deg); }
+  100% { transform: translate3d(-28px, -15px, 0) rotate(9deg); }
+}
+@keyframes wrGlassMorph {
+  0% { transform: rotate(-2deg); border-radius: 36% 64% 58% 42% / 46% 39% 61% 54%; }
+  100% { transform: rotate(4deg); border-radius: 58% 42% 38% 62% / 40% 55% 45% 60%; }
+}
+@keyframes wrGlassBreathe {
+  0%, 100% { opacity: 0.72; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.05); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wr-liquid-orb,
+  .wr-showcase .wr-emblem__plate,
+  .wr-showcase .wr-emblem__halo { animation: none !important; }
+}
+
+@media (max-width: 1180px) {
+  .wr-showcase .wr-banner__kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .wr-showcase .wr-kpi:nth-child(n + 4) { border-top-color: rgba(255, 255, 255, 0.35); }
+  .wr-grid-3 > .wr-panel:first-child .wr-bars { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 920px) {
+  .wr-showcase { min-height: 0; }
+  .wr-showcase .wr-banner__body { grid-template-columns: minmax(0, 1fr) 120px; padding-inline: 22px; }
+  .wr-showcase .wr-emblem { width: 116px; height: 116px; }
+  .wr-showcase .wr-emblem__plate { width: 72px; height: 72px; }
+  .wr-showcase .wr-emblem__grade { font-size: 30px; }
+  .wr-grid-3 { grid-template-columns: minmax(0, 1fr); }
+  .wr-grid-3 > .wr-panel:first-child { grid-column: auto; }
+  .wr-grid-3 > .wr-panel:first-child .wr-bars { display: flex; }
+}
+
+@media (max-width: 680px) {
+  .wr-showcase { border-radius: 27px; }
+  .wr-showcase::before { border-radius: 26px; }
+  .wr-showcase .wr-page-head { align-items: center; flex-direction: row; padding: 24px 21px 0; }
+  .wr-showcase .wr-page-head__copy > p:last-child { max-width: 180px; }
+  .wr-showcase .wr-sync-note { width: auto; min-width: 0; padding: 8px; }
+  .wr-showcase .wr-sync-note div { display: none; }
+  .wr-showcase .wr-banner__body { flex-direction: column-reverse; gap: 2px; padding: 15px 19px 21px; }
+  .wr-showcase .wr-banner__title { font-size: 27px; }
+  .wr-showcase .wr-banner__figures { gap: 14px 18px; margin-top: 18px; }
+  .wr-showcase .wr-figure.is-primary .wr-figure__value { font-size: 30px; }
+  .wr-showcase .wr-figure__value { font-size: 21px; }
+  .wr-showcase .wr-banner__kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-inline: 3px; }
+  .wr-showcase .wr-cycle-browser { margin: 13px 14px 14px; }
+  .wr-showcase .wr-period-card { width: 160px; }
+  .wr-section-lead { padding-inline: 3px; }
+  .wr-section-lead h2 { font-size: 27px; }
+  .wr-panel { border-radius: 24px; }
+}
