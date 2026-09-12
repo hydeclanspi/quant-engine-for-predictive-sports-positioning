@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  Activity,
   Award,
+  CalendarDays,
   Check,
   ChevronLeft,
   ChevronRight,
+  Cloud,
   Flag,
   Layers,
   Pencil,
+  ShieldCheck,
   Swords,
   Target,
   TrendingDown,
@@ -61,15 +65,24 @@ function PeriodCard({ period, active, onSelect }) {
       type="button"
       onClick={() => onSelect(period.id)}
       className={`wr-period-card ${active ? 'is-active' : ''} is-${tone}`}
+      role="tab"
+      aria-selected={active}
+      aria-label={`${period.name}，${period.isOpen ? '进行中' : '已归档'}，净盈亏 ${toSigned(period.profit)} 元`}
     >
       <div className="wr-period-card__top">
-        <span className="wr-period-card__ordinal">C{period.ordinal}</span>
-        {period.isOpen && <span className="wr-period-card__live">进行中</span>}
+        <span className="wr-period-card__ordinal">CYCLE {String(period.ordinal).padStart(2, '0')}</span>
+        <span className={`wr-period-card__state ${period.isOpen ? 'is-live' : ''}`}>
+          <i aria-hidden="true" />
+          {period.isOpen ? '进行中' : '已归档'}
+        </span>
       </div>
       <p className="wr-period-card__name" title={period.name}>{period.name}</p>
-      <p className="wr-period-card__profit">{toSigned(period.profit)}</p>
+      <p className="wr-period-card__profit">
+        {toSigned(period.profit)}
+        <em>rmb</em>
+      </p>
       <p className="wr-period-card__meta">
-        {period.settledCount} 笔已结 · 本金 {toRmb(period.baseCapital)}
+        {period.settledCount} 笔结算 <i /> 本金 {toRmb(period.baseCapital)}
       </p>
     </button>
   )
@@ -108,23 +121,17 @@ function VerdictBanner({ report, runKey, onRename, children }) {
     <div className={`wr-banner ${GRADE_TONE[kpi.grade] || 'is-grade-none'}`}>
       <div className="wr-banner__sheen" aria-hidden="true" />
       <div className="wr-banner__grid" aria-hidden="true" />
+      <span className="wr-banner__corner is-tl" aria-hidden="true" />
+      <span className="wr-banner__corner is-tr" aria-hidden="true" />
+      <span className="wr-banner__corner is-bl" aria-hidden="true" />
+      <span className="wr-banner__corner is-br" aria-hidden="true" />
 
       <div className="wr-banner__body">
-        {/* 评级徽章 */}
-        <div className="wr-emblem">
-          <span className="wr-emblem__halo" aria-hidden="true" />
-          <span className="wr-emblem__ring" aria-hidden="true" />
-          <span className="wr-emblem__plate">
-            <span className="wr-emblem__grade">{kpi.grade}</span>
-          </span>
-          <span className="wr-emblem__title">{kpi.gradeTitle}</span>
-        </div>
-
         {/* 标题 + 战果 */}
         <div className="wr-banner__main">
           <div className="wr-banner__eyebrow">
             <Swords size={13} />
-            <span>Campaign Report</span>
+            <span>Campaign {String(period.ordinal).padStart(2, '0')} · Final Report</span>
             {period.isOpen && <em className="wr-banner__live">进行中</em>}
           </div>
 
@@ -135,6 +142,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
                 value={draft}
                 maxLength={24}
                 onChange={(event) => setDraft(event.target.value)}
+                aria-label="周期名称"
                 onKeyDown={(event) => {
                   if (event.key === 'Enter') commit()
                   if (event.key === 'Escape') {
@@ -172,7 +180,7 @@ function VerdictBanner({ report, runKey, onRename, children }) {
           <p className="wr-banner__span">{spanLabel}</p>
 
           <div className="wr-banner__figures">
-            <div className="wr-figure">
+            <div className="wr-figure is-primary">
               <span className="wr-figure__label">周期净盈亏</span>
               <span className={`wr-figure__value is-${tone}`}>
                 <CountUp
@@ -211,6 +219,20 @@ function VerdictBanner({ report, runKey, onRename, children }) {
               </span>
             </div>
           </div>
+        </div>
+
+        {/* 评级徽章 */}
+        <div className="wr-emblem" aria-label={`周期评级 ${kpi.grade}，${kpi.gradeTitle}`}>
+          <span className="wr-emblem__halo" aria-hidden="true" />
+          <span className="wr-emblem__orbit" aria-hidden="true">
+            <i />
+          </span>
+          <span className="wr-emblem__ring" aria-hidden="true" />
+          <span className="wr-emblem__plate">
+            <span className="wr-emblem__grade">{kpi.grade}</span>
+          </span>
+          <span className="wr-emblem__caption">PERFORMANCE</span>
+          <span className="wr-emblem__title">{kpi.gradeTitle}</span>
         </div>
       </div>
 
@@ -270,6 +292,16 @@ function CampaignCurve({ curve }) {
             <stop offset="100%" stopColor="var(--wr-curve-stroke)" stopOpacity="0" />
           </linearGradient>
         </defs>
+        {[0.25, 0.5, 0.75].map((ratio) => (
+          <line
+            key={ratio}
+            x1={padX}
+            y1={padTop + ratio * (H - padTop - padBottom)}
+            x2={W - padX}
+            y2={padTop + ratio * (H - padTop - padBottom)}
+            className="wr-curve__guide"
+          />
+        ))}
         {zeroY !== null && (
           <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} className="wr-curve__zero" />
         )}
@@ -293,6 +325,77 @@ function CampaignCurve({ curve }) {
   )
 }
 
+/* ── 战绩节奏 ─────────────────────────────────────────────────────────── */
+
+function OutcomeDigest({ entries, kpi }) {
+  const settled = entries.filter((row) => row.settled).slice().reverse()
+  const recent = settled.slice(-18)
+
+  return (
+    <div className="wr-panel wr-outcome">
+      <div className="wr-panel__head">
+        <Activity size={14} />
+        <div>
+          <p className="wr-panel__eyebrow">Battle rhythm</p>
+          <h3>战绩节奏</h3>
+        </div>
+        <span className="wr-panel__count">按发生顺序</span>
+      </div>
+
+      {recent.length === 0 ? (
+        <div className="wr-empty">本周期尚无已结算战果。</div>
+      ) : (
+        <>
+          <div className="wr-outcome__score">
+            <div>
+              <strong>{kpi.wins}</strong>
+              <span>命中</span>
+            </div>
+            <i aria-hidden="true" />
+            <div>
+              <strong>{kpi.losses}</strong>
+              <span>失手</span>
+            </div>
+            <i aria-hidden="true" />
+            <div>
+              <strong>{kpi.pendingCount}</strong>
+              <span>在途</span>
+            </div>
+          </div>
+
+          <div className="wr-outcome__sequence" aria-label="最近战绩序列">
+            {recent.map((row, index) => {
+              const tone = toneOf(row.profit)
+              return (
+                <span
+                  key={row.id}
+                  className={`is-${tone}`}
+                  title={`${row.fullDateLabel} · ${row.profit > 0 ? '命中' : row.profit < 0 ? '失手' : '走盘'} · ${toSigned(row.profit)} 元`}
+                  style={{ '--wr-seq-delay': `${index * 34}ms` }}
+                >
+                  {row.profit > 0 ? 'W' : row.profit < 0 ? 'L' : 'D'}
+                </span>
+              )
+            })}
+          </div>
+          <p className="wr-outcome__hint">显示最近 {recent.length} 笔 · 从左至右</p>
+
+          <div className="wr-outcome__split">
+            <div>
+              <span>最佳单笔</span>
+              <strong className="is-win">{kpi.bestEntry ? toSigned(kpi.bestEntry.profit) : '—'}</strong>
+            </div>
+            <div>
+              <span>最差单笔</span>
+              <strong className="is-lose">{kpi.worstEntry ? toSigned(kpi.worstEntry.profit) : '—'}</strong>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
 /* ── 分项战果（通用条形榜） ───────────────────────────────────────────── */
 
 function BreakdownList({
@@ -303,6 +406,7 @@ function BreakdownList({
   renderLabel,
   metric = 'profit',
   showEmpty = false,
+  className = '',
 }) {
   const visible = showEmpty ? rows : rows.filter((row) => row.settled > 0)
   const hasData = visible.some((row) => row.settled > 0)
@@ -313,10 +417,13 @@ function BreakdownList({
   const scale = Math.max(1e-6, ...visible.map((row) => Math.abs(valueOf(row))))
 
   return (
-    <div className="wr-panel">
+    <div className={`wr-panel wr-breakdown ${className}`}>
       <div className="wr-panel__head">
         <Icon size={14} />
-        <h3>{title}</h3>
+        <div>
+          <p className="wr-panel__eyebrow">Performance split</p>
+          <h3>{title}</h3>
+        </div>
       </div>
       {!hasData ? (
         <div className="wr-empty">{emptyHint}</div>
@@ -325,17 +432,24 @@ function BreakdownList({
           {visible.map((row, index) => {
             const value = valueOf(row)
             const tone = row.settled === 0 ? 'idle' : toneOf(row.profit)
-            const width = row.settled === 0 ? '0%' : `${Math.max(3, (Math.abs(value) / scale) * 100)}%`
+            const width = row.settled === 0 ? '0%' : `${Math.max(3, (Math.abs(value) / scale) * 48)}%`
             return (
-              <li key={row.key} className={`wr-bar is-${tone}`} style={{ '--wr-delay': `${index * 45}ms` }}>
+              <li
+                key={row.key}
+                className={`wr-bar is-${tone}`}
+                style={{ '--wr-delay': `${index * 45}ms`, '--wr-bar-size': width }}
+              >
                 <div className="wr-bar__row">
-                  <span className="wr-bar__label">{renderLabel ? renderLabel(row) : row.label}</span>
+                  <span className="wr-bar__label">
+                    <i>{String(index + 1).padStart(2, '0')}</i>
+                    {renderLabel ? renderLabel(row) : row.label}
+                  </span>
                   <span className="wr-bar__metric">
                     {row.settled === 0 ? '—' : metric === 'roi' ? toSignedPct(row.roi) : `${toSigned(row.profit)} rmb`}
                   </span>
                 </div>
                 <div className="wr-bar__track">
-                  <span className="wr-bar__fill" style={{ width }} />
+                  <span className="wr-bar__fill" />
                 </div>
                 <div className="wr-bar__foot">
                   <span>
@@ -372,13 +486,18 @@ function EntryLedger({ entries, modeLabel }) {
   const totalPages = Math.max(1, Math.ceil(entries.length / LEDGER_PAGE_SIZE))
   const safePage = Math.min(page, totalPages - 1)
   const rows = entries.slice(safePage * LEDGER_PAGE_SIZE, safePage * LEDGER_PAGE_SIZE + LEDGER_PAGE_SIZE)
+  const rangeStart = entries.length === 0 ? 0 : safePage * LEDGER_PAGE_SIZE + 1
+  const rangeEnd = Math.min(entries.length, safePage * LEDGER_PAGE_SIZE + rows.length)
 
   return (
     <div className="wr-panel wr-panel--wide">
       <div className="wr-panel__head">
         <Layers size={14} />
-        <h3>逐笔战果</h3>
-        <span className="wr-panel__count">{entries.length} 笔</span>
+        <div>
+          <p className="wr-panel__eyebrow">Campaign ledger</p>
+          <h3>逐笔战果</h3>
+        </div>
+        <span className="wr-panel__fresh"><ShieldCheck size={12} /> 结果实时匹配</span>
       </div>
 
       {entries.length === 0 ? (
@@ -450,7 +569,7 @@ function EntryLedger({ entries, modeLabel }) {
           </div>
 
           <div className="wr-pager">
-            <span>第 {safePage + 1} / {totalPages} 页</span>
+            <span>显示 {rangeStart}–{rangeEnd} / 共 {entries.length} 笔</span>
             <div className="wr-pager__btns">
               <button
                 type="button"
@@ -479,6 +598,7 @@ function EntryLedger({ entries, modeLabel }) {
 export default function WarReportPage() {
   const [dataVersion, setDataVersion] = useState(0)
   const [selectedId, setSelectedId] = useState(null)
+  const railRef = useRef(null)
   const modeLabel = useModeLabelMap()
 
   // 结算界面一落笔就派发 dugou:data-changed —— 战报据此重算，results 永远跟最新的。
@@ -504,6 +624,10 @@ export default function WarReportPage() {
 
   const runKey = `${activeId}:${dataVersion}`
 
+  const scrollRail = (direction) => {
+    railRef.current?.scrollBy({ left: direction * 356, behavior: 'smooth' })
+  }
+
   if (!report) {
     return (
       <div className="page-shell page-content-wide pt-5 motion-v2-scope">
@@ -517,26 +641,50 @@ export default function WarReportPage() {
   return (
     <div className="page-shell page-content-wide pt-5 space-y-5 motion-v2-scope warreport-scope">
       {/* 页头 */}
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-stone-800">战报</h1>
-          <p className="mt-0.5 text-sm text-stone-400">
-            按蓄水池周期复盘 · 共 {periods.length} 期
-            {isPreviewMode() && <span className="ml-2 text-sky-500">· 演示数据</span>}
+      <div className="wr-page-head">
+        <div className="wr-page-head__copy">
+          <p className="wr-page-head__eyebrow"><span /> Campaign Archive</p>
+          <h1>周期战报 <em>/ War Report</em></h1>
+          <p>
+            把每一轮资金周期封存成可回看的战役档案
+            {isPreviewMode() && <span>· 演示数据</span>}
           </p>
+        </div>
+        <div className="wr-sync-note">
+          <Cloud size={17} />
+          <div>
+            <span>周期档案</span>
+            <strong>命名随数据同步</strong>
+          </div>
         </div>
       </div>
 
       {/* 周期选择器 */}
-      <div className="wr-rail">
-        {periods.map((period) => (
-          <PeriodCard
-            key={period.id}
-            period={period}
-            active={period.id === activeId}
-            onSelect={setSelectedId}
-          />
-        ))}
+      <div className="wr-cycle-browser">
+        <div className="wr-cycle-browser__head">
+          <div>
+            <span>战役档案</span>
+            <strong>{periods.length} 个周期</strong>
+          </div>
+          <div className="wr-cycle-browser__nav">
+            <button type="button" onClick={() => scrollRail(-1)} aria-label="向前浏览周期">
+              <ChevronLeft size={15} />
+            </button>
+            <button type="button" onClick={() => scrollRail(1)} aria-label="向后浏览周期">
+              <ChevronRight size={15} />
+            </button>
+          </div>
+        </div>
+        <div className="wr-rail" ref={railRef} role="tablist" aria-label="选择战报周期">
+          {periods.map((period) => (
+            <PeriodCard
+              key={period.id}
+              period={period}
+              active={period.id === activeId}
+              onSelect={setSelectedId}
+            />
+          ))}
+        </div>
       </div>
 
       {/* 裁决横幅 + KPI —— 合成一整块结算幕 */}
@@ -589,16 +737,22 @@ export default function WarReportPage() {
         />
       </VerdictBanner>
 
-      {/* 净值曲线 */}
-      <div className="wr-panel">
-        <div className="wr-panel__head">
-          <TrendingUp size={14} />
-          <h3>周期净值推进</h3>
-          <span className="wr-panel__count">
-            结束余额 {toRmb(report.period.endBalance)}
-          </span>
+      {/* 战局走势 */}
+      <div className="wr-battle-grid">
+        <div className="wr-panel wr-curve-panel">
+          <div className="wr-panel__head">
+            <TrendingUp size={14} />
+            <div>
+              <p className="wr-panel__eyebrow">Capital trajectory</p>
+              <h3>周期净值推进</h3>
+            </div>
+            <span className="wr-panel__count">
+              结束余额 <strong>{toRmb(report.period.endBalance)}</strong>
+            </span>
+          </div>
+          <CampaignCurve curve={report.curve} />
         </div>
-        <CampaignCurve curve={report.curve} />
+        <OutcomeDigest entries={report.entries} kpi={kpi} />
       </div>
 
       {/* 分项战果 */}
@@ -627,14 +781,23 @@ export default function WarReportPage() {
       </div>
 
       {/* 分周 */}
-      <BreakdownList title="分自然周盈亏" Icon={Target} rows={report.weeks} emptyHint="本周期尚无已结算样本。" />
+      <BreakdownList
+        title="分自然周盈亏"
+        Icon={CalendarDays}
+        rows={report.weeks}
+        emptyHint="本周期尚无已结算样本。"
+        className="wr-panel--weeks"
+      />
 
       {/* 逐笔流水 */}
       <EntryLedger entries={report.entries} modeLabel={modeLabel} />
 
       <p className="wr-footnote">
-        周期分界线与「蓄水池余额 · 历史明细」中的止盈 / 止损结算完全一致。跨联赛、跨模式的串关按腿数均摊计入各分项，
-        故分项之和与总计一致。结算界面填回的比分与命中状态实时反映在逐笔战果中。
+        <ShieldCheck size={13} />
+        <span>
+          周期分界线与「蓄水池余额 · 历史明细」中的止盈 / 止损结算完全一致。跨联赛、跨模式的串关按腿数均摊计入各分项，
+          故分项之和与总计一致。结算界面填回的比分与命中状态实时反映在逐笔战果中。
+        </span>
       </p>
     </div>
   )
