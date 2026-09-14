@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, X, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, X, ChevronDown, ChevronRight, Sparkles, Loader2, ShieldCheck } from 'lucide-react'
 import { bumpTeamSamples, findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveInvestment, searchTeamProfiles } from '../lib/localData'
 import { handleNoteShortcut } from '../lib/noteFormatting'
 import { getPredictionCalibrationContext, getModeKellyRecommendations, getReservoirState } from '../lib/analytics'
@@ -15,6 +15,8 @@ import {
   solveKellyFractionByAtomicDistribution,
 } from '../lib/atomicParlay'
 import { parseNaturalInput } from '../lib/naturalInputParser'
+import { requestAiInvestmentParse } from '../lib/aiInvestmentClient'
+import { AI_PARSE_MAX_TEXT_LENGTH } from '../lib/aiInvestmentSchema'
 import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
@@ -352,12 +354,15 @@ export default function NewInvestmentPage() {
   const [quickInputOpen, setQuickInputOpen] = useState(false)
   const [quickPeeking, setQuickPeeking] = useState(false)
   const [quickInputResult, setQuickInputResult] = useState(null)
+  const [quickInputPhase, setQuickInputPhase] = useState('idle')
+  const [quickInputMeta, setQuickInputMeta] = useState(null)
   const [waxSealBurst, setWaxSealBurst] = useState({ active: false, token: 0, x: 0, y: 0 })
   const [confirmPersistPending, setConfirmPersistPending] = useState(false)
   const [systemConfig] = useState(() => getSystemConfig())
   const persistTimerRef = useRef(null)
   const persistIdleRef = useRef(null)
   const quickPeekTimersRef = useRef([])
+  const quickAiAbortRef = useRef(null)
 
   // 首屏「秀一下」：演示态、每会话一次、尊重 prefers-reduced-motion。面板静息折叠，
   // 仅首次进入时自动下拉展示再收回，让功能自我介绍而不破坏首屏的克制美感。
@@ -385,6 +390,8 @@ export default function NewInvestmentPage() {
     // 仅挂载时执行一次；isPreview 在页面生命周期内稳定。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => () => quickAiAbortRef.current?.abort(), [])
 
   const teamProfiles = useMemo(() => getTeamProfiles(), [profilesVersion])
   const historicalMatchLibrary = useMemo(() => {
@@ -1049,29 +1056,100 @@ export default function NewInvestmentPage() {
     return { newInvestment, normalizedMatches }
   }
 
-  const handleQuickInput = (overrideText) => {
+  const applyQuickInputResult = (result) => {
+    setQuickInputResult(result)
+    if (!Array.isArray(result?.matches) || result.matches.length === 0) return
+
+    const newSize = Math.min(5, result.matches.length)
+    // Programmatic Quick Input must keep its parsed amount. Without advancing
+    // this ref, the regular parlay-size effect would replace it with 80/150.
+    prevParlaySizeRef.current = newSize
+    setParlaySize(newSize)
+    setMatches(
+      result.matches.slice(0, 5).map((draft) => {
+        const { _nlMeta: ignoredMeta, ...safeDraft } = draft || {}
+        void ignoredMeta
+        return {
+          ...createEmptyMatch(),
+          ...safeDraft,
+          entries: Array.isArray(safeDraft.entries) && safeDraft.entries.length > 0
+            ? safeDraft.entries.slice(0, 5).map((entry) => ({
+                name: String(entry?.name || ''),
+                odds: String(entry?.odds || ''),
+              }))
+            : [{ name: '', odds: '' }],
+          conf: normalizeSliderPercent(safeDraft.conf, 50),
+          mode: normalizeModeValue(safeDraft.mode),
+          tys_home: normalizeTysValue(safeDraft.tys_home),
+          tys_away: normalizeTysValue(safeDraft.tys_away),
+          fid: normalizeFidOption(safeDraft.fid),
+          fse_home: normalizeSliderPercent(safeDraft.fse_home, 50),
+          fse_away: normalizeSliderPercent(safeDraft.fse_away, 50),
+        }
+      }),
+    )
+    const parsedInput = Number.parseFloat(String(result.actualInput ?? ''))
+    setActualInput(Number.isFinite(parsedInput) && parsedInput > 0 ? String(parsedInput) : (newSize === 1 ? '150' : '80'))
+    setComboName(newSize > 1 ? String(result.comboName || '') : '')
+    setHistoryPrefillApplied({})
+    setHistoryFloatDismissed({})
+  }
+
+  const handleQuickInput = async (overrideText) => {
     // Example chips pass their sentence directly; the toolbar button passes a
     // click event (ignored) and falls back to the textarea's current value.
     const text = typeof overrideText === 'string' ? overrideText : quickInputText
     if (!text.trim()) return
-    const result = parseNaturalInput(text)
-    setQuickInputResult(result)
-    if (result.matches.length === 0) return
 
-    // Apply parsed matches to form
-    const newSize = Math.min(5, result.matches.length)
-    setParlaySize(newSize)
-    setMatches(
-      result.matches.slice(0, 5).map((draft) => ({
-        ...createEmptyMatch(),
-        ...draft,
-        // strip internal _nlMeta from form state
-      })),
-    )
-    const parsedInput = Number.parseInt(String(result.actualInput || ''), 10)
-    setActualInput(Number.isFinite(parsedInput) && parsedInput > 0 ? String(parsedInput) : (newSize === 1 ? '150' : '80'))
-    setHistoryPrefillApplied({})
-    setHistoryFloatDismissed({})
+    quickAiAbortRef.current?.abort()
+    setQuickInputMeta(null)
+    setQuickInputResult(null)
+
+    if (isPreview) {
+      const result = parseNaturalInput(text)
+      applyQuickInputResult(result)
+      setQuickInputPhase('local')
+      return
+    }
+
+    const controller = new AbortController()
+    quickAiAbortRef.current = controller
+    setQuickInputPhase('loading')
+    try {
+      const result = await requestAiInvestmentParse(text, { signal: controller.signal })
+      if (controller.signal.aborted) return
+      applyQuickInputResult(result)
+      setQuickInputMeta({
+        model: result.model,
+        attempts: result.attempts,
+        totalTokens: result.usage?.totalTokens || 0,
+      })
+      setQuickInputPhase('ai')
+    } catch (error) {
+      if (controller.signal.aborted || error?.reason === 'request_cancelled') return
+      const fallbackReason = {
+        ai_not_configured: 'AI 尚未配置',
+        provider_rate_limited: 'AI 请求较多',
+        provider_timeout: 'AI 响应超时',
+        client_timeout: 'AI 响应超时',
+        provider_auth_failed: 'AI 密钥无效',
+        unauthorized: '登录状态不可用',
+        invalid_token: '登录状态已失效',
+        text_too_long: '输入内容过长',
+      }[error?.reason] || 'AI 暂时不可用'
+      const localResult = parseNaturalInput(text)
+      applyQuickInputResult({
+        ...localResult,
+        diagnostics: [
+          { level: 'info', message: `${fallbackReason}，已自动使用本地解析。` },
+          ...(localResult.diagnostics || []),
+        ],
+      })
+      setQuickInputMeta({ reason: error?.reason || 'unknown' })
+      setQuickInputPhase('fallback')
+    } finally {
+      if (quickAiAbortRef.current === controller) quickAiAbortRef.current = null
+    }
   }
 
   const persistInvestmentFromPayload = (payload) => {
@@ -1180,7 +1258,10 @@ export default function NewInvestmentPage() {
         >
           <ChevronRight size={14} className={`qi-chevron${quickShown ? ' is-open' : ''}`} />
           <span className="font-medium">Quick Input</span>
-          <span className="ml-1 px-[5px] py-[0.5px] rounded border border-indigo-200 bg-indigo-50 text-[7.5px] font-semibold uppercase tracking-[0.08em] text-indigo-500">Beta</span>
+          <span className={`qi-intelligence-badge${isPreview ? ' is-local' : ''}`}>
+            <Sparkles size={9} aria-hidden="true" />
+            {isPreview ? 'Local Demo' : 'AI Assist'}
+          </span>
           <span className="text-[11px] text-stone-400 ml-1">自然语言快捷录入</span>
         </button>
 
@@ -1193,44 +1274,79 @@ export default function NewInvestmentPage() {
               <textarea
                 value={quickInputText}
                 onChange={(e) => setQuickInputText(e.target.value)}
+                maxLength={AI_PARSE_MAX_TEXT_LENGTH}
                 placeholder={isPreview
                   ? '欢迎体验 · 在此粘贴一句话即可自动解析为结构化投资单\n例如：曼城 win, 赔率 1.85, 变量 α 1.3, 变量 δ 0.72, 策略 Directional, 仓位 150'
                   : '示例：利兹联 win/平 拜仁, conf 3.5, odds 7.4, fse 0.72, mode 半, input 180\n或：arsenal W, chelsea D, conf 55 60, odds 1.8 3.2, mode 常规-稳'}
                 rows={3}
-                className="input-glow w-full px-3 py-2 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-amber-400 resize-none"
+                aria-label="自然语言投资描述"
+                aria-describedby="quick-input-privacy"
+                className="input-glow qi-ai-textarea w-full px-3 py-2 rounded-xl border border-stone-200 text-sm focus:outline-none resize-none"
               />
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <button
+                  type="button"
                   onClick={handleQuickInput}
-                  disabled={!quickInputText.trim()}
-                  className="px-4 py-1.5 rounded-lg text-xs font-medium bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  disabled={!quickInputText.trim() || quickInputPhase === 'loading'}
+                  aria-busy={quickInputPhase === 'loading'}
+                  className="qi-ai-parse-btn"
                 >
-                  解析并填入
+                  {quickInputPhase === 'loading'
+                    ? <Loader2 size={13} className="qi-ai-spinner" aria-hidden="true" />
+                    : <Sparkles size={13} aria-hidden="true" />}
+                  <span>{quickInputPhase === 'loading' ? '正在理解…' : (isPreview ? '解析并填入' : 'AI 解析并填入')}</span>
                 </button>
                 {quickInputText.trim() && (
                   <button
-                    onClick={() => { setQuickInputText(''); setQuickInputResult(null) }}
+                    type="button"
+                    onClick={() => {
+                      quickAiAbortRef.current?.abort()
+                      setQuickInputText('')
+                      setQuickInputResult(null)
+                      setQuickInputPhase('idle')
+                      setQuickInputMeta(null)
+                    }}
                     className="px-3 py-1.5 rounded-lg text-xs text-stone-500 hover:text-stone-700 hover:bg-stone-100 transition-colors"
                   >
                     清空
                   </button>
                 )}
+                <span id="quick-input-privacy" className="qi-ai-privacy">
+                  <ShieldCheck size={11} aria-hidden="true" />
+                  {isPreview ? '演示数据仅在浏览器内解析' : '只填表，不会自动保存'}
+                </span>
               </div>
 
               {quickInputResult && (
-                <div className="mt-2 space-y-1">
+                <div
+                  className={`qi-ai-result is-${quickInputPhase}`}
+                  role="status"
+                  aria-live="polite"
+                >
+                  <div className="qi-ai-result-heading">
+                    <span className="qi-ai-result-orb" aria-hidden="true"><Sparkles size={11} /></span>
+                    <span>
+                      {quickInputPhase === 'ai' && 'DeepSeek 已完成结构化'}
+                      {quickInputPhase === 'fallback' && '已无缝切换至本地解析'}
+                      {quickInputPhase === 'local' && '本地解析完成'}
+                    </span>
+                    {quickInputPhase === 'ai' && quickInputMeta?.model && (
+                      <span className="qi-ai-model">{quickInputMeta.model}</span>
+                    )}
+                  </div>
                   {quickInputResult.matches.length > 0 && (
-                    <p className="text-[11px] text-emerald-600">
+                    <p className="qi-ai-result-summary">
                       已识别 {quickInputResult.matches.length} 场比赛
                       {quickInputResult.confidence >= 0.7 ? '' : ' (部分字段可能需要手动补充)'}
+                      {quickInputPhase === 'ai' && quickInputMeta?.totalTokens > 0
+                        ? ` · ${quickInputMeta.totalTokens} tokens`
+                        : ''}
                     </p>
                   )}
-                  {quickInputResult.diagnostics.map((d, i) => (
+                  {(quickInputResult.diagnostics || []).map((d, i) => (
                     <p
                       key={i}
-                      className={`text-[11px] ${
-                        d.level === 'error' ? 'text-rose-500' : d.level === 'warning' ? 'text-amber-600' : 'text-stone-400'
-                      }`}
+                      className={`qi-ai-diagnostic is-${d.level || 'info'}`}
                     >
                       {d.message}
                     </p>

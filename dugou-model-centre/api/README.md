@@ -87,6 +87,37 @@ leaks via response timing.
 
 ---
 
+# AI Quick Input · `/api/parse-investment`
+
+The owner-facing New Investment page can turn a natural-language sentence
+into a structured form draft through DeepSeek. The browser sends only the
+sentence to this serverless endpoint; the API key remains server-side. Model
+output passes a strict shared allow-list before it reaches the form, and the UI
+falls back to the deterministic local parser on every provider/config/network
+failure. AI only fills fields — it never saves or syncs an investment.
+
+```http
+POST /api/parse-investment
+Authorization: Bearer <full-scope unlock JWT>
+Content-Type: application/json
+
+{ "text": "皇马 vs 皇社，-1 win，odds 1.52，conf 0.55，投入 30" }
+```
+
+Set these in Vercel, then redeploy:
+
+| Variable              | Required | Default                    |
+| --------------------- | -------- | -------------------------- |
+| `DEEPSEEK_API_KEY`    | ✅       | —                          |
+| `DEEPSEEK_BASE_URL`   | optional | `https://api.deepseek.com` |
+| `DEEPSEEK_MODEL`      | optional | `deepseek-flash`           |
+| `DEEPSEEK_TIMEOUT_MS` | optional | `12000` (bounded 3–30 sec) |
+
+For an OpenAI-compatible replacement, the endpoint also accepts the generic
+aliases `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`.
+
+---
+
 # Git-as-sync · `/api/commit-bundle` + `/api/bundle`
 
 The **live** cross-device snapshot syncs through git instead of Supabase.

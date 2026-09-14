@@ -4863,6 +4863,198 @@
   transform: rotate(90deg);
 }
 
+/* ── AI Quick Input ────────────────────────────────────────────────────
+   A compact, liquid-light treatment: it signals intelligence without
+   turning the data-entry card into a second hero section. */
+.qi-intelligence-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 4px;
+  padding: 2px 7px;
+  border: 1px solid rgba(99, 102, 241, 0.18);
+  border-radius: 999px;
+  background:
+    linear-gradient(115deg, rgba(255, 255, 255, 0.82), rgba(238, 242, 255, 0.74)),
+    rgba(238, 242, 255, 0.7);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.9), 0 3px 10px rgba(99, 102, 241, 0.08);
+  color: #6366f1;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.075em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.qi-intelligence-badge.is-local {
+  border-color: rgba(120, 113, 108, 0.15);
+  background: rgba(250, 250, 249, 0.82);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.9);
+  color: #78716c;
+}
+
+.qi-ai-textarea {
+  background:
+    radial-gradient(circle at 98% 0%, rgba(224, 231, 255, 0.48), transparent 34%),
+    rgba(255, 255, 255, 0.9);
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+
+.qi-ai-textarea:focus {
+  border-color: rgba(99, 102, 241, 0.42);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08), 0 12px 34px rgba(79, 70, 229, 0.06);
+}
+
+.qi-ai-parse-btn {
+  position: relative;
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  overflow: hidden;
+  padding: 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 10px;
+  background: linear-gradient(125deg, #6366f1 0%, #7c6ee7 48%, #4f8ce8 100%);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 7px 18px rgba(79, 70, 229, 0.2);
+  color: white;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.qi-ai-parse-btn::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 28%, rgba(255, 255, 255, 0.3) 48%, transparent 67%);
+  transform: translateX(-110%);
+  transition: transform 520ms ease;
+}
+
+.qi-ai-parse-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.28), 0 10px 22px rgba(79, 70, 229, 0.25);
+}
+
+.qi-ai-parse-btn:hover:not(:disabled)::after {
+  transform: translateX(110%);
+}
+
+.qi-ai-parse-btn:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
+}
+
+.qi-ai-parse-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+  box-shadow: none;
+}
+
+.qi-ai-spinner {
+  animation: qiAiSpin 0.8s linear infinite;
+}
+
+@keyframes qiAiSpin {
+  to { transform: rotate(360deg); }
+}
+
+.qi-ai-privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: #a8a29e;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.qi-ai-result {
+  position: relative;
+  margin-top: 10px;
+  overflow: hidden;
+  padding: 10px 12px;
+  border: 1px solid rgba(99, 102, 241, 0.12);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 2% 0%, rgba(199, 210, 254, 0.38), transparent 38%),
+    linear-gradient(120deg, rgba(248, 250, 252, 0.96), rgba(245, 247, 255, 0.82));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), 0 8px 24px rgba(99, 102, 241, 0.06);
+  animation: qiAiResultIn 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.qi-ai-result.is-fallback {
+  border-color: rgba(217, 119, 6, 0.13);
+  background:
+    radial-gradient(circle at 2% 0%, rgba(254, 243, 199, 0.48), transparent 38%),
+    rgba(255, 253, 248, 0.9);
+}
+
+@keyframes qiAiResultIn {
+  from { opacity: 0; transform: translateY(-4px); filter: blur(1px); }
+  to { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+
+.qi-ai-result-heading {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #57534e;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.qi-ai-result-orb {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #eef2ff, #dbeafe);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), 0 3px 9px rgba(79, 70, 229, 0.12);
+  color: #6366f1;
+}
+
+.qi-ai-result.is-fallback .qi-ai-result-orb {
+  background: linear-gradient(145deg, #fffbeb, #fef3c7);
+  color: #d97706;
+}
+
+.qi-ai-model {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  color: #8b8aa6;
+  font-size: 9.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+}
+
+.qi-ai-result-summary,
+.qi-ai-diagnostic {
+  margin: 5px 0 0 27px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.qi-ai-result-summary { color: #059669; }
+.qi-ai-diagnostic { color: #a8a29e; }
+.qi-ai-diagnostic.is-warning { color: #d97706; }
+.qi-ai-diagnostic.is-error { color: #f43f5e; }
+
+@media (max-width: 640px) {
+  .qi-ai-privacy {
+    width: 100%;
+    margin-left: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .qi-collapse,
   .qi-collapse.is-open,
@@ -4886,6 +5078,21 @@
   }
   .qi-chevron {
     transition: none;
+  }
+  .qi-ai-parse-btn,
+  .qi-ai-textarea {
+    transition: none;
+  }
+  .qi-ai-parse-btn:hover:not(:disabled),
+  .qi-ai-parse-btn:active:not(:disabled) {
+    transform: none;
+  }
+  .qi-ai-parse-btn::after {
+    display: none;
+  }
+  .qi-ai-spinner,
+  .qi-ai-result {
+    animation: none;
   }
 }
 
