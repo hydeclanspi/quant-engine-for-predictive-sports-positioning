@@ -1406,7 +1406,7 @@ export default function NewInvestmentPage() {
         >
           <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron qi-gold-chevron${quickShown ? ' is-open' : ''}`} />
           <span className="qi-quick-title">Quick Input</span>
-          <span className="ml-1 px-[5px] py-[0.5px] rounded border border-indigo-200 bg-indigo-50 text-[7.5px] font-semibold uppercase tracking-[0.08em] text-indigo-500">Beta</span>
+          <span className="qi-beta-badge ml-1">Beta</span>
           <span className="qi-quick-subtitle ml-1">大模型自然语言快捷录入</span>
         </button>
 
@@ -1429,9 +1429,7 @@ export default function NewInvestmentPage() {
                 }}
                 maxLength={AI_PARSE_MAX_TEXT_LENGTH}
                 readOnly={quickInputHasStructuredResult}
-                placeholder={isPreview
-                  ? '欢迎体验 · 在此粘贴一句话即可自动解析为结构化投资单\n例如：曼城 win, 赔率 1.85, 变量 α 1.3, 变量 δ 0.72, 策略 Directional, 仓位 150'
-                  : '示例：利兹联 win/平 拜仁, conf 3.5, odds 7.4, fse 0.72, mode 半, input 180\n或：arsenal W, chelsea D, conf 55 60, odds 1.8 3.2, mode 常规-稳'}
+                placeholder={'示例：1. 利兹联1-2拜仁 conf 0.45 odds 4.3 fse 0.72 mode 赌一把  阿森纳2-0利物浦 odds 3.9 conf 0.71  140块\n2. 巴萨3-3皇马 odds 7.5 20块'}
                 rows={quickInputHasStructuredResult ? Math.min(16, 4 + quickInputMatchCount * 3) : 3}
                 aria-label={quickInputHasStructuredResult ? '解析后的结构化投资数据' : '自然语言投资描述'}
                 aria-describedby="quick-input-privacy"

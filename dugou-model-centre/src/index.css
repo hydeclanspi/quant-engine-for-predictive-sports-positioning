@@ -4866,22 +4866,52 @@
 .qi-gold-chevron {
   color: #a87527;
   filter: drop-shadow(0 1px 1px rgba(100, 67, 16, 0.14));
-  animation: qiGoldChevronFlow 4.8s ease-in-out infinite;
 }
 
 .qi-quick-title {
-  background: linear-gradient(105deg, #654514 0%, #8e6120 18%, #d1a653 36%, #e1c27d 48%, #a87325 62%, #d6ae5e 78%, #6b4816 100%);
-  background-clip: text;
-  background-position: 0% 50%;
-  background-size: 245% 100%;
-  color: #8c621f;
+  color: #8e6424;
   font-weight: 560;
   letter-spacing: 0.005em;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
   text-shadow: 0 1px 0 rgba(255, 249, 229, 0.28);
-  animation: qiGoldFluid 4.8s ease-in-out infinite;
   transition: filter 180ms ease;
+}
+
+.qi-beta-badge {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  overflow: hidden;
+  min-height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px 0;
+  border: 1px solid rgba(50, 99, 145, 0.38);
+  border-radius: 5px;
+  background: linear-gradient(112deg, #1e466d 0%, #356e9d 23%, #73a2bd 43%, #416f98 58%, #244e78 78%, #5c8caa 100%);
+  background-position: 0% 50%;
+  background-size: 260% 100%;
+  box-shadow:
+    inset 0 1px rgba(222, 241, 250, 0.34),
+    inset 0 -1px rgba(8, 38, 67, 0.2),
+    0 2px 7px rgba(35, 81, 120, 0.16);
+  color: #f5fbff;
+  font-size: 7.5px;
+  font-weight: 720;
+  letter-spacing: 0.095em;
+  line-height: 1;
+  text-shadow: 0 1px 1px rgba(7, 34, 58, 0.28);
+  text-transform: uppercase;
+  animation: qiBetaBlueFlow 3.9s ease-in-out infinite;
+}
+
+.qi-beta-badge::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(104deg, transparent 18%, rgba(225, 242, 250, 0.2) 42%, rgba(255, 255, 255, 0.05) 54%, transparent 76%);
+  content: '';
+  transform: translateX(-105%);
+  animation: qiBetaBlueSheen 3.9s cubic-bezier(0.45, 0, 0.25, 1) infinite;
 }
 
 .qi-quick-subtitle {
@@ -4891,20 +4921,14 @@
   letter-spacing: 0.008em;
 }
 
-@keyframes qiGoldFluid {
+@keyframes qiBetaBlueFlow {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
 
-@keyframes qiGoldChevronFlow {
-  0%, 100% {
-    color: #8f631f;
-    filter: drop-shadow(0 1px 1px rgba(100, 67, 16, 0.12));
-  }
-  50% {
-    color: #d0a450;
-    filter: drop-shadow(0 1px 2px rgba(165, 116, 36, 0.22));
-  }
+@keyframes qiBetaBlueSheen {
+  0%, 12% { transform: translateX(-105%); }
+  62%, 100% { transform: translateX(115%); }
 }
 
 .qi-trigger:hover .qi-quick-title {
@@ -5256,8 +5280,8 @@
   .qi-chevron {
     transition: none;
   }
-  .qi-gold-chevron,
-  .qi-quick-title {
+  .qi-beta-badge,
+  .qi-beta-badge::after {
     animation: none;
   }
   .qi-ai-parse-btn,
