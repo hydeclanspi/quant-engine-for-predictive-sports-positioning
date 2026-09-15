@@ -27,7 +27,7 @@ export const SETTLEMENT_PARSE_SYSTEM_PROMPT = `
 
 字段规则：
 - revenues 是整张单收回的实际总收入（含本金）；明确亏损并且收入为零时输出 0；未提供时输出 null。
-- results 只填用户明确提供的实际比分/赛果，否则 ""。
+- results 优先填写用户明确提供的实际比分/赛果；若用户只明确表示“中了/命中/hit”等、没有提供实际结果，则复制该场 prediction 作为 results 的预填值，不得留空。
 - isCorrect 表示原预测是否命中。用户明说“中/未中”时直接规范为 true/false。
 - 若用户没有明说中没中、但提供了实际比分或结果，必须将它与 PENDING_RECORDS 中该场的 prediction 比较并自动输出 true/false。精确比分、win/draw/lose（及胜/平/负）和标准数字让球均应确定性计算，不能因为用户没写“中”就输出 null。
 - 多个 Entry 视为备选预测：任一项确定命中则为 true；全部确定未中才为 false；若没有命中且仍含无法判断的项才输出 null 并警告。只有预测语义或赛果确实不足以唯一判断时才允许 isCorrect=null。

@@ -142,7 +142,9 @@ export const parseSingleMatchSettlementLocally = (rawText, combo) => {
   const isCorrect = explicitHit !== null
     ? explicitHit
     : score ? evaluateEntry(match.entry, score.home, score.away) : null
-  const results = score ? `${score.home}-${score.away}` : ''
+  const results = score
+    ? `${score.home}-${score.away}`
+    : explicitHit === true ? String(match.entry || '') : ''
   const postNote = postNoteMatch?.[1]?.trim() || ''
   const hasPayload = results || isCorrect !== null || matchRating !== null || normalizedRep !== null || postNote
   const warnings = []
@@ -255,6 +257,7 @@ export const resolveAiSettlementParse = (result, pendingCombos) => {
       matchPatches.push({
         ...parsedMatch,
         matchIndex,
+        results: parsedMatch.results || (parsedMatch.isCorrect === true ? String(pendingMatch?.entry || '') : ''),
         isCorrect: parsedMatch.isCorrect === null || parsedMatch.isCorrect === undefined
           ? inferredHit
           : parsedMatch.isCorrect,

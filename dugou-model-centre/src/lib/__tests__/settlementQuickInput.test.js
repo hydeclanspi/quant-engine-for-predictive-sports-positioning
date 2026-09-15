@@ -61,6 +61,7 @@ describe('settlement Quick Input matching', () => {
 
     const hit = parseSingleMatchSettlementLocally('中了', singleContext)
     expect(hit.settlements[0].matches[0]).toMatchObject({
+      results: 'win',
       isCorrect: true,
       matchRating: 0.8,
       matchRep: 0,
@@ -79,6 +80,8 @@ describe('settlement Quick Input matching', () => {
     expect(inferIsCorrectFromResult('win', '0-1')).toBe(false)
     expect(inferIsCorrectFromResult('-1 win', '3-1')).toBe(true)
     expect(inferIsCorrectFromResult('-1 win', '2-1')).toBe(false)
+    expect(inferIsCorrectFromResult('-1 lose', '3-2')).toBe(false)
+    expect(inferIsCorrectFromResult('-1 draw', '3-2')).toBe(true)
     expect(inferIsCorrectFromResult('特殊玩法, win', '0-1')).toBeNull()
     expect(inferIsCorrectFromResult('2-1', '2-1')).toBe(true)
   })
@@ -91,5 +94,15 @@ describe('settlement Quick Input matching', () => {
       }],
     }, pending)
     expect(result.resolved[0].matchPatches[0].isCorrect).toBe(false)
+  })
+
+  it('prefills the prediction as Results when AI only reports a hit', () => {
+    const result = resolveAiSettlementParse({
+      settlements: [{
+        pendingId: 'inv_1', reference: '', revenues: null,
+        matches: [{ matchIndex: 0, homeTeam: '', awayTeam: '', results: '', isCorrect: true }],
+      }],
+    }, pending)
+    expect(result.resolved[0].matchPatches[0]).toMatchObject({ results: 'win', isCorrect: true })
   })
 })
