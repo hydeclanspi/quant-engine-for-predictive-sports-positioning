@@ -23,6 +23,8 @@ import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
+const QI_AUTO_UNFURL_DELAY_MS = 520
+const QI_AUTO_UNFURL_GLOW_MS = 1250
 
 // 默认 Kelly 分母映射（基于需求文档 S4）
 // 保险产品用较小分母（更激进），赌一把用较大分母（更保守）
@@ -332,8 +334,9 @@ export default function NewInvestmentPage() {
   const [historyPrefillApplied, setHistoryPrefillApplied] = useState({})
   const [historyFloatDismissed, setHistoryFloatDismissed] = useState({})
   const [quickInputText, setQuickInputText] = useState('')
-  // Quick Input 是本页的主入口，进入页面即展开；用户仍可手动收起。
-  const [quickInputOpen, setQuickInputOpen] = useState(true)
+  // 首屏自动展卷后保持展开；用户仍可手动收起。
+  const [quickInputOpen, setQuickInputOpen] = useState(false)
+  const [quickIntroUnfurl, setQuickIntroUnfurl] = useState(false)
   const [quickInputResult, setQuickInputResult] = useState(null)
   const [quickInputPhase, setQuickInputPhase] = useState('idle')
   const [quickInputMeta, setQuickInputMeta] = useState(null)
@@ -342,10 +345,38 @@ export default function NewInvestmentPage() {
   const [systemConfig] = useState(() => getSystemConfig())
   const persistTimerRef = useRef(null)
   const persistIdleRef = useRef(null)
+  const quickUnfurlTimersRef = useRef([])
   const quickAiAbortRef = useRef(null)
   const quickInputSourceRef = useRef('')
 
   const quickShown = quickInputOpen
+
+  useEffect(() => {
+    let reducedMotion = false
+    try {
+      reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    } catch {
+      // matchMedia unavailable: use the normal animated path.
+    }
+    if (reducedMotion) {
+      setQuickInputOpen(true)
+      return undefined
+    }
+
+    const timers = quickUnfurlTimersRef.current
+    timers.push(window.setTimeout(() => {
+      setQuickIntroUnfurl(true)
+      setQuickInputOpen(true)
+    }, QI_AUTO_UNFURL_DELAY_MS))
+    timers.push(window.setTimeout(() => {
+      setQuickIntroUnfurl(false)
+    }, QI_AUTO_UNFURL_DELAY_MS + QI_AUTO_UNFURL_GLOW_MS))
+
+    return () => {
+      timers.forEach((timer) => window.clearTimeout(timer))
+      quickUnfurlTimersRef.current = []
+    }
+  }, [])
 
   useEffect(() => () => quickAiAbortRef.current?.abort(), [])
 
@@ -1229,17 +1260,23 @@ export default function NewInvestmentPage() {
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-4 mb-5">
         <button
-          onClick={() => setQuickInputOpen((open) => !open)}
+          onClick={() => {
+            quickUnfurlTimersRef.current.forEach((timer) => window.clearTimeout(timer))
+            quickUnfurlTimersRef.current = []
+            setQuickIntroUnfurl(false)
+            setQuickInputOpen((open) => !open)
+          }}
+          aria-expanded={quickShown}
           className="qi-trigger motion-v2-ghost-btn flex items-center gap-2 text-sm text-stone-600 transition-colors w-full"
         >
           <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron qi-gold-chevron${quickShown ? ' is-open' : ''}`} />
           <span className="qi-quick-title">Quick Input</span>
           <span className="ml-1 px-[5px] py-[0.5px] rounded border border-indigo-200 bg-indigo-50 text-[7.5px] font-semibold uppercase tracking-[0.08em] text-indigo-500">Beta</span>
-          <span className="text-[11px] text-stone-400 ml-1">大模型自然语言快捷录入</span>
+          <span className="qi-quick-subtitle ml-1">大模型自然语言快捷录入</span>
         </button>
 
         <div
-          className={`qi-collapse${quickShown ? ' is-open' : ''}`}
+          className={`qi-collapse${quickShown ? ' is-open' : ''}${quickIntroUnfurl ? ' is-peeking' : ''}`}
           inert={quickShown ? undefined : ''}
         >
           <div className="qi-collapse-inner">

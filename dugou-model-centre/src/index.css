@@ -4866,18 +4866,45 @@
 .qi-gold-chevron {
   color: #a87527;
   filter: drop-shadow(0 1px 1px rgba(100, 67, 16, 0.14));
+  animation: qiGoldChevronFlow 4.8s ease-in-out infinite;
 }
 
 .qi-quick-title {
-  background: linear-gradient(105deg, #6f4d19 0%, #a87527 31%, #d5ad61 52%, #93631f 75%, #684716 100%);
+  background: linear-gradient(105deg, #654514 0%, #8e6120 18%, #d1a653 36%, #f0d495 48%, #a87325 62%, #d6ae5e 78%, #6b4816 100%);
   background-clip: text;
+  background-position: 0% 50%;
+  background-size: 245% 100%;
   color: #8c621f;
   font-weight: 560;
   letter-spacing: 0.005em;
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   text-shadow: 0 1px 0 rgba(255, 249, 229, 0.28);
+  animation: qiGoldFluid 4.8s ease-in-out infinite;
   transition: filter 180ms ease;
+}
+
+.qi-quick-subtitle {
+  color: #9a7130;
+  font-size: 11px;
+  font-weight: 540;
+  letter-spacing: 0.008em;
+}
+
+@keyframes qiGoldFluid {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes qiGoldChevronFlow {
+  0%, 100% {
+    color: #8f631f;
+    filter: drop-shadow(0 1px 1px rgba(100, 67, 16, 0.12));
+  }
+  50% {
+    color: #d0a450;
+    filter: drop-shadow(0 1px 2px rgba(165, 116, 36, 0.22));
+  }
 }
 
 .qi-trigger:hover .qi-quick-title {
@@ -5139,6 +5166,10 @@
   }
   .qi-chevron {
     transition: none;
+  }
+  .qi-gold-chevron,
+  .qi-quick-title {
+    animation: none;
   }
   .qi-ai-parse-btn,
   .qi-ai-textarea,
