@@ -3,8 +3,8 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 
 // Components
 import Sidebar from './components/Sidebar'
-import TopBar from './components/TopBar'
 import ModernTopBar from './components/ModernTopBar'
+import TempTitleTopBar from './components/TempTitleTopBar'
 import BottomBar from './components/BottomBar'
 import Modal from './components/Modal'
 import DemoBubble from './components/DemoBubble'
@@ -26,7 +26,7 @@ import { trackRouteAccess } from './lib/accessTracking'
 import { useDisplayMode, PREVIEW_MODE } from './lib/displayMode'
 
 const LAYOUT_KEY = 'dugou:layout-mode'
-const VALID_MODES = ['topbar', 'sidebar', 'modern']
+const VALID_MODES = ['modern', 'temp_title', 'sidebar']
 const SYSTEM_CONFIG_KEY = 'dugou.system_config.v1'
 const PAGE_AMBIENT_ROUTE_MAP = {
   '/': 'new',
@@ -168,11 +168,11 @@ function App() {
     )
   }
 
-  /* ── Topbar layout (default) ── */
-  if (layoutMode === 'topbar') {
+  /* ── temp_title — isolated workspace for the next UI/theme generation ── */
+  if (layoutMode === 'temp_title') {
     return (
-      <div className="flex flex-col h-screen bg-stone-100/50">
-        <TopBar />
+      <div className="flex flex-col h-screen theme-modern theme-temp-title" style={{ background: '#f7f8fa' }}>
+        <TempTitleTopBar />
         <main
           ref={mainScrollRef}
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"

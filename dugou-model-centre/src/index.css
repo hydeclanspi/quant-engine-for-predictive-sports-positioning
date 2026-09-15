@@ -5918,6 +5918,14 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
+/*
+ * temp_title begins from the current Modern baseline. New visual-system work
+ * is scoped here so the Modern layout remains the stable preserved version.
+ */
+.theme-temp-title {
+  --temp-title-generation: 1;
+}
+
 /* ── Page layout — generous, centered, airy ── */
 .theme-modern .page-shell {
   padding: clamp(24px, 3vw, 48px) clamp(20px, 4vw, 56px);

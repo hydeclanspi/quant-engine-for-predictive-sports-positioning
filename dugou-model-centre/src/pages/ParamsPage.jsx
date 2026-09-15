@@ -198,7 +198,7 @@ const PAGE_AMBIENT_TONE_OPTIONS = [
   { value: 'soft_blue', label: '淡蓝色' },
   { value: 'soft_orange', label: '浅橙色' },
 ]
-const LAYOUT_MODE_OPTIONS = ['modern', 'topbar', 'sidebar']
+const LAYOUT_MODE_OPTIONS = ['modern', 'temp_title', 'sidebar']
 const ACCESS_LOG_PAGE_SIZE = 6
 const FIT_TRAJECTORY_WINDOW_OPTIONS = [24, 36, 48, 72, 96, 120, 150, 0]
 const FIT_TRAJECTORY_MODE_OPTIONS = [
@@ -3959,7 +3959,7 @@ export default function ParamsPage({ openModal }) {
   }
 
   const resetPageAmbientThemes = (defaultThemes = PAGE_AMBIENT_THEME_DEFAULTS) => {
-    applyPageAmbientThemes(defaultThemes, { layoutMode: 'modern' })
+    applyPageAmbientThemes(defaultThemes)
   }
 
   const openThemeSettingsModal = () => {
@@ -4255,7 +4255,14 @@ export default function ParamsPage({ openModal }) {
     () => WEIGHT_FIELDS.reduce((sum, field) => sum + Number(config[field.key] || 0), 0),
     [config],
   )
-  const currentLayoutMode = config.layoutMode || 'modern'
+  const currentLayoutMode = LAYOUT_MODE_OPTIONS.includes(config.layoutMode) ? config.layoutMode : 'modern'
+  const selectLayoutMode = (layoutMode) => {
+    if (!LAYOUT_MODE_OPTIONS.includes(layoutMode)) return
+    saveSystemConfig({ layoutMode })
+    localStorage.setItem('dugou:layout-mode', layoutMode)
+    window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
+    setConfig((prev) => ({ ...prev, layoutMode }))
+  }
 
   return (
     <div className="page-shell page-content-wide console-motion-scope">
@@ -4833,11 +4840,7 @@ export default function ParamsPage({ openModal }) {
         <div className="grid grid-cols-3 gap-4">
           {/* Modern */}
           <button
-            onClick={() => {
-              saveSystemConfig({ layoutMode: 'modern' })
-              localStorage.setItem('dugou:layout-mode', 'modern')
-              window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: 'modern' } }))
-            }}
+            onClick={() => selectLayoutMode('modern')}
             className={`p-4 rounded-xl border-2 transition-all text-left ${
               currentLayoutMode === 'modern'
                 ? 'border-neutral-900 bg-neutral-50'
@@ -4856,38 +4859,30 @@ export default function ParamsPage({ openModal }) {
             </div>
             <p className="text-xs text-stone-400">Vercel-inspired. Clean monochrome, sharp typography, system-native feel.</p>
           </button>
-          {/* Topbar */}
+          {/* temp_title */}
           <button
-            onClick={() => {
-              saveSystemConfig({ layoutMode: 'topbar' })
-              localStorage.setItem('dugou:layout-mode', 'topbar')
-              window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: 'topbar' } }))
-            }}
+            onClick={() => selectLayoutMode('temp_title')}
             className={`p-4 rounded-xl border-2 transition-all text-left ${
-              currentLayoutMode === 'topbar'
-                ? 'border-amber-400 bg-amber-50/50'
+              currentLayoutMode === 'temp_title'
+                ? 'border-sky-500 bg-sky-50/60'
                 : 'border-stone-200 hover:border-stone-300 bg-stone-50'
             }`}
           >
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-lg bg-stone-200 flex flex-col overflow-hidden">
-                <div className="h-2 bg-amber-400 w-full" />
-                <div className="flex-1 bg-stone-100" />
+              <div className="w-8 h-8 rounded-md bg-white border border-sky-200 flex flex-col overflow-hidden">
+                <div className="h-[5px] bg-gradient-to-r from-sky-500 to-indigo-500 w-full" />
+                <div className="flex-1 bg-sky-50/60" />
               </div>
-              <span className="text-sm font-medium text-stone-700">Topbar</span>
-              {currentLayoutMode === 'topbar' && (
-                <span className="text-[10px] px-2 py-0.5 bg-amber-100 text-amber-700 rounded-full ml-auto">Active</span>
+              <span className="text-sm font-medium text-stone-700">temp_title</span>
+              {currentLayoutMode === 'temp_title' && (
+                <span className="text-[10px] px-2 py-0.5 bg-sky-600 text-white rounded-full ml-auto">Active</span>
               )}
             </div>
-            <p className="text-xs text-stone-400">Glassmorphism topbar with warm amber accents and brand logo.</p>
+            <p className="text-xs text-stone-400">Next-generation UI workspace. Future theme upgrades land here.</p>
           </button>
           {/* Sidebar */}
           <button
-            onClick={() => {
-              saveSystemConfig({ layoutMode: 'sidebar' })
-              localStorage.setItem('dugou:layout-mode', 'sidebar')
-              window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: 'sidebar' } }))
-            }}
+            onClick={() => selectLayoutMode('sidebar')}
             className={`p-4 rounded-xl border-2 transition-all text-left ${
               currentLayoutMode === 'sidebar'
                 ? 'border-amber-400 bg-amber-50/50'
