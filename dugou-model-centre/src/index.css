@@ -2719,6 +2719,154 @@
   transition: transform 140ms ease-out;
 }
 
+.mn-brand-measure {
+  width: 0;
+  height: 0;
+  flex: 0 0 0;
+  pointer-events: none;
+}
+
+/* Compact liquid morph switch — active label blooms, inactive side is icon-only. */
+.mn-layout-morph {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 32px;
+  margin-left: 3px;
+  padding: 2px;
+  flex-shrink: 0;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 11px;
+  background:
+    radial-gradient(circle at 28% -10%, rgba(255, 255, 255, 0.98), transparent 56%),
+    linear-gradient(135deg, rgba(241, 245, 249, 0.82), rgba(238, 242, 255, 0.62));
+  box-shadow:
+    0 5px 14px -9px rgba(30, 41, 59, 0.46),
+    inset 0 1px 0 rgba(255, 255, 255, 0.95),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.08);
+  backdrop-filter: blur(15px) saturate(155%);
+  -webkit-backdrop-filter: blur(15px) saturate(155%);
+}
+
+.mn-layout-morph::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  width: 48px;
+  height: 40px;
+  left: 36%;
+  top: -22px;
+  border-radius: 50%;
+  background: rgba(147, 197, 253, 0.32);
+  filter: blur(10px);
+  pointer-events: none;
+}
+
+.mn-layout-choice {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0;
+  width: 27px;
+  height: 26px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: #94a3b8;
+  white-space: nowrap;
+  transition:
+    width 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    gap 220ms cubic-bezier(0.22, 1, 0.36, 1),
+    padding 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    color 180ms ease,
+    background 220ms ease,
+    border-color 220ms ease,
+    box-shadow 220ms ease,
+    transform 180ms ease;
+}
+
+.mn-layout-choice::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(112deg, transparent 18%, rgba(255, 255, 255, 0.76) 47%, transparent 72%);
+  transform: translateX(-130%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mn-layout-choice > svg {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+}
+
+.mn-layout-choice > span {
+  position: relative;
+  z-index: 1;
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 650;
+  letter-spacing: -0.08px;
+  transition: max-width 230ms cubic-bezier(0.22, 1, 0.36, 1), opacity 120ms ease;
+}
+
+.mn-layout-choice:hover {
+  color: #475569;
+  background: rgba(255, 255, 255, 0.58);
+  transform: translateY(-0.5px);
+}
+
+.mn-layout-choice.is-active {
+  width: 69px;
+  gap: 5px;
+  padding: 0 8px;
+  color: #334155;
+  border-color: rgba(148, 163, 184, 0.2);
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(241, 245, 249, 0.88));
+  box-shadow:
+    0 4px 10px -7px rgba(30, 41, 59, 0.7),
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 rgba(148, 163, 184, 0.09);
+}
+
+.mn-layout-choice--title.is-active {
+  color: #4f46e5;
+  border-color: rgba(129, 140, 248, 0.22);
+  background:
+    radial-gradient(circle at 22% 0%, rgba(255, 255, 255, 1), transparent 52%),
+    linear-gradient(142deg, rgba(239, 246, 255, 0.98), rgba(238, 242, 255, 0.94));
+  box-shadow:
+    0 5px 12px -8px rgba(79, 70, 229, 0.58),
+    inset 0 1px 0 #fff,
+    inset 0 -1px 0 rgba(99, 102, 241, 0.1);
+}
+
+.mn-layout-choice.is-active > span {
+  max-width: 42px;
+  opacity: 1;
+  transition-delay: 55ms;
+}
+
+.mn-layout-choice.is-active::after {
+  animation: mnLayoutLiquidGlint 680ms cubic-bezier(0.22, 1, 0.36, 1) 1;
+}
+
+@keyframes mnLayoutLiquidGlint {
+  0% { transform: translateX(-130%); opacity: 0; }
+  22% { opacity: 0.72; }
+  100% { transform: translateX(135%); opacity: 0; }
+}
+
 /* Breadcrumb separator */
 .mn-sep {
   color: #d4d4d4;
@@ -2935,7 +3083,11 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .seasons-star-orbit { animation: none; }
+  .seasons-star-orbit,
+  .mn-layout-choice.is-active::after { animation: none; }
+
+  .mn-layout-choice,
+  .mn-layout-choice > span { transition: none; }
 }
 
 .mn-dropdown-label {

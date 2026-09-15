@@ -11,8 +11,10 @@ import {
   FileText,
   Flag,
   Swords,
+  PanelsTopLeft,
+  Sparkles,
 } from 'lucide-react'
-import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode } from '../lib/localData'
+import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode, saveSystemConfig } from '../lib/localData'
 import C15DiamondCutV1Logo from './C15DiamondCutV1Logo'
 import PreviewModeToggle from './PreviewModeToggle'
 
@@ -73,7 +75,59 @@ const ConsoleIcon = ({ size = 14, className = '' }) => (
   </svg>
 )
 
-export default function ModernTopBar() {
+const LAYOUT_SWITCH_DELAY_MS = 240
+
+function LayoutMorphSwitch({ layoutMode }) {
+  const activeMode = layoutMode === 'temp_title' ? 'temp_title' : 'modern'
+  const [visualMode, setVisualMode] = useState(activeMode)
+  const switchTimerRef = useRef(null)
+
+  useEffect(() => {
+    setVisualMode(activeMode)
+  }, [activeMode])
+
+  useEffect(() => () => window.clearTimeout(switchTimerRef.current), [])
+
+  const selectMode = (nextMode) => {
+    if (nextMode === activeMode || switchTimerRef.current) return
+    setVisualMode(nextMode)
+    switchTimerRef.current = window.setTimeout(() => {
+      saveSystemConfig({ layoutMode: nextMode })
+      window.localStorage.setItem('dugou:layout-mode', nextMode)
+      window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: nextMode } }))
+      switchTimerRef.current = null
+    }, LAYOUT_SWITCH_DELAY_MS)
+  }
+
+  return (
+    <div className="mn-layout-morph" role="group" aria-label="界面主题切换">
+      <button
+        type="button"
+        aria-label="切换到 Modern"
+        aria-pressed={visualMode === 'modern'}
+        title="Modern"
+        onClick={() => selectMode('modern')}
+        className={`mn-layout-choice mn-layout-choice--modern ${visualMode === 'modern' ? 'is-active' : ''}`}
+      >
+        <PanelsTopLeft size={13} strokeWidth={1.8} aria-hidden="true" />
+        <span>Modern</span>
+      </button>
+      <button
+        type="button"
+        aria-label="切换到 temp_title"
+        aria-pressed={visualMode === 'temp_title'}
+        title="temp_title"
+        onClick={() => selectMode('temp_title')}
+        className={`mn-layout-choice mn-layout-choice--title ${visualMode === 'temp_title' ? 'is-active' : ''}`}
+      >
+        <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
+        <span>Title</span>
+      </button>
+    </div>
+  )
+}
+
+export default function ModernTopBar({ layoutMode = 'modern' }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dataVersion, setDataVersion] = useState(0)
   const [brandNameOffset, setBrandNameOffset] = useState(0)
@@ -194,8 +248,13 @@ export default function ModernTopBar() {
         </span>
       </button>
 
+      <span ref={brandSepRef} className="mn-brand-measure" aria-hidden="true" />
+
+      {/* ── Modern / temp_title liquid morph switch ── */}
+      <LayoutMorphSwitch layoutMode={layoutMode} />
+
       {/* ── Breadcrumb separator ── */}
-      <span ref={brandSepRef} className="mn-sep">/</span>
+      <span className="mn-sep">/</span>
 
       {/* ── Page context ── */}
       <span className="mn-page-title">{pageTitle}</span>

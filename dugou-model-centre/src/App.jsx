@@ -150,7 +150,7 @@ function App() {
   if (layoutMode === 'modern') {
     return (
       <div className="flex flex-col h-screen theme-modern" style={{ background: '#f7f8fa' }}>
-        <ModernTopBar />
+        <ModernTopBar layoutMode="modern" />
         <main
           ref={mainScrollRef}
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"

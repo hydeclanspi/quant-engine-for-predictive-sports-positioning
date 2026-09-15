@@ -6,5 +6,5 @@ import ModernTopBar from './ModernTopBar'
  * stable Modern layout remains untouched.
  */
 export default function TempTitleTopBar() {
-  return <ModernTopBar />
+  return <ModernTopBar layoutMode="temp_title" />
 }
