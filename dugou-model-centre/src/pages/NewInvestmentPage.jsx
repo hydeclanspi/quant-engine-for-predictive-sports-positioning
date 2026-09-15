@@ -22,23 +22,6 @@ import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
-// Quick Input 首屏「秀一下」：首次进入（演示态）时面板自动下拉展示再收回，
-// 每会话仅一次。静息态保持折叠——克制、精致才是首屏的第一印象。
-const QI_PEEK_KEY = 'dugou.quick_input_peek.v1'
-// 等首屏完全落定后再「展卷」——沿用 DemoBubble 原本的浮现时机 (2770ms)，
-// 此刻页面已渲染完毕，动效不再与加载抢主线程、不卡顿。DemoBubble 则顺延到
-// 本动画播放完 + 0.7s 之后才浮现 (见 DemoBubble.APPEAR_DELAY_MS)，两者不打架。
-const QI_PEEK_DELAY_MS = 2770 // 首屏打开后 x 秒「展卷」(x = DemoBubble 原浮现延时)
-const QI_PEEK_HOLD_MS = 2050 // 充分展示后再「收锋」弹回
-
-const prefersReducedMotion = () => {
-  try {
-    return window.matchMedia('(prefers-reduced-motion: reduce)').matches
-  } catch {
-    return false
-  }
-}
-
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
 
 // 默认 Kelly 分母映射（基于需求文档 S4）
@@ -349,11 +332,8 @@ export default function NewInvestmentPage() {
   const [historyPrefillApplied, setHistoryPrefillApplied] = useState({})
   const [historyFloatDismissed, setHistoryFloatDismissed] = useState({})
   const [quickInputText, setQuickInputText] = useState('')
-  // 面板对所有人都静息折叠——收起来才是更精致的首屏第一印象。首次进入的演示访客
-  // 改为获得一次性的「秀一下」（自动下拉再弹回），让功能自我介绍，又不至于把首页
-  // 留在更繁忙的展开态。
-  const [quickInputOpen, setQuickInputOpen] = useState(false)
-  const [quickPeeking, setQuickPeeking] = useState(false)
+  // Quick Input 是本页的主入口，进入页面即展开；用户仍可手动收起。
+  const [quickInputOpen, setQuickInputOpen] = useState(true)
   const [quickInputResult, setQuickInputResult] = useState(null)
   const [quickInputPhase, setQuickInputPhase] = useState('idle')
   const [quickInputMeta, setQuickInputMeta] = useState(null)
@@ -362,36 +342,10 @@ export default function NewInvestmentPage() {
   const [systemConfig] = useState(() => getSystemConfig())
   const persistTimerRef = useRef(null)
   const persistIdleRef = useRef(null)
-  const quickPeekTimersRef = useRef([])
   const quickAiAbortRef = useRef(null)
   const quickInputSourceRef = useRef('')
 
-  // 首屏「秀一下」：演示态、每会话一次、尊重 prefers-reduced-motion。面板静息折叠，
-  // 仅首次进入时自动下拉展示再收回，让功能自我介绍而不破坏首屏的克制美感。
-  const quickShown = quickInputOpen || quickPeeking
-  useEffect(() => {
-    if (!isPreview) return undefined
-    try {
-      if (window.sessionStorage.getItem(QI_PEEK_KEY) === '1') return undefined
-      window.sessionStorage.setItem(QI_PEEK_KEY, '1')
-    } catch {
-      // sessionStorage 不可用——宁可不演示，也不要每次进入都弹
-      return undefined
-    }
-    if (prefersReducedMotion()) return undefined // 降级：保持折叠，不强加动效
-
-    const timers = quickPeekTimersRef.current
-    timers.push(window.setTimeout(() => setQuickPeeking(true), QI_PEEK_DELAY_MS))
-    timers.push(
-      window.setTimeout(() => setQuickPeeking(false), QI_PEEK_DELAY_MS + QI_PEEK_HOLD_MS),
-    )
-    return () => {
-      timers.forEach((t) => window.clearTimeout(t))
-      quickPeekTimersRef.current = []
-    }
-    // 仅挂载时执行一次；isPreview 在页面生命周期内稳定。
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  const quickShown = quickInputOpen
 
   useEffect(() => () => quickAiAbortRef.current?.abort(), [])
 
@@ -1275,24 +1229,17 @@ export default function NewInvestmentPage() {
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-4 mb-5">
         <button
-          onClick={() => {
-            // 手动点击优先于自动「秀一下」：取消在途定时器，避免面板在用户操作下被弹回。
-            quickPeekTimersRef.current.forEach((t) => window.clearTimeout(t))
-            quickPeekTimersRef.current = []
-            const next = !quickShown
-            setQuickPeeking(false)
-            setQuickInputOpen(next)
-          }}
-          className="motion-v2-ghost-btn flex items-center gap-2 text-sm text-stone-600 hover:text-amber-600 transition-colors w-full"
+          onClick={() => setQuickInputOpen((open) => !open)}
+          className="qi-trigger motion-v2-ghost-btn flex items-center gap-2 text-sm text-stone-600 transition-colors w-full"
         >
-          <ChevronRight size={14} className={`qi-chevron${quickShown ? ' is-open' : ''}`} />
-          <span className="font-medium">Quick Input</span>
+          <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron qi-gold-chevron${quickShown ? ' is-open' : ''}`} />
+          <span className="qi-quick-title">Quick Input</span>
           <span className="ml-1 px-[5px] py-[0.5px] rounded border border-indigo-200 bg-indigo-50 text-[7.5px] font-semibold uppercase tracking-[0.08em] text-indigo-500">Beta</span>
           <span className="text-[11px] text-stone-400 ml-1">大模型自然语言快捷录入</span>
         </button>
 
         <div
-          className={`qi-collapse${quickShown ? ' is-open' : ''}${quickPeeking ? ' is-peeking' : ''}`}
+          className={`qi-collapse${quickShown ? ' is-open' : ''}`}
           inert={quickShown ? undefined : ''}
         >
           <div className="qi-collapse-inner">

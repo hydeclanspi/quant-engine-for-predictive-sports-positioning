@@ -4863,6 +4863,31 @@
   transform: rotate(90deg);
 }
 
+.qi-gold-chevron {
+  color: #a87527;
+  filter: drop-shadow(0 1px 1px rgba(100, 67, 16, 0.14));
+}
+
+.qi-quick-title {
+  background: linear-gradient(105deg, #6f4d19 0%, #a87527 31%, #d5ad61 52%, #93631f 75%, #684716 100%);
+  background-clip: text;
+  color: #8c621f;
+  font-weight: 560;
+  letter-spacing: 0.005em;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 1px 0 rgba(255, 249, 229, 0.28);
+  transition: filter 180ms ease;
+}
+
+.qi-trigger:hover .qi-quick-title {
+  filter: brightness(1.08) saturate(1.04);
+}
+
+.qi-trigger:hover .qi-gold-chevron {
+  color: #b48029;
+}
+
 .qi-ai-textarea {
   background:
     radial-gradient(circle at 98% 0%, rgba(224, 231, 255, 0.48), transparent 34%),
