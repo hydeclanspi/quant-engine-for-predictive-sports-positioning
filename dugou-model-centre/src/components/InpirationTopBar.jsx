@@ -5,6 +5,6 @@ import ModernTopBar from './ModernTopBar'
  * It intentionally mirrors Modern today; future redesigns belong here so the
  * stable Modern layout remains untouched.
  */
-export default function TempTitleTopBar() {
-  return <ModernTopBar layoutMode="temp_title" />
+export default function InpirationTopBar() {
+  return <ModernTopBar layoutMode="inpiration" />
 }

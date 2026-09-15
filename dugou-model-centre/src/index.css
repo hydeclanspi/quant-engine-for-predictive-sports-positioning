@@ -2732,14 +2732,14 @@
   isolation: isolate;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  height: 32px;
-  margin-left: 3px;
-  padding: 2px;
+  gap: 1.65px;
+  height: 26.43px;
+  margin-left: 2.48px;
+  padding: 1.65px;
   flex-shrink: 0;
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.2);
-  border-radius: 11px;
+  border-radius: 9.09px;
   background:
     radial-gradient(circle at 28% -10%, rgba(255, 255, 255, 0.98), transparent 56%),
     linear-gradient(135deg, rgba(241, 245, 249, 0.82), rgba(238, 242, 255, 0.62));
@@ -2755,13 +2755,13 @@
   content: '';
   position: absolute;
   z-index: -1;
-  width: 48px;
-  height: 40px;
+  width: 39.65px;
+  height: 33.04px;
   left: 36%;
-  top: -22px;
+  top: -18.17px;
   border-radius: 50%;
   background: rgba(147, 197, 253, 0.32);
-  filter: blur(10px);
+  filter: blur(8.26px);
   pointer-events: none;
 }
 
@@ -2771,12 +2771,12 @@
   align-items: center;
   justify-content: center;
   gap: 0;
-  width: 27px;
-  height: 26px;
+  width: 22.3px;
+  height: 21.48px;
   padding: 0;
   overflow: hidden;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 6.61px;
   color: #94a3b8;
   white-space: nowrap;
   transition:
@@ -2802,6 +2802,8 @@
 }
 
 .mn-layout-choice > svg {
+  width: 10.74px;
+  height: 10.74px;
   flex: 0 0 auto;
   position: relative;
   z-index: 1;
@@ -2813,7 +2815,7 @@
   max-width: 0;
   opacity: 0;
   overflow: hidden;
-  font-size: 10px;
+  font-size: 8.26px;
   line-height: 1;
   font-weight: 650;
   letter-spacing: -0.08px;
@@ -2823,13 +2825,13 @@
 .mn-layout-choice:hover {
   color: #475569;
   background: rgba(255, 255, 255, 0.58);
-  transform: translateY(-0.5px);
+  transform: translateY(-0.41px);
 }
 
 .mn-layout-choice.is-active {
-  width: 69px;
-  gap: 5px;
-  padding: 0 8px;
+  width: 57px;
+  gap: 3.6px;
+  padding: 0 4px;
   color: #334155;
   border-color: rgba(148, 163, 184, 0.2);
   background: linear-gradient(145deg, rgba(255, 255, 255, 0.97), rgba(241, 245, 249, 0.88));
@@ -2839,7 +2841,7 @@
     inset 0 -1px 0 rgba(148, 163, 184, 0.09);
 }
 
-.mn-layout-choice--title.is-active {
+.mn-layout-choice--inpiration.is-active {
   color: #4f46e5;
   border-color: rgba(129, 140, 248, 0.22);
   background:
@@ -2852,7 +2854,7 @@
 }
 
 .mn-layout-choice.is-active > span {
-  max-width: 42px;
+  max-width: 38px;
   opacity: 1;
   transition-delay: 55ms;
 }
@@ -6071,11 +6073,11 @@
 }
 
 /*
- * temp_title begins from the current Modern baseline. New visual-system work
+ * inpiration begins from the current Modern baseline. New visual-system work
  * is scoped here so the Modern layout remains the stable preserved version.
  */
-.theme-temp-title {
-  --temp-title-generation: 1;
+.theme-inpiration {
+  --inpiration-generation: 1;
 }
 
 /* ── Page layout — generous, centered, airy ── */

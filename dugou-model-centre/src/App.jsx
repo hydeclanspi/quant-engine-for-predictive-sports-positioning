@@ -4,7 +4,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 // Components
 import Sidebar from './components/Sidebar'
 import ModernTopBar from './components/ModernTopBar'
-import TempTitleTopBar from './components/TempTitleTopBar'
+import InpirationTopBar from './components/InpirationTopBar'
 import BottomBar from './components/BottomBar'
 import Modal from './components/Modal'
 import DemoBubble from './components/DemoBubble'
@@ -26,7 +26,10 @@ import { trackRouteAccess } from './lib/accessTracking'
 import { useDisplayMode, PREVIEW_MODE } from './lib/displayMode'
 
 const LAYOUT_KEY = 'dugou:layout-mode'
-const VALID_MODES = ['modern', 'temp_title', 'sidebar']
+const VALID_MODES = ['modern', 'inpiration', 'sidebar']
+const normalizeLayoutMode = (mode) => mode === 'temp_title'
+  ? 'inpiration'
+  : VALID_MODES.includes(mode) ? mode : null
 const SYSTEM_CONFIG_KEY = 'dugou.system_config.v1'
 const PAGE_AMBIENT_ROUTE_MAP = {
   '/': 'new',
@@ -45,10 +48,10 @@ const VALID_AMBIENT_TONES = ['classic_white', 'soft_blue', 'soft_orange']
 
 function App() {
   const [layoutMode, setLayoutMode] = useState(() => {
-    const cached = localStorage.getItem(LAYOUT_KEY)
-    if (VALID_MODES.includes(cached)) return cached
+    const cached = normalizeLayoutMode(localStorage.getItem(LAYOUT_KEY))
+    if (cached) return cached
     const config = getSystemConfig()
-    return VALID_MODES.includes(config.layoutMode) ? config.layoutMode : 'modern'
+    return normalizeLayoutMode(config.layoutMode) || 'modern'
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [modalData, setModalData] = useState(null)
@@ -62,9 +65,10 @@ function App() {
   useEffect(() => {
     const onLayoutChange = (e) => {
       const mode = e.detail?.mode
-      if (VALID_MODES.includes(mode)) {
-        setLayoutMode(mode)
-        localStorage.setItem(LAYOUT_KEY, mode)
+      const normalizedMode = normalizeLayoutMode(mode)
+      if (normalizedMode) {
+        setLayoutMode(normalizedMode)
+        localStorage.setItem(LAYOUT_KEY, normalizedMode)
       }
     }
     window.addEventListener('dugou:layout-changed', onLayoutChange)
@@ -168,11 +172,11 @@ function App() {
     )
   }
 
-  /* ── temp_title — isolated workspace for the next UI/theme generation ── */
-  if (layoutMode === 'temp_title') {
+  /* ── inpiration — isolated workspace for the next UI/theme generation ── */
+  if (layoutMode === 'inpiration') {
     return (
-      <div className="flex flex-col h-screen theme-modern theme-temp-title" style={{ background: '#f7f8fa' }}>
-        <TempTitleTopBar />
+      <div className="flex flex-col h-screen theme-modern theme-inpiration" style={{ background: '#f7f8fa' }}>
+        <InpirationTopBar />
         <main
           ref={mainScrollRef}
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"

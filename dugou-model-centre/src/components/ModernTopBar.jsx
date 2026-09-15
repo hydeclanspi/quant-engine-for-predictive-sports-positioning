@@ -78,7 +78,7 @@ const ConsoleIcon = ({ size = 14, className = '' }) => (
 const LAYOUT_SWITCH_DELAY_MS = 240
 
 function LayoutMorphSwitch({ layoutMode }) {
-  const activeMode = layoutMode === 'temp_title' ? 'temp_title' : 'modern'
+  const activeMode = layoutMode === 'inpiration' || layoutMode === 'temp_title' ? 'inpiration' : 'modern'
   const [visualMode, setVisualMode] = useState(activeMode)
   const switchTimerRef = useRef(null)
 
@@ -114,14 +114,14 @@ function LayoutMorphSwitch({ layoutMode }) {
       </button>
       <button
         type="button"
-        aria-label="切换到 temp_title"
-        aria-pressed={visualMode === 'temp_title'}
-        title="temp_title"
-        onClick={() => selectMode('temp_title')}
-        className={`mn-layout-choice mn-layout-choice--title ${visualMode === 'temp_title' ? 'is-active' : ''}`}
+        aria-label="切换到 inpiration"
+        aria-pressed={visualMode === 'inpiration'}
+        title="inpiration"
+        onClick={() => selectMode('inpiration')}
+        className={`mn-layout-choice mn-layout-choice--inpiration ${visualMode === 'inpiration' ? 'is-active' : ''}`}
       >
         <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
-        <span>Title</span>
+        <span>inpiration</span>
       </button>
     </div>
   )
@@ -250,7 +250,7 @@ export default function ModernTopBar({ layoutMode = 'modern' }) {
 
       <span ref={brandSepRef} className="mn-brand-measure" aria-hidden="true" />
 
-      {/* ── Modern / temp_title liquid morph switch ── */}
+      {/* ── Modern / inpiration liquid morph switch ── */}
       <LayoutMorphSwitch layoutMode={layoutMode} />
 
       {/* ── Breadcrumb separator ── */}

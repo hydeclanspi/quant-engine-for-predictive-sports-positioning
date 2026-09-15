@@ -198,7 +198,10 @@ const PAGE_AMBIENT_TONE_OPTIONS = [
   { value: 'soft_blue', label: '淡蓝色' },
   { value: 'soft_orange', label: '浅橙色' },
 ]
-const LAYOUT_MODE_OPTIONS = ['modern', 'temp_title', 'sidebar']
+const LAYOUT_MODE_OPTIONS = ['modern', 'inpiration', 'sidebar']
+const normalizeLayoutMode = (mode) => mode === 'temp_title'
+  ? 'inpiration'
+  : LAYOUT_MODE_OPTIONS.includes(mode) ? mode : null
 const ACCESS_LOG_PAGE_SIZE = 6
 const FIT_TRAJECTORY_WINDOW_OPTIONS = [24, 36, 48, 72, 96, 120, 150, 0]
 const FIT_TRAJECTORY_MODE_OPTIONS = [
@@ -3938,11 +3941,10 @@ export default function ParamsPage({ openModal }) {
   )
 
   const getCurrentLayoutMode = () => {
-    if (typeof window === 'undefined') return config.layoutMode || 'modern'
-    const cached = window.localStorage.getItem('dugou:layout-mode')
-    if (LAYOUT_MODE_OPTIONS.includes(cached)) return cached
-    if (LAYOUT_MODE_OPTIONS.includes(config.layoutMode)) return config.layoutMode
-    return 'modern'
+    if (typeof window === 'undefined') return normalizeLayoutMode(config.layoutMode) || 'modern'
+    const cached = normalizeLayoutMode(window.localStorage.getItem('dugou:layout-mode'))
+    if (cached) return cached
+    return normalizeLayoutMode(config.layoutMode) || 'modern'
   }
 
   const applyPageAmbientThemes = (nextThemes, options = {}) => {
@@ -4255,7 +4257,7 @@ export default function ParamsPage({ openModal }) {
     () => WEIGHT_FIELDS.reduce((sum, field) => sum + Number(config[field.key] || 0), 0),
     [config],
   )
-  const currentLayoutMode = LAYOUT_MODE_OPTIONS.includes(config.layoutMode) ? config.layoutMode : 'modern'
+  const currentLayoutMode = getCurrentLayoutMode()
   const selectLayoutMode = (layoutMode) => {
     if (!LAYOUT_MODE_OPTIONS.includes(layoutMode)) return
     saveSystemConfig({ layoutMode })
@@ -4859,11 +4861,11 @@ export default function ParamsPage({ openModal }) {
             </div>
             <p className="text-xs text-stone-400">Vercel-inspired. Clean monochrome, sharp typography, system-native feel.</p>
           </button>
-          {/* temp_title */}
+          {/* inpiration */}
           <button
-            onClick={() => selectLayoutMode('temp_title')}
+            onClick={() => selectLayoutMode('inpiration')}
             className={`p-4 rounded-xl border-2 transition-all text-left ${
-              currentLayoutMode === 'temp_title'
+              currentLayoutMode === 'inpiration'
                 ? 'border-sky-500 bg-sky-50/60'
                 : 'border-stone-200 hover:border-stone-300 bg-stone-50'
             }`}
@@ -4873,8 +4875,8 @@ export default function ParamsPage({ openModal }) {
                 <div className="h-[5px] bg-gradient-to-r from-sky-500 to-indigo-500 w-full" />
                 <div className="flex-1 bg-sky-50/60" />
               </div>
-              <span className="text-sm font-medium text-stone-700">temp_title</span>
-              {currentLayoutMode === 'temp_title' && (
+              <span className="text-sm font-medium text-stone-700">inpiration</span>
+              {currentLayoutMode === 'inpiration' && (
                 <span className="text-[10px] px-2 py-0.5 bg-sky-600 text-white rounded-full ml-auto">Active</span>
               )}
             </div>
