@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 
 // Components
@@ -25,11 +25,9 @@ import { getSystemConfig, PAGE_AMBIENT_THEME_DEFAULTS, isInTimeMachineMode } fro
 import { trackRouteAccess } from './lib/accessTracking'
 import { useDisplayMode, PREVIEW_MODE } from './lib/displayMode'
 
-const LAYOUT_KEY = 'dugou:layout-mode'
-const VALID_MODES = ['modern', 'inpiration', 'sidebar']
-const normalizeLayoutMode = (mode) => mode === 'temp_title'
-  ? 'inpiration'
-  : VALID_MODES.includes(mode) ? mode : null
+import { initializeLayoutMode, LAYOUT_KEY, normalizeLayoutMode } from './lib/layoutMode'
+
+const DesignStudioPage = lazy(() => import('./pages/DesignStudioPage'))
 const SYSTEM_CONFIG_KEY = 'dugou.system_config.v1'
 const PAGE_AMBIENT_ROUTE_MAP = {
   '/': 'new',
@@ -48,10 +46,7 @@ const VALID_AMBIENT_TONES = ['classic_white', 'soft_blue', 'soft_orange']
 
 function App() {
   const [layoutMode, setLayoutMode] = useState(() => {
-    const cached = normalizeLayoutMode(localStorage.getItem(LAYOUT_KEY))
-    if (cached) return cached
-    const config = getSystemConfig()
-    return normalizeLayoutMode(config.layoutMode) || 'modern'
+    return initializeLayoutMode(getSystemConfig().layoutMode, localStorage)
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [modalData, setModalData] = useState(null)
@@ -118,6 +113,7 @@ function App() {
   }, [location.pathname])
 
   useEffect(() => {
+    if (location.pathname.replace(/\/$/, '') === '/design/inpiration') return
     trackRouteAccess(location.pathname)
   }, [location.pathname])
 
@@ -149,6 +145,10 @@ function App() {
       <Route path="/params" element={<ParamsPage openModal={openModal} />} />
     </Routes>
   )
+
+  if (location.pathname.replace(/\/$/, '') === '/design/inpiration') {
+    return <Suspense fallback={<p style={{ padding: 32 }}>正在打开设计提案…</p>}><DesignStudioPage /></Suspense>
+  }
 
   /* ── Modern layout — Vercel/Linear design language ── */
   if (layoutMode === 'modern') {

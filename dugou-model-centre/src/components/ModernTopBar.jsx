@@ -127,7 +127,7 @@ function LayoutMorphSwitch({ layoutMode }) {
   )
 }
 
-export default function ModernTopBar({ layoutMode = 'modern' }) {
+export default function ModernTopBar({ layoutMode = 'modern', designLink = null }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dataVersion, setDataVersion] = useState(0)
   const [brandNameOffset, setBrandNameOffset] = useState(0)
@@ -317,6 +317,7 @@ export default function ModernTopBar({ layoutMode = 'modern' }) {
 
       {/* ── Right ── */}
       <div className="mn-right">
+        {designLink}
         {/* Time Machine indicator */}
         {tmActive && tmInfo && (
           <div className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full bg-gradient-to-r from-blue-100 to-cyan-100 border border-blue-200/70 shadow-[0_2px_8px_rgba(59,130,246,0.15)]">

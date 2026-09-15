@@ -63,6 +63,7 @@ import {
 } from '../data/futureFeaturesRoadmap'
 import { LogoGalleryExplorer, LogoGalleryPreview } from '../components/LogoGalleryExplorer'
 import TimeMachineModalContent from '../components/TimeMachineModalContent'
+import { LAYOUT_MODES as LAYOUT_MODE_OPTIONS, getPreferredLayoutMode } from '../lib/layoutMode'
 import { isPreviewMode } from '../lib/displayMode'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
@@ -198,10 +199,6 @@ const PAGE_AMBIENT_TONE_OPTIONS = [
   { value: 'soft_blue', label: '淡蓝色' },
   { value: 'soft_orange', label: '浅橙色' },
 ]
-const LAYOUT_MODE_OPTIONS = ['modern', 'inpiration', 'sidebar']
-const normalizeLayoutMode = (mode) => mode === 'temp_title'
-  ? 'inpiration'
-  : LAYOUT_MODE_OPTIONS.includes(mode) ? mode : null
 const ACCESS_LOG_PAGE_SIZE = 6
 const FIT_TRAJECTORY_WINDOW_OPTIONS = [24, 36, 48, 72, 96, 120, 150, 0]
 const FIT_TRAJECTORY_MODE_OPTIONS = [
@@ -3941,10 +3938,7 @@ export default function ParamsPage({ openModal }) {
   )
 
   const getCurrentLayoutMode = () => {
-    if (typeof window === 'undefined') return normalizeLayoutMode(config.layoutMode) || 'modern'
-    const cached = normalizeLayoutMode(window.localStorage.getItem('dugou:layout-mode'))
-    if (cached) return cached
-    return normalizeLayoutMode(config.layoutMode) || 'modern'
+    return getPreferredLayoutMode(config.layoutMode, typeof window === 'undefined' ? null : window.localStorage)
   }
 
   const applyPageAmbientThemes = (nextThemes, options = {}) => {

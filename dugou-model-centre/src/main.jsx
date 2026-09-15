@@ -40,4 +40,11 @@ const bootstrapBeforeRender = async () => {
   })
 }
 
-bootstrapBeforeRender().finally(renderApp)
+// The standalone design studio never needs a live snapshot or a monthly
+// backup. Returning to the app reloads the document to run normal bootstrap.
+const designPreviewPath = /^\/(?:arsenal\/)?design\/inpiration\/?$/
+if (designPreviewPath.test(window.location.pathname)) {
+  renderApp()
+} else {
+  bootstrapBeforeRender().finally(renderApp)
+}
