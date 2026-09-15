@@ -23,8 +23,17 @@ import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
-const QI_AUTO_UNFURL_DELAY_MS = 520
+const QI_AUTO_UNFURL_DELAY_MS = 4300
 const QI_AUTO_UNFURL_GLOW_MS = 1250
+const QI_AUTO_UNFURL_SESSION_KEY = 'dugou.quick_input_intro_seen.v2'
+
+const markQuickInputIntroSeen = () => {
+  try {
+    window.sessionStorage.setItem(QI_AUTO_UNFURL_SESSION_KEY, '1')
+  } catch {
+    // Storage can be unavailable in hardened/private contexts; animation still works.
+  }
+}
 
 // 默认 Kelly 分母映射（基于需求文档 S4）
 // 保险产品用较小分母（更激进），赌一把用较大分母（更保守）
@@ -353,19 +362,32 @@ export default function NewInvestmentPage() {
   const quickShown = quickInputOpen
 
   useEffect(() => {
+    let shouldPlayIntro = true
+    try {
+      shouldPlayIntro = window.sessionStorage.getItem(QI_AUTO_UNFURL_SESSION_KEY) !== '1'
+    } catch {
+      // Storage unavailable: preserve the first-mount animation as a safe fallback.
+    }
+
     let reducedMotion = false
     try {
       reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     } catch {
       // matchMedia unavailable: use the normal animated path.
     }
+    if (!shouldPlayIntro) {
+      setQuickInputOpen(true)
+      return undefined
+    }
     if (reducedMotion) {
+      markQuickInputIntroSeen()
       setQuickInputOpen(true)
       return undefined
     }
 
     const timers = quickUnfurlTimersRef.current
     timers.push(window.setTimeout(() => {
+      markQuickInputIntroSeen()
       setQuickIntroUnfurl(true)
       setQuickInputOpen(true)
     }, QI_AUTO_UNFURL_DELAY_MS))
@@ -1393,21 +1415,22 @@ export default function NewInvestmentPage() {
         <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">录入比赛信息与预测参数 · Record match predictions & calibration parameters</p>
       </div>
 
-      <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 p-4 mb-5">
+      <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border">
         <button
           onClick={() => {
             quickUnfurlTimersRef.current.forEach((timer) => window.clearTimeout(timer))
             quickUnfurlTimersRef.current = []
+            markQuickInputIntroSeen()
             setQuickIntroUnfurl(false)
             setQuickInputOpen((open) => !open)
           }}
           aria-expanded={quickShown}
-          className="qi-trigger motion-v2-ghost-btn flex items-center gap-2 text-sm text-stone-600 transition-colors w-full"
+          className="settle-ai-trigger qi-trigger motion-v2-ghost-btn flex w-full items-center gap-2 px-4 py-3 text-left"
         >
-          <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron qi-gold-chevron${quickShown ? ' is-open' : ''}`} />
-          <span className="qi-quick-title">Quick Input</span>
-          <span className="qi-beta-badge ml-1">Beta</span>
-          <span className="qi-quick-subtitle ml-1">大模型自然语言快捷录入</span>
+          <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron settle-ai-chevron${quickShown ? ' is-open' : ''}`} />
+          <span className="settle-ai-title">Quick Input</span>
+          <span className="settle-ai-beta-badge ml-1">LAB · AI</span>
+          <span className="settle-ai-subtitle ml-1">大模型自然语言快捷录入</span>
         </button>
 
         <div
@@ -1415,7 +1438,7 @@ export default function NewInvestmentPage() {
           inert={quickShown ? undefined : ''}
         >
           <div className="qi-collapse-inner">
-            <div className="mt-3 space-y-2">
+            <div className="settle-ai-body space-y-2 px-4 pb-4 pt-3">
               <textarea
                 value={quickInputText}
                 onChange={(event) => {
@@ -1433,10 +1456,10 @@ export default function NewInvestmentPage() {
                 rows={quickInputHasStructuredResult ? Math.min(16, 4 + quickInputMatchCount * 3) : 3}
                 aria-label={quickInputHasStructuredResult ? '解析后的结构化投资数据' : '自然语言投资描述'}
                 aria-describedby="quick-input-privacy"
-                className={`input-glow qi-ai-textarea w-full px-3 py-2 rounded-xl border border-stone-200 text-sm focus:outline-none resize-none${quickInputHasStructuredResult ? ' is-structured' : ''}`}
+                className={`settle-ai-textarea input-glow w-full px-3 py-2 rounded-xl border text-sm focus:outline-none resize-none${quickInputHasStructuredResult ? ' is-structured' : ''}`}
               />
               {quickInputHasStructuredResult && quickInputComboCount > 1 && (
-                <div className="qi-combo-switcher" role="tablist" aria-label="已识别的投资组合">
+                <div className="qi-combo-switcher is-champagne" role="tablist" aria-label="已识别的投资组合">
                   <span className="qi-combo-switcher-label">{quickInputComboCount} 单</span>
                   <div className="qi-combo-tabs">
                     {quickInputResult.combos.map((combo, index) => (
@@ -1462,7 +1485,7 @@ export default function NewInvestmentPage() {
                     onClick={handleQuickInput}
                     disabled={!quickInputText.trim() || quickInputPhase === 'loading'}
                     aria-busy={quickInputPhase === 'loading'}
-                    className="qi-ai-parse-btn"
+                    className="settle-ai-parse-btn"
                   >
                     {quickInputPhase === 'loading'
                       ? <Loader2 size={13} className="qi-ai-spinner" aria-hidden="true" />
@@ -1476,7 +1499,7 @@ export default function NewInvestmentPage() {
                       type="button"
                       onClick={handleQuickArchive}
                       disabled={confirmPersistPending}
-                      className="qi-archive-btn"
+                      className="settle-ai-archive-btn"
                     >
                       {confirmPersistPending
                         ? <Loader2 size={13} className="qi-ai-spinner" aria-hidden="true" />
@@ -1503,7 +1526,7 @@ export default function NewInvestmentPage() {
                     清空
                   </button>
                 )}
-                <span id="quick-input-privacy" className="qi-ai-privacy">
+                <span id="quick-input-privacy" className="settle-ai-privacy">
                   <ShieldCheck size={11} aria-hidden="true" />
                   {quickInputHasStructuredResult
                     ? `已将组合 ${quickComboIndex + 1} 填入下方 · 入档前会逐单校验`
@@ -1513,12 +1536,12 @@ export default function NewInvestmentPage() {
 
               {quickInputResult && (
                 <div
-                  className={`qi-ai-result is-${quickInputPhase}`}
+                  className={`settle-ai-result is-${quickInputPhase}`}
                   role="status"
                   aria-live="polite"
                 >
                   <div className="qi-ai-result-heading">
-                    <span className="qi-ai-result-orb" aria-hidden="true"><Sparkles size={11} /></span>
+                    <span className="settle-ai-result-orb" aria-hidden="true"><Sparkles size={11} /></span>
                     <span>
                       {quickInputPhase === 'ai' && 'DeepSeek 已完成结构化'}
                       {quickInputPhase === 'fallback' && '已无缝切换至本地解析'}
@@ -1529,7 +1552,7 @@ export default function NewInvestmentPage() {
                     )}
                   </div>
                   {quickInputMatchCount > 0 && (
-                    <p className="qi-ai-result-summary">
+                    <p className="settle-ai-result-summary">
                       已识别 {quickInputComboCount} 个组合 · 共 {quickInputMatchCount} 场比赛
                       {quickInputResult.confidence >= 0.7 ? '' : ' (部分字段可能需要手动补充)'}
                       {quickInputPhase === 'ai' && quickInputMeta?.totalTokens > 0
@@ -1540,7 +1563,7 @@ export default function NewInvestmentPage() {
                   {(quickInputResult.diagnostics || []).map((d, i) => (
                     <p
                       key={i}
-                      className={`qi-ai-diagnostic is-${d.level || 'info'}`}
+                      className={`settle-ai-diagnostic is-${d.level || 'info'}`}
                     >
                       {d.message}
                     </p>

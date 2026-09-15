@@ -4683,7 +4683,7 @@
 
 /* ============================================================
    Quick Input 首屏「秀一下」(展卷 · 收锋)
-   首屏 Quick Input 面板静息折叠；首次进入演示态时自动下拉展示再弹回。
+   首屏 Quick Input 面板静息折叠；本标签页首次进入时延迟自动下拉，此后保持展开。
    - 展开（展卷）：高度 0fr→1fr 缓出揭开，内容带重力 Q 弹落定，并掠过一道
      科技感扫描线——刚柔并济。
    - 收起（收锋）：更短、加速的回弹，干净利落不拖泥带水。
@@ -4749,8 +4749,8 @@
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(99, 102, 241, 0.13) 0%,
-    rgba(99, 102, 241, 0) 100%
+    rgba(186, 151, 91, 0.13) 0%,
+    rgba(186, 151, 91, 0) 100%
   );
   transform: translateY(-100%);
   animation: qiScan 1.05s cubic-bezier(0.22, 0.61, 0.36, 1) 0.18s both;
@@ -4991,6 +4991,7 @@
   line-height: 1;
   text-shadow: 0 1px rgba(255, 255, 255, 0.65);
   text-transform: uppercase;
+  white-space: nowrap;
   animation: settleChampagneFlow 3.9s ease-in-out infinite;
 }
 
@@ -5234,6 +5235,36 @@
 }
 
 .qi-combo-tab.is-active > small { color: #7775a1; }
+
+.qi-combo-switcher.is-champagne {
+  border-color: rgba(185, 157, 109, 0.14);
+  background:
+    radial-gradient(circle at 92% 0%, rgba(235, 219, 190, 0.3), transparent 42%),
+    rgba(252, 250, 246, 0.76);
+}
+
+.qi-combo-switcher.is-champagne .qi-combo-switcher-label { color: #9a7130; }
+
+.qi-combo-switcher.is-champagne .qi-combo-tab {
+  border-color: rgba(178, 151, 105, 0.16);
+  color: #776d5e;
+}
+
+.qi-combo-switcher.is-champagne .qi-combo-tab:hover {
+  border-color: rgba(169, 132, 70, 0.27);
+  color: #66563f;
+}
+
+.qi-combo-switcher.is-champagne .qi-combo-tab.is-active {
+  border-color: rgba(169, 132, 70, 0.25);
+  background:
+    radial-gradient(circle at 88% 0%, rgba(235, 216, 180, 0.56), transparent 48%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.98), rgba(250, 245, 235, 0.92));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.98), 0 5px 14px rgba(127, 96, 50, 0.085);
+  color: #70552d;
+}
+
+.qi-combo-switcher.is-champagne .qi-combo-tab.is-active > small { color: #9b835f; }
 
 .qi-ai-parse-btn {
   position: relative;

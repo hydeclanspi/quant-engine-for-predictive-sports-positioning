@@ -828,7 +828,7 @@ export default function SettlePage() {
           >
             <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron settle-ai-chevron${settleQuickOpen ? ' is-open' : ''}`} />
             <span className="settle-ai-title">Quick Settle</span>
-            <span className="settle-ai-beta-badge ml-1">Beta</span>
+            <span className="settle-ai-beta-badge ml-1">LAB · AI</span>
             <span className="settle-ai-subtitle ml-1">大模型自然语言快捷结算</span>
           </button>
 
