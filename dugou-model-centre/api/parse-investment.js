@@ -103,6 +103,7 @@ const callDeepSeek = async ({ apiKey, baseUrl, model, text, timeoutMs }) => {
             content: `请只解析下面 JSON 中的 USER_TEXT，并返回约定的 json 对象：\n${JSON.stringify({ USER_TEXT: text })}`,
           },
         ],
+        thinking: { type: 'disabled' },
         temperature: 0,
         max_tokens: 1200,
         stream: false,

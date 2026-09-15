@@ -95,6 +95,9 @@ sentence to this serverless endpoint; the API key remains server-side. Model
 output passes a strict shared allow-list before it reaches the form, and the UI
 falls back to the deterministic local parser on every provider/config/network
 failure. AI only fills fields — it never saves or syncs an investment.
+Because this endpoint performs deterministic field extraction, it explicitly
+sets `thinking.type` to `disabled` to avoid paying for unnecessary reasoning
+tokens; the UI still reports the provider's actual total token usage.
 
 ```http
 POST /api/parse-investment

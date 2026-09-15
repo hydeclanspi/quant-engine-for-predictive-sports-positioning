@@ -4908,9 +4908,11 @@
   box-shadow: inset 0 1px rgba(255, 255, 255, 0.96), 0 9px 28px rgba(79, 70, 229, 0.06);
   color: #44405c;
   cursor: default;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 12px;
-  line-height: 1.65;
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 450;
+  letter-spacing: 0.005em;
+  line-height: 1.72;
 }
 
 .qi-ai-parse-btn {

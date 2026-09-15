@@ -93,7 +93,7 @@ describe('POST /api/parse-investment', () => {
     expect(options.headers.Authorization).toBe('Bearer test-deepseek-key')
     const requestBody = JSON.parse(options.body)
     expect(requestBody).toMatchObject({
-      model: 'deepseek-flash', temperature: 0, stream: false,
+      model: 'deepseek-flash', thinking: { type: 'disabled' }, temperature: 0, stream: false,
       response_format: { type: 'json_object' },
     })
     expect(requestBody.messages[0].content.toLowerCase()).toContain('json')
