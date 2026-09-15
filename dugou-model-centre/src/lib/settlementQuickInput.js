@@ -15,8 +15,20 @@ const evaluateEntry = (entryText, homeScore, awayScore) => {
     if (['lose', 'loss', '负', '客胜', 'l'].includes(outcome)) return adjustedHome < awayScore
     return null
   })
-  if (outcomes.every((outcome) => outcome === null)) return null
-  return outcomes.some(Boolean)
+  if (outcomes.some((outcome) => outcome === true)) return true
+  if (outcomes.every((outcome) => outcome === false)) return false
+  return null
+}
+
+const parseResultScore = (value) => {
+  const result = String(value || '').match(/(?:^|[^\d.])(\d{1,2})\s*(?:-|:|：)\s*(\d{1,2})(?![\d.])/)
+  return result ? { home: Number(result[1]), away: Number(result[2]) } : null
+}
+
+/** Infer a hit only when the saved prediction and actual score are deterministic. */
+export const inferIsCorrectFromResult = (entryText, resultText) => {
+  const score = parseResultScore(resultText)
+  return score ? evaluateEntry(entryText, score.home, score.away) : null
 }
 
 const findScoreForMatch = (text, match) => {
@@ -107,7 +119,7 @@ export const parseSingleMatchSettlementLocally = (rawText, combo) => {
     return { ok: false, confidence: 0, settlements: [], warnings: ['缺少可解析的单场上下文'], diagnostics: [{ level: 'warning', message: '缺少可解析的单场上下文' }] }
   }
 
-  const scoreMatch = text.match(/(?:^|[^\d.])(\d{1,2})\s*(?:-|:|：)\s*(\d{1,2})(?![\d.])/)
+  const scoreMatch = parseResultScore(text)
   const ratingMatch = text.match(/(?:ajr|rating|评分)\s*[:：=]?\s*(0(?:\.\d+)?)/i)
   const repMatch = text.match(/(?:rep|随机(?:事件)?参数)\s*[:：=]?\s*(\d+(?:\.\d+)?)/i)
   const postNoteMatch = text.match(/(?:备注|复盘|note)\s*[:：=]?\s*([^\n]+)/i)
@@ -123,9 +135,10 @@ export const parseSingleMatchSettlementLocally = (rawText, combo) => {
   if (matchRating === null && matchRep === null && bareNumbers.length === 1 && bareNumbers[0] >= 0 && bareNumbers[0] <= 0.8) {
     matchRating = bareNumbers[0]
   }
-  const normalizedRep = matchRating !== null && matchRep === null ? 0 : matchRep
-  const score = scoreMatch ? { home: Number(scoreMatch[1]), away: Number(scoreMatch[2]) } : null
+  const score = scoreMatch
   const explicitHit = parseColloquialHit(text)
+  if (explicitHit === true && matchRating === null) matchRating = 0.8
+  const normalizedRep = matchRating !== null && matchRep === null ? 0 : matchRep
   const isCorrect = explicitHit !== null
     ? explicitHit
     : score ? evaluateEntry(match.entry, score.home, score.away) : null
@@ -237,7 +250,15 @@ export const resolveAiSettlementParse = (result, pendingCombos) => {
         return
       }
       claimedIndices.add(matchIndex)
-      matchPatches.push({ ...parsedMatch, matchIndex })
+      const pendingMatch = combo.matches[matchIndex]
+      const inferredHit = inferIsCorrectFromResult(pendingMatch?.entry, parsedMatch.results)
+      matchPatches.push({
+        ...parsedMatch,
+        matchIndex,
+        isCorrect: parsedMatch.isCorrect === null || parsedMatch.isCorrect === undefined
+          ? inferredHit
+          : parsedMatch.isCorrect,
+      })
     })
     resolved.push({
       comboId: combo.id,

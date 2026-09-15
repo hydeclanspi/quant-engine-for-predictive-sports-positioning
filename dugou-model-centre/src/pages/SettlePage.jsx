@@ -11,6 +11,7 @@ import { requestAiSettlementParse } from '../lib/aiSettlementClient'
 import { AI_SETTLE_MAX_TEXT_LENGTH } from '../lib/aiSettlementSchema'
 import {
   formatStructuredSettlementInput,
+  inferIsCorrectFromResult,
   parseSettlementLocally,
   parseSingleMatchSettlementLocally,
   resolveAiSettlementParse,
@@ -417,6 +418,28 @@ export default function SettlePage() {
         matches: prev[comboId].matches.map((match, idx) => (idx === matchIdx ? { ...match, [field]: normalizedValue } : match)),
       },
     }))
+  }
+
+  const updateMatchResult = (combo, matchIdx, value) => {
+    const inferredHit = inferIsCorrectFromResult(combo.matches[matchIdx]?.entry, value)
+    const isEmpty = !String(value || '').trim()
+    setForms((prev) => {
+      const current = prev[combo.id]
+      if (!current) return prev
+      return {
+        ...prev,
+        [combo.id]: {
+          ...current,
+          matches: current.matches.map((match, idx) => (idx === matchIdx
+            ? {
+              ...match,
+              results: value,
+              isCorrect: inferredHit === null ? (isEmpty ? null : match.isCorrect) : inferredHit,
+            }
+            : match)),
+        },
+      }
+    })
   }
 
   const updateRevenue = (comboId, value) => {
@@ -1329,7 +1352,7 @@ export default function SettlePage() {
                           type="text"
                           placeholder="比分或结果..."
                           value={forms[combo.id]?.matches[matchIdx]?.results || ''}
-                          onChange={(event) => updateMatchField(combo.id, matchIdx, 'results', event.target.value)}
+                          onChange={(event) => updateMatchResult(combo, matchIdx, event.target.value)}
                           className="input-glow w-full px-3 py-2.5 rounded-xl border border-stone-200 text-sm"
                         />
                       </div>

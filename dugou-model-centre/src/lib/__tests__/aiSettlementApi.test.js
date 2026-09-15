@@ -51,6 +51,8 @@ describe('POST /api/parse-settlement', () => {
     expect(requestBody.messages[1].content).not.toContain('secret')
     expect(requestBody.messages[1].content).toContain('"INPUT_SCOPE":"match"')
     expect(requestBody.messages[0].content).toContain('no 0.4')
+    expect(requestBody.messages[0].content).toContain('必须将它与 PENDING_RECORDS')
+    expect(requestBody.messages[0].content).toContain('matchRating 必须默认为 0.8')
   })
 
   it('rejects requests without pending context before calling the provider', async () => {
@@ -61,5 +63,31 @@ describe('POST /api/parse-settlement', () => {
     expect(res.statusCode).toBe(400)
     expect(res.body.reason).toBe('no_pending_records')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('enforces hit, AJR 0.8 and REP 0 for a positive match-scope phrase', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: vi.fn().mockResolvedValue({
+        choices: [{ message: { content: JSON.stringify({
+          confidence: 0.9,
+          settlements: [{ pendingId: 'inv_1', revenues: null, matches: [{ matchIndex: 0, isCorrect: null, matchRating: null, matchRep: null }] }],
+          warnings: [],
+        }) } }],
+      }),
+    }))
+    const res = makeResponse()
+    await handler(ownerRequest({
+      text: '中了',
+      scope: 'match',
+      pending: [{ id: 'inv_1', matches: [{ homeTeam: '皇马', awayTeam: '皇社', entry: 'win' }] }],
+    }), res)
+
+    expect(res.body.settlements[0].matches[0]).toMatchObject({
+      isCorrect: true,
+      matchRating: 0.8,
+      matchRep: 0,
+    })
   })
 })

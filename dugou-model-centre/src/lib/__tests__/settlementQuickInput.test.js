@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   formatStructuredSettlementInput,
+  inferIsCorrectFromResult,
   parseSettlementLocally,
   parseSingleMatchSettlementLocally,
   resolveAiSettlementParse,
@@ -58,11 +59,37 @@ describe('settlement Quick Input matching', () => {
       matchRep: 0,
     })
 
+    const hit = parseSingleMatchSettlementLocally('中了', singleContext)
+    expect(hit.settlements[0].matches[0]).toMatchObject({
+      isCorrect: true,
+      matchRating: 0.8,
+      matchRep: 0,
+    })
+
     const loneNumber = parseSingleMatchSettlementLocally('0.56', singleContext)
     expect(loneNumber.settlements[0].matches[0]).toMatchObject({ matchRating: 0.56, matchRep: 0 })
 
     const invalid = parseSingleMatchSettlementLocally('AJR 0.9', singleContext)
     expect(invalid.settlements[0].matches[0].matchRating).toBeNull()
     expect(invalid.warnings).toContain('AJR 需在 0–0.8 之间')
+  })
+
+  it('infers hit state from an actual score without guessing ambiguous predictions', () => {
+    expect(inferIsCorrectFromResult('win', '实际 2-1')).toBe(true)
+    expect(inferIsCorrectFromResult('win', '0-1')).toBe(false)
+    expect(inferIsCorrectFromResult('-1 win', '3-1')).toBe(true)
+    expect(inferIsCorrectFromResult('-1 win', '2-1')).toBe(false)
+    expect(inferIsCorrectFromResult('特殊玩法, win', '0-1')).toBeNull()
+    expect(inferIsCorrectFromResult('2-1', '2-1')).toBe(true)
+  })
+
+  it('repairs a missing AI hit flag from the matched prediction and result', () => {
+    const result = resolveAiSettlementParse({
+      settlements: [{
+        pendingId: 'inv_1', reference: '', revenues: null,
+        matches: [{ matchIndex: 0, homeTeam: '', awayTeam: '', results: '0-1', isCorrect: null }],
+      }],
+    }, pending)
+    expect(result.resolved[0].matchPatches[0].isCorrect).toBe(false)
   })
 })

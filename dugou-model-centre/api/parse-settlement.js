@@ -28,11 +28,14 @@ export const SETTLEMENT_PARSE_SYSTEM_PROMPT = `
 字段规则：
 - revenues 是整张单收回的实际总收入（含本金）；明确亏损并且收入为零时输出 0；未提供时输出 null。
 - results 只填用户明确提供的实际比分/赛果，否则 ""。
-- isCorrect 表示原预测是否命中。用户明说“中/未中”时直接规范为 true/false；若可从 prediction 与实际比分唯一判定，可做确定性计算；让球、多 Entry 或语义不确定时输出 null并警告。
+- isCorrect 表示原预测是否命中。用户明说“中/未中”时直接规范为 true/false。
+- 若用户没有明说中没中、但提供了实际比分或结果，必须将它与 PENDING_RECORDS 中该场的 prediction 比较并自动输出 true/false。精确比分、win/draw/lose（及胜/平/负）和标准数字让球均应确定性计算，不能因为用户没写“中”就输出 null。
+- 多个 Entry 视为备选预测：任一项确定命中则为 true；全部确定未中才为 false；若没有命中且仍含无法判断的项才输出 null 并警告。只有预测语义或赛果确实不足以唯一判断时才允许 isCorrect=null。
 - matchRating 是 AJR，范围 0–0.8；matchRep 是 REP，范围 0–1.8；未提供均为 null。
 - postNote 只保留用户明确提供的赛后备注，否则 ""。
 - INPUT_SCOPE="match" 表示用户正在某一场比赛下方的独立 AI 框中输入，PENDING_RECORDS 此时只含这一场：无需用户重复球队或序号，直接匹配该场。
 - 在 INPUT_SCOPE="match" 时：若 USER_TEXT 中唯一的数值参数是一个 0–0.8 的裸数（如“0.4”或“no 0.4”），它表示 matchRating；若已得到 matchRating 但用户未提 REP，则 matchRep=0。比分、金额以及明确标注为 REP 的数值不适用此规则。
+- 用户明确表达该场“中了、命中、hit、yes、拿下”等肯定命中，而没有提供 AJR 时，matchRating 必须默认为 0.8；因此若也未提供 REP，matchRep=0。仅由比分计算出命中时不要擅自补 AJR。
 
 严格返回：
 {
@@ -73,6 +76,20 @@ const getConfig = () => ({
   model: String(process.env.DEEPSEEK_SETTLE_MODEL || process.env.DEEPSEEK_MODEL || process.env.AI_MODEL || DEFAULT_MODEL).trim(),
 })
 
+const applyMatchScopeDefaults = (sanitized, text, scope) => {
+  if (scope !== 'match') return sanitized
+  const normalized = String(text || '').trim().toLowerCase()
+  const explicitlyNegative = /(?:没中|未中|不中|错了?|输了?|挂了?|寄了?|败了?|\bno\b|\bmiss(?:ed)?\b|\bwrong\b|\blos(?:e|t|s)\b)/i.test(normalized)
+  const explicitlyPositive = !explicitlyNegative && /(?:命中|中了?|对了?|拿下|收米|\byes\b|\bhit\b|\bwon\b|\bwin\b)/i.test(normalized)
+  if (!explicitlyPositive) return sanitized
+  const match = sanitized.settlements?.[0]?.matches?.[0]
+  if (!match) return sanitized
+  match.isCorrect = true
+  if (match.matchRating === null) match.matchRating = 0.8
+  if (match.matchRep === null) match.matchRep = 0
+  return sanitized
+}
+
 const callDeepSeek = async ({ apiKey, baseUrl, model, text, pending, scope = 'general' }) => {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), DEFAULT_TIMEOUT_MS)
@@ -112,7 +129,7 @@ const callDeepSeek = async ({ apiKey, baseUrl, model, text, pending, scope = 'ge
   if (!parsed) throw new ProviderError('invalid_model_json', 502, true)
   const sanitized = sanitizeAiSettlementParse(parsed)
   if (!sanitized.ok) throw new ProviderError(sanitized.reason, 502, true)
-  return { sanitized, usage: envelope?.usage || null }
+  return { sanitized: applyMatchScopeDefaults(sanitized, text, scope), usage: envelope?.usage || null }
 }
 
 export default async function handler(req, res) {
@@ -157,4 +174,4 @@ export default async function handler(req, res) {
   return res.status(lastError.status).json({ ok: false, reason: lastError.reason })
 }
 
-export const __testables = { callDeepSeek, getConfig, providerEndpoint }
+export const __testables = { applyMatchScopeDefaults, callDeepSeek, getConfig, providerEndpoint }
