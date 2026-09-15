@@ -8,6 +8,7 @@
  */
 
 export const AI_PARSE_MAX_TEXT_LENGTH = 1500
+export const AI_PARSE_MAX_COMBOS = 5
 export const AI_PARSE_MAX_MATCHES = 5
 export const AI_PARSE_MAX_ENTRIES = 5
 
@@ -98,25 +99,50 @@ const normalizeMatch = (match) => {
   }
 }
 
-export const sanitizeAiInvestmentParse = (payload) => {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    return { ok: false, reason: 'invalid_ai_payload' }
-  }
+const normalizeActualInput = (value) => {
+  const parsed = toFiniteNumber(value)
+  return parsed !== null && parsed > 0 && parsed <= 10_000_000
+    ? Number(parsed.toFixed(2))
+    : null
+}
 
-  const rawMatches = Array.isArray(payload.matches) ? payload.matches : []
+const normalizeCombo = (combo) => {
+  const rawMatches = Array.isArray(combo?.matches) ? combo.matches : []
   const matches = rawMatches
     .slice(0, AI_PARSE_MAX_MATCHES)
     .map(normalizeMatch)
     .filter((match) => match.homeTeam || match.awayTeam || match.entries.some((entry) => entry.name))
 
-  if (matches.length === 0) {
+  return {
+    comboName: cleanText(combo?.comboName, 80),
+    actualInput: normalizeActualInput(combo?.actualInput),
+    matches,
+  }
+}
+
+export const sanitizeAiInvestmentParse = (payload) => {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return { ok: false, reason: 'invalid_ai_payload' }
+  }
+
+  // Accept the former single-ticket shape during rollout so cached/local
+  // clients keep working, but always return the canonical combos[] contract.
+  const rawCombos = Array.isArray(payload.combos) && payload.combos.length > 0
+    ? payload.combos
+    : [{
+        comboName: payload.comboName,
+        actualInput: payload.actualInput,
+        matches: payload.matches,
+      }]
+  const combos = rawCombos
+    .slice(0, AI_PARSE_MAX_COMBOS)
+    .map(normalizeCombo)
+    .filter((combo) => combo.matches.length > 0)
+
+  if (combos.length === 0) {
     return { ok: false, reason: 'no_matches' }
   }
 
-  const actualInputValue = toFiniteNumber(payload.actualInput)
-  const actualInput = actualInputValue !== null && actualInputValue > 0 && actualInputValue <= 10_000_000
-    ? Number(actualInputValue.toFixed(2))
-    : null
   const warnings = (Array.isArray(payload.warnings) ? payload.warnings : [])
     .map((warning) => cleanText(warning, 180))
     .filter(Boolean)
@@ -125,9 +151,7 @@ export const sanitizeAiInvestmentParse = (payload) => {
   return {
     ok: true,
     confidence: normalizeConfidence(payload.confidence),
-    actualInput,
-    comboName: cleanText(payload.comboName, 80),
-    matches,
+    combos,
     warnings,
     diagnostics: warnings.map((message) => ({ level: 'warning', message })),
   }

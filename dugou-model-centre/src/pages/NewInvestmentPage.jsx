@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, X, ChevronDown, ChevronRight, Sparkles, Loader2, ShieldCheck, Archive, RotateCcw } from 'lucide-react'
-import { bumpTeamSamples, findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveInvestment, searchTeamProfiles } from '../lib/localData'
+import { bumpTeamSamples, findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveInvestment, saveInvestments, searchTeamProfiles } from '../lib/localData'
 import { handleNoteShortcut } from '../lib/noteFormatting'
 import { getPredictionCalibrationContext, getModeKellyRecommendations, getReservoirState } from '../lib/analytics'
 import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryNameWhileTyping, normalizeEntryRecord } from '../lib/entryParsing'
@@ -22,7 +22,7 @@ import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
-const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
+const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
 const QI_AUTO_UNFURL_DELAY_MS = 520
 const QI_AUTO_UNFURL_GLOW_MS = 1250
 
@@ -338,6 +338,7 @@ export default function NewInvestmentPage() {
   const [quickInputOpen, setQuickInputOpen] = useState(false)
   const [quickIntroUnfurl, setQuickIntroUnfurl] = useState(false)
   const [quickInputResult, setQuickInputResult] = useState(null)
+  const [quickComboIndex, setQuickComboIndex] = useState(0)
   const [quickInputPhase, setQuickInputPhase] = useState('idle')
   const [quickInputMeta, setQuickInputMeta] = useState(null)
   const [waxSealBurst, setWaxSealBurst] = useState({ active: false, token: 0, x: 0, y: 0 })
@@ -583,11 +584,6 @@ export default function NewInvestmentPage() {
       return Object.keys(next).length === Object.keys(prev).length ? prev : next
     })
   }, [parlaySize])
-
-  const parsedActualInput = useMemo(() => {
-    const parsed = Number.parseInt(String(actualInput || '').trim(), 10)
-    return Number.isFinite(parsed) ? parsed : Number.NaN
-  }, [actualInput])
 
   const updateMatch = (idx, field, value) => {
     setMatches((prev) => {
@@ -953,22 +949,26 @@ export default function NewInvestmentPage() {
     })
   }
 
-  const validateForm = () => {
-    if (!Number.isFinite(parsedActualInput) || parsedActualInput <= 0) {
-      return '请先填写 Inputs 实际投资金额（必须大于 0）。'
+  const validateDraft = (draft, label = '') => {
+    const input = Number.parseFloat(String(draft?.actualInput ?? '').trim())
+    const prefix = label ? `${label}：` : ''
+    if (!Number.isFinite(input) || input <= 0) {
+      return `${prefix}请先填写 Inputs 实际投资金额（必须大于 0）。`
     }
 
-    for (let idx = 0; idx < matches.length; idx += 1) {
-      const match = matches[idx]
+    const draftMatches = Array.isArray(draft?.matches) ? draft.matches : []
+    if (draftMatches.length === 0) return `${prefix}至少需要 1 场比赛。`
+    for (let idx = 0; idx < draftMatches.length; idx += 1) {
+      const match = draftMatches[idx]
       if (!match.homeTeam.trim() || !match.awayTeam.trim()) {
-        return `第 ${idx + 1} 场还没填完主队/客队。`
+        return `${prefix}第 ${idx + 1} 场还没填完主队/客队。`
       }
       if (match.homeTeam.trim() === match.awayTeam.trim()) {
-        return `第 ${idx + 1} 场主队和客队不能相同。`
+        return `${prefix}第 ${idx + 1} 场主队和客队不能相同。`
       }
       const validEntries = getValidEntries(match.entries)
       if (validEntries.length === 0) {
-        return `第 ${idx + 1} 场至少要有 1 条有效 Entry（名称 + 正数赔率）。`
+        return `${prefix}第 ${idx + 1} 场至少要有 1 条有效 Entry（名称 + 正数赔率）。`
       }
     }
     return ''
@@ -983,14 +983,53 @@ export default function NewInvestmentPage() {
     setHistoryFloatDismissed({})
   }
 
-  const buildInvestmentPayload = () => {
-    const validationMessage = validateForm()
-    if (validationMessage) {
-      window.alert(validationMessage)
-      return null
-    }
+  const calculateDraftMetrics = (draftMatches) => {
+    const profiles = draftMatches.map((match) => {
+      const unionProbability = calcAdjustedConf(match)
+      return {
+        ...buildAtomicMatchProfile({
+          entries: getValidEntries(match.entries),
+          unionProbability,
+          fallbackOdds: systemConfig.defaultOdds,
+        }),
+        unionProbability,
+      }
+    })
+    const combinedProfile = combineAtomicMatchProfiles(profiles)
+    const conditionalOdds = Number(combinedProfile.conditionalOdds)
+    const fallbackOdds = draftMatches.reduce((product, match) => product * calcMatchOdds(match.entries), 1)
+    const draftCombinedOdds = Number.isFinite(conditionalOdds) && conditionalOdds > 0
+      ? conditionalOdds
+      : fallbackOdds
+    const draftExpectedRating = profiles.length > 0
+      ? profiles.reduce((sum, profile) => sum + profile.unionProbability, 0) / profiles.length
+      : 0
+    const divisors = draftMatches.map((match) => getKellyDivisorForMode(match.mode))
+    const draftKellyDivisor = divisors.length > 0
+      ? divisors.reduce((sum, divisor) => sum + divisor, 0) / divisors.length
+      : systemConfig.kellyDivisor
+    const kelly = solveKellyFractionByAtomicDistribution(combinedProfile.states || [], 0.95)
+    const wfFeedback = calibrationContext?.walkForwardFeedback
+    const wfKellyDivisor = wfFeedback?.ready && Number.isFinite(wfFeedback.adjustments?.kellyDivisor)
+      ? wfFeedback.adjustments.kellyDivisor
+      : draftKellyDivisor
+    const rawSuggestion = Number.isFinite(kelly) && kelly > 0
+      ? poolCapital * (kelly / Math.max(1, wfKellyDivisor))
+      : 0
 
-    const normalizedMatches = matches.map((match) => {
+    return {
+      combinedOdds: Number.isFinite(draftCombinedOdds) ? draftCombinedOdds : 0,
+      expectedRating: Number.isFinite(draftExpectedRating) ? draftExpectedRating : 0,
+      recommendedInvest: Math.min(riskCap, Math.max(0, Math.round(rawSuggestion))),
+    }
+  }
+
+  const buildInvestmentPayloadFromDraft = (draft, label = '') => {
+    const validationMessage = validateDraft(draft, label)
+    if (validationMessage) return { validationMessage, payload: null }
+    const draftMatches = draft.matches
+    const draftMetrics = calculateDraftMetrics(draftMatches)
+    const normalizedMatches = draftMatches.map((match) => {
       const validEntries = getValidEntries(match.entries)
       const entryMarket = getPrimaryEntryMarket(validEntries, validEntries.map((entry) => entry.name).join(', '))
       const matchOdds = calcMatchOdds(match.entries)
@@ -1025,12 +1064,12 @@ export default function NewInvestmentPage() {
     const newInvestment = {
       id: buildId('inv'),
       created_at: new Date().toISOString(),
-      parlay_size: parlaySize,
-      combo_name: parlaySize > 1 ? comboName.trim() : '',
-      inputs: parsedActualInput,
-      suggested_amount: recommendedInvest,
-      expected_rating: Number(expectedRating.toFixed(2)),
-      combined_odds: Number(combinedOdds.toFixed(2)),
+      parlay_size: draftMatches.length,
+      combo_name: String(draft.comboName || '').trim(),
+      inputs: Number.parseFloat(String(draft.actualInput).trim()),
+      suggested_amount: draftMetrics.recommendedInvest,
+      expected_rating: Number(draftMetrics.expectedRating.toFixed(2)),
+      combined_odds: Number(draftMetrics.combinedOdds.toFixed(2)),
       status: 'pending',
       revenues: null,
       profit: null,
@@ -1040,58 +1079,103 @@ export default function NewInvestmentPage() {
       matches: normalizedMatches,
     }
 
-    return { newInvestment, normalizedMatches }
+    return { validationMessage: '', payload: { newInvestment, normalizedMatches } }
   }
 
-  const applyQuickInputResult = (result) => {
-    if (!Array.isArray(result?.matches) || result.matches.length === 0) {
-      setQuickInputResult(result)
-      return
-    }
+  const buildInvestmentPayload = () => {
+    const { validationMessage, payload } = buildInvestmentPayloadFromDraft({ matches, actualInput, comboName })
+    if (validationMessage) window.alert(validationMessage)
+    return payload
+  }
 
-    const newSize = Math.min(5, result.matches.length)
+  const normalizeQuickMatch = (draft) => {
+    const { _nlMeta: ignoredMeta, ...safeDraft } = draft || {}
+    void ignoredMeta
+    return {
+      ...createEmptyMatch(),
+      ...safeDraft,
+      entries: Array.isArray(safeDraft.entries) && safeDraft.entries.length > 0
+        ? safeDraft.entries.slice(0, 5).map((entry) => ({
+            name: String(entry?.name || ''),
+            odds: String(entry?.odds || ''),
+          }))
+        : [{ name: '', odds: '' }],
+      conf: normalizeSliderPercent(safeDraft.conf, 50),
+      mode: normalizeModeValue(safeDraft.mode),
+      tys_home: normalizeTysValue(safeDraft.tys_home),
+      tys_away: normalizeTysValue(safeDraft.tys_away),
+      fid: normalizeFidOption(safeDraft.fid),
+      fse_home: normalizeSliderPercent(safeDraft.fse_home, 50),
+      fse_away: normalizeSliderPercent(safeDraft.fse_away, 50),
+    }
+  }
+
+  const normalizeQuickCombo = (combo) => {
+    const parsedInput = Number.parseFloat(String(combo?.actualInput ?? ''))
+    return {
+      comboName: String(combo?.comboName || ''),
+      actualInput: Number.isFinite(parsedInput) && parsedInput > 0 ? parsedInput : null,
+      matches: (Array.isArray(combo?.matches) ? combo.matches : []).slice(0, 5).map(normalizeQuickMatch),
+    }
+  }
+
+  const loadQuickComboIntoForm = (combo) => {
+    if (!combo || combo.matches.length === 0) return
+    const newSize = combo.matches.length
     // Programmatic Quick Input must keep its parsed amount. Without advancing
     // this ref, the regular parlay-size effect would replace it with 80/150.
     prevParlaySizeRef.current = newSize
     setParlaySize(newSize)
-    const normalizedMatches = result.matches.slice(0, 5).map((draft) => {
-      const { _nlMeta: ignoredMeta, ...safeDraft } = draft || {}
-      void ignoredMeta
-      return {
-        ...createEmptyMatch(),
-        ...safeDraft,
-        entries: Array.isArray(safeDraft.entries) && safeDraft.entries.length > 0
-          ? safeDraft.entries.slice(0, 5).map((entry) => ({
-              name: String(entry?.name || ''),
-              odds: String(entry?.odds || ''),
-            }))
-          : [{ name: '', odds: '' }],
-        conf: normalizeSliderPercent(safeDraft.conf, 50),
-        mode: normalizeModeValue(safeDraft.mode),
-        tys_home: normalizeTysValue(safeDraft.tys_home),
-        tys_away: normalizeTysValue(safeDraft.tys_away),
-        fid: normalizeFidOption(safeDraft.fid),
-        fse_home: normalizeSliderPercent(safeDraft.fse_home, 50),
-        fse_away: normalizeSliderPercent(safeDraft.fse_away, 50),
-      }
-    })
-    const parsedInput = Number.parseFloat(String(result.actualInput ?? ''))
-    const normalizedInput = Number.isFinite(parsedInput) && parsedInput > 0 ? parsedInput : (newSize === 1 ? 150 : 80)
-    const normalizedComboName = newSize > 1 ? String(result.comboName || '') : ''
-    const normalizedResult = {
-      ...result,
-      actualInput: normalizedInput,
-      comboName: normalizedComboName,
-      matches: normalizedMatches,
-    }
-
-    setMatches(normalizedMatches)
-    setActualInput(String(normalizedInput))
-    setComboName(normalizedComboName)
-    setQuickInputResult(normalizedResult)
-    setQuickInputText(formatStructuredQuickInput(normalizedResult))
+    setMatches(combo.matches.map((match) => ({
+      ...match,
+      entries: match.entries.map((entry) => ({ ...entry })),
+    })))
+    setActualInput(combo.actualInput === null ? '' : String(combo.actualInput))
+    setComboName(combo.comboName)
+    setShowModeDropdown({})
+    setActiveTeamInput(null)
     setHistoryPrefillApplied({})
     setHistoryFloatDismissed({})
+  }
+
+  const captureActiveQuickCombo = (result = quickInputResult) => {
+    if (!Array.isArray(result?.combos) || !result.combos[quickComboIndex]) return result
+    const parsedInput = Number.parseFloat(String(actualInput || ''))
+    const combos = result.combos.map((combo, index) => index === quickComboIndex
+      ? {
+          comboName,
+          actualInput: Number.isFinite(parsedInput) && parsedInput > 0 ? parsedInput : null,
+          matches: matches.map((match) => ({
+            ...match,
+            entries: match.entries.map((entry) => ({ ...entry })),
+          })),
+        }
+      : combo)
+    return { ...result, combos }
+  }
+
+  const applyQuickInputResult = (result) => {
+    const sourceCombos = Array.isArray(result?.combos) && result.combos.length > 0
+      ? result.combos
+      : (Array.isArray(result?.matches) && result.matches.length > 0 ? [result] : [])
+    const combos = sourceCombos.slice(0, 5).map(normalizeQuickCombo).filter((combo) => combo.matches.length > 0)
+    const normalizedResult = {
+      ...result,
+      combos,
+    }
+    setQuickComboIndex(0)
+    setQuickInputResult(normalizedResult)
+    setQuickInputText(formatStructuredQuickInput(normalizedResult))
+    if (combos[0]) loadQuickComboIntoForm(combos[0])
+  }
+
+  const handleQuickComboSelect = (nextIndex) => {
+    if (nextIndex === quickComboIndex || !quickInputResult?.combos?.[nextIndex]) return
+    const captured = captureActiveQuickCombo()
+    setQuickInputResult(captured)
+    setQuickInputText(formatStructuredQuickInput(captured))
+    setQuickComboIndex(nextIndex)
+    loadQuickComboIntoForm(captured.combos[nextIndex])
   }
 
   const handleQuickInput = async (overrideText) => {
@@ -1157,6 +1241,7 @@ export default function NewInvestmentPage() {
     setQuickInputText(restoreSource ? quickInputSourceRef.current : '')
     if (!restoreSource) quickInputSourceRef.current = ''
     setQuickInputResult(null)
+    setQuickComboIndex(0)
     setQuickInputPhase('idle')
     setQuickInputMeta(null)
   }
@@ -1184,18 +1269,39 @@ export default function NewInvestmentPage() {
     return saved
   }
 
+  const persistInvestmentsFromPayloads = (payloads) => {
+    if (!Array.isArray(payloads) || payloads.length === 0) return []
+    let saved = []
+    try {
+      saved = saveInvestments(payloads.map((payload) => payload.newInvestment))
+    } catch (err) {
+      console.error('[DuGou] 批量投资落库失败，已保留全部草稿待恢复：', err)
+      return []
+    }
+    if (saved.length !== payloads.length) return []
+    const teamNames = payloads.flatMap(({ normalizedMatches }) =>
+      normalizedMatches.flatMap((item) => [item.home_team, item.away_team]))
+    bumpTeamSamples(teamNames)
+    setProfilesVersion((prev) => prev + 1)
+    setComboName('')
+    resetForm()
+    resetQuickInput()
+    if (isFullMode()) clearInvestmentDraft()
+    return saved
+  }
+
   const persistCurrentInvestment = () => {
     const payload = buildInvestmentPayload()
     if (!payload) return null
     return persistInvestmentFromPayload(payload)
   }
 
-  const queueBackgroundPersist = (payload) => {
+  const queueBackgroundPersist = (persistTask) => {
     const runPersist = () => {
       persistTimerRef.current = null
       persistIdleRef.current = null
       try {
-        persistInvestmentFromPayload(payload)
+        persistTask()
       } finally {
         setConfirmPersistPending(false)
         setWaxSealBurst((prev) => (prev.active ? { ...prev, active: false } : prev))
@@ -1238,7 +1344,31 @@ export default function NewInvestmentPage() {
     if (!payload) return
     setConfirmPersistPending(true)
     triggerWaxSealStamp(event?.currentTarget)
-    queueBackgroundPersist(payload)
+    queueBackgroundPersist(() => persistInvestmentFromPayload(payload))
+  }
+
+  const handleQuickArchive = (event) => {
+    if (confirmPersistPending) return
+    const captured = captureActiveQuickCombo()
+    const payloads = []
+    for (let index = 0; index < (captured?.combos?.length || 0); index += 1) {
+      const { validationMessage, payload } = buildInvestmentPayloadFromDraft(
+        captured.combos[index],
+        `组合 ${index + 1}`,
+      )
+      if (validationMessage) {
+        window.alert(validationMessage)
+        handleQuickComboSelect(index)
+        return
+      }
+      payloads.push(payload)
+    }
+    if (payloads.length === 0) return
+    setQuickInputResult(captured)
+    setQuickInputText(formatStructuredQuickInput(captured))
+    setConfirmPersistPending(true)
+    triggerWaxSealStamp(event?.currentTarget)
+    queueBackgroundPersist(() => persistInvestmentsFromPayloads(payloads))
   }
 
   const handleAddToCombo = () => {
@@ -1248,8 +1378,13 @@ export default function NewInvestmentPage() {
   }
 
   const quickInputHasStructuredResult = Boolean(
-    quickInputResult?.matches?.length > 0 && ['ai', 'fallback', 'local'].includes(quickInputPhase),
+    quickInputResult?.combos?.length > 0 && ['ai', 'fallback', 'local'].includes(quickInputPhase),
   )
+  const quickInputComboCount = quickInputResult?.combos?.length || 0
+  const quickInputMatchCount = quickInputResult?.combos?.reduce(
+    (sum, combo) => sum + (combo.matches?.length || 0),
+    0,
+  ) || 0
 
   return (
     <div className="page-shell page-content-fluid motion-v2-scope">
@@ -1297,11 +1432,31 @@ export default function NewInvestmentPage() {
                 placeholder={isPreview
                   ? '欢迎体验 · 在此粘贴一句话即可自动解析为结构化投资单\n例如：曼城 win, 赔率 1.85, 变量 α 1.3, 变量 δ 0.72, 策略 Directional, 仓位 150'
                   : '示例：利兹联 win/平 拜仁, conf 3.5, odds 7.4, fse 0.72, mode 半, input 180\n或：arsenal W, chelsea D, conf 55 60, odds 1.8 3.2, mode 常规-稳'}
-                rows={quickInputHasStructuredResult ? Math.min(12, 4 + quickInputResult.matches.length * 4) : 3}
+                rows={quickInputHasStructuredResult ? Math.min(16, 4 + quickInputMatchCount * 3) : 3}
                 aria-label={quickInputHasStructuredResult ? '解析后的结构化投资数据' : '自然语言投资描述'}
                 aria-describedby="quick-input-privacy"
                 className={`input-glow qi-ai-textarea w-full px-3 py-2 rounded-xl border border-stone-200 text-sm focus:outline-none resize-none${quickInputHasStructuredResult ? ' is-structured' : ''}`}
               />
+              {quickInputHasStructuredResult && quickInputComboCount > 1 && (
+                <div className="qi-combo-switcher" role="tablist" aria-label="已识别的投资组合">
+                  <span className="qi-combo-switcher-label">{quickInputComboCount} 单</span>
+                  <div className="qi-combo-tabs">
+                    {quickInputResult.combos.map((combo, index) => (
+                      <button
+                        key={`${index}-${combo.comboName || 'combo'}`}
+                        type="button"
+                        role="tab"
+                        aria-selected={index === quickComboIndex}
+                        onClick={() => handleQuickComboSelect(index)}
+                        className={`qi-combo-tab${index === quickComboIndex ? ' is-active' : ''}`}
+                      >
+                        <span>{combo.comboName || `组合 ${index + 1}`}</span>
+                        <small>{combo.matches.length} 场 · {Number(combo.actualInput) > 0 ? `¥${Number(combo.actualInput)}` : '待补金额'}</small>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-2">
                 {!quickInputHasStructuredResult && (
                   <button
@@ -1321,14 +1476,14 @@ export default function NewInvestmentPage() {
                   <>
                     <button
                       type="button"
-                      onClick={(event) => handleConfirmInvestment(event)}
+                      onClick={handleQuickArchive}
                       disabled={confirmPersistPending}
                       className="qi-archive-btn"
                     >
                       {confirmPersistPending
                         ? <Loader2 size={13} className="qi-ai-spinner" aria-hidden="true" />
                         : <Archive size={13} aria-hidden="true" />}
-                      <span>{confirmPersistPending ? '正在入档…' : '一键入档'}</span>
+                      <span>{confirmPersistPending ? '正在入档…' : `一键入档${quickInputComboCount > 1 ? ` · ${quickInputComboCount} 单` : ''}`}</span>
                     </button>
                     <button
                       type="button"
@@ -1353,7 +1508,7 @@ export default function NewInvestmentPage() {
                 <span id="quick-input-privacy" className="qi-ai-privacy">
                   <ShieldCheck size={11} aria-hidden="true" />
                   {quickInputHasStructuredResult
-                    ? '已同步填入下方表格 · 入档前仍会完整校验'
+                    ? `已将组合 ${quickComboIndex + 1} 填入下方 · 入档前会逐单校验`
                     : (isPreview ? '演示数据仅在浏览器内解析' : '只填表，不会自动保存')}
                 </span>
               </div>
@@ -1375,9 +1530,9 @@ export default function NewInvestmentPage() {
                       <span className="qi-ai-model">{quickInputMeta.model}</span>
                     )}
                   </div>
-                  {quickInputResult.matches.length > 0 && (
+                  {quickInputMatchCount > 0 && (
                     <p className="qi-ai-result-summary">
-                      已识别 {quickInputResult.matches.length} 场比赛
+                      已识别 {quickInputComboCount} 个组合 · 共 {quickInputMatchCount} 场比赛
                       {quickInputResult.confidence >= 0.7 ? '' : ' (部分字段可能需要手动补充)'}
                       {quickInputPhase === 'ai' && quickInputMeta?.totalTokens > 0
                         ? ` · ${quickInputMeta.totalTokens} tokens`

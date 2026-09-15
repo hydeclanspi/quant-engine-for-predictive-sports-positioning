@@ -1340,6 +1340,17 @@ export const saveInvestment = (investment) => {
   return normalized
 }
 
+export const saveInvestments = (investments) => {
+  if (!checkReadOnlyMode('New Investments')) return []
+  const incoming = Array.isArray(investments) ? investments : []
+  if (incoming.length === 0) return []
+  const normalized = incoming.map((investment) => normalizeInvestmentRecord(investment))
+  // One storage write means a multi-ticket AI import cannot be observed in a
+  // half-written state, and cloud sync receives one coherent final snapshot.
+  writeJSON(STORAGE_KEYS.investments, [...normalized, ...getInvestments()])
+  return normalized
+}
+
 export const updateInvestment = (investmentId, updater) => {
   if (!checkReadOnlyMode('Update Investment')) return null
   const existing = getInvestments()

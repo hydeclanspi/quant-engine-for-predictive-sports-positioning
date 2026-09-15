@@ -63,12 +63,15 @@ describe('POST /api/parse-investment', () => {
   it('authenticates the owner, calls JSON Output, and returns only sanitized fields', async () => {
     const fetchMock = vi.fn().mockResolvedValue(providerResponse(200, modelEnvelope(JSON.stringify({
       confidence: 0.9,
-      actualInput: 30,
-      matches: [{
-        homeTeam: '皇马', awayTeam: '皇社',
-        entries: [{ name: '-1 win', odds: 1.52, hidden: 'drop me' }],
-        conf: 0.55, mode: '常规', tys_home: 'M', tys_away: 'M', fid: 0.4,
-        fse_home: 50, fse_away: 50, note: '',
+      combos: [{
+        actualInput: 30,
+        comboName: '',
+        matches: [{
+          homeTeam: '皇马', awayTeam: '皇社',
+          entries: [{ name: '-1 win', odds: 1.52, hidden: 'drop me' }],
+          conf: 0.55, mode: '常规', tys_home: 'M', tys_away: 'M', fid: 0.4,
+          fse_home: 50, fse_away: 50, note: '',
+        }],
       }],
       arbitrary: 'drop me too', warnings: [],
     }))))
@@ -81,11 +84,12 @@ describe('POST /api/parse-investment', () => {
     expect(res.headers['Cache-Control']).toBe('no-store')
     expect(res.body).toMatchObject({
       ok: true, source: 'deepseek', model: 'deepseek-flash', attempts: 1,
-      actualInput: 30, confidence: 0.9,
+      confidence: 0.9,
       usage: { promptTokens: 91, completionTokens: 27, totalTokens: 118 },
     })
     expect(res.body.arbitrary).toBeUndefined()
-    expect(res.body.matches[0]).toMatchObject({ conf: 55, entries: [{ name: '-1 win', odds: '1.52' }] })
+    expect(res.body.combos[0]).toMatchObject({ actualInput: 30 })
+    expect(res.body.combos[0].matches[0]).toMatchObject({ conf: 55, entries: [{ name: '-1 win', odds: '1.52' }] })
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     const [url, options] = fetchMock.mock.calls[0]
@@ -94,6 +98,7 @@ describe('POST /api/parse-investment', () => {
     const requestBody = JSON.parse(options.body)
     expect(requestBody).toMatchObject({
       model: 'deepseek-flash', thinking: { type: 'disabled' }, temperature: 0, stream: false,
+      max_tokens: 3000,
       response_format: { type: 'json_object' },
     })
     expect(requestBody.messages[0].content.toLowerCase()).toContain('json')

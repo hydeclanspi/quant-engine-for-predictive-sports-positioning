@@ -31,14 +31,17 @@ describe('AI Quick Input browser client', () => {
         model: 'deepseek-flash',
         attempts: 1,
         confidence: 0.8,
-        actualInput: 76,
         usage: { totalTokens: 100 },
-        matches: [{
-          homeTeam: '西班牙',
-          awayTeam: '皇马',
-          entries: [{ name: 'lose', odds: 1.3 }],
-          conf: 70,
-          arbitrary: 'drop',
+        combos: [{
+          actualInput: 76,
+          comboName: '',
+          matches: [{
+            homeTeam: '西班牙',
+            awayTeam: '皇马',
+            entries: [{ name: 'lose', odds: 1.3 }],
+            conf: 70,
+            arbitrary: 'drop',
+          }],
         }],
       }),
     })
@@ -46,12 +49,13 @@ describe('AI Quick Input browser client', () => {
 
     const result = await requestAiInvestmentParse('西班牙 vs 皇马，负，1.3，投入 76')
 
-    expect(result).toMatchObject({ ok: true, source: 'deepseek', actualInput: 76 })
-    expect(result.matches[0]).toMatchObject({
+    expect(result).toMatchObject({ ok: true, source: 'deepseek' })
+    expect(result.combos[0]).toMatchObject({ actualInput: 76 })
+    expect(result.combos[0].matches[0]).toMatchObject({
       homeTeam: '西班牙', awayTeam: '皇马', conf: 70,
       entries: [{ name: 'lose', odds: '1.3' }],
     })
-    expect(result.matches[0].arbitrary).toBeUndefined()
+    expect(result.combos[0].matches[0].arbitrary).toBeUndefined()
     expect(fetchMock).toHaveBeenCalledWith('/api/parse-investment', expect.objectContaining({
       method: 'POST',
       headers: expect.objectContaining({ 'X-Dugou-Arsenal': '1' }),

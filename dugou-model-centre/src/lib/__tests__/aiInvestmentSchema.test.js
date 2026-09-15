@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  AI_PARSE_MAX_COMBOS,
   AI_PARSE_MAX_ENTRIES,
   AI_PARSE_MAX_MATCHES,
   parseJsonObjectText,
@@ -24,9 +25,11 @@ describe('AI investment payload allow-list', () => {
   it('normalizes a valid model response into form-safe values', () => {
     const result = sanitizeAiInvestmentParse({
       confidence: 0.86,
-      actualInput: '134.55',
-      comboName: '周末组合',
-      matches: [validMatch()],
+      combos: [{
+        actualInput: '134.55',
+        comboName: '周末组合',
+        matches: [validMatch()],
+      }],
       warnings: ['赔率需要复核'],
       injected: '<script>alert(1)</script>',
     })
@@ -34,20 +37,22 @@ describe('AI investment payload allow-list', () => {
     expect(result).toEqual({
       ok: true,
       confidence: 0.86,
-      actualInput: 134.55,
-      comboName: '周末组合',
-      matches: [{
-        homeTeam: '主队 0',
-        awayTeam: '客队 0',
-        entries: [{ name: '-1 win', odds: '1.52' }],
-        conf: 55,
-        mode: '保险产品',
-        tys_home: 'L',
-        tys_away: 'H',
-        fid: '0.6',
-        fse_home: 63,
-        fse_away: 72,
-        note: 'demo',
+      combos: [{
+        actualInput: 134.55,
+        comboName: '周末组合',
+        matches: [{
+          homeTeam: '主队 0',
+          awayTeam: '客队 0',
+          entries: [{ name: '-1 win', odds: '1.52' }],
+          conf: 55,
+          mode: '保险产品',
+          tys_home: 'L',
+          tys_away: 'H',
+          fid: '0.6',
+          fse_home: 63,
+          fse_away: 72,
+          note: 'demo',
+        }],
       }],
       warnings: ['赔率需要复核'],
       diagnostics: [{ level: 'warning', message: '赔率需要复核' }],
@@ -68,19 +73,31 @@ describe('AI investment payload allow-list', () => {
     }))
     const result = sanitizeAiInvestmentParse({
       confidence: 99,
-      actualInput: 99_000_000,
-      matches: oversized,
+      combos: Array.from({ length: 9 }, () => ({ actualInput: 99_000_000, matches: oversized })),
     })
 
     expect(result.ok).toBe(true)
-    expect(result.matches).toHaveLength(AI_PARSE_MAX_MATCHES)
-    expect(result.matches[0].entries).toHaveLength(AI_PARSE_MAX_ENTRIES)
-    expect(result.matches[0].entries[0].odds).toBe('')
-    expect(result.matches[0].conf).toBe(100)
-    expect(result.matches[0].mode).toBe('常规')
-    expect(result.matches[0].tys_home).toBe('M')
-    expect(result.actualInput).toBeNull()
+    expect(result.combos).toHaveLength(AI_PARSE_MAX_COMBOS)
+    expect(result.combos[0].matches).toHaveLength(AI_PARSE_MAX_MATCHES)
+    expect(result.combos[0].matches[0].entries).toHaveLength(AI_PARSE_MAX_ENTRIES)
+    expect(result.combos[0].matches[0].entries[0].odds).toBe('')
+    expect(result.combos[0].matches[0].conf).toBe(100)
+    expect(result.combos[0].matches[0].mode).toBe('常规')
+    expect(result.combos[0].matches[0].tys_home).toBe('M')
+    expect(result.combos[0].actualInput).toBeNull()
     expect(result.confidence).toBe(1)
+  })
+
+  it('wraps the former single-ticket response into combos during rollout', () => {
+    const result = sanitizeAiInvestmentParse({
+      confidence: 0.7,
+      actualInput: 30,
+      comboName: '旧格式',
+      matches: [validMatch()],
+    })
+    expect(result.ok).toBe(true)
+    expect(result.combos).toHaveLength(1)
+    expect(result.combos[0]).toMatchObject({ actualInput: 30, comboName: '旧格式' })
   })
 
   it('accepts raw or fenced JSON and rejects non-objects', () => {
