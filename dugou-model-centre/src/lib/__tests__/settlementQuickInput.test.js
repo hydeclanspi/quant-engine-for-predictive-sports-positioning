@@ -93,7 +93,21 @@ describe('settlement Quick Input matching', () => {
         matches: [{ matchIndex: 0, homeTeam: '', awayTeam: '', results: '0-1', isCorrect: null }],
       }],
     }, pending)
-    expect(result.resolved[0].matchPatches[0].isCorrect).toBe(false)
+    expect(result.resolved[0].matchPatches[0]).toMatchObject({ isCorrect: false, matchRating: undefined })
+  })
+
+  it('defaults AJR and REP when a supplied result is determined to be a hit', () => {
+    const result = resolveAiSettlementParse({
+      settlements: [{
+        pendingId: 'inv_1', reference: '', revenues: null,
+        matches: [{ matchIndex: 0, homeTeam: '', awayTeam: '', results: '2-1', isCorrect: null, matchRating: null, matchRep: null }],
+      }],
+    }, pending)
+    expect(result.resolved[0].matchPatches[0]).toMatchObject({
+      isCorrect: true,
+      matchRating: 0.8,
+      matchRep: 0,
+    })
   })
 
   it('prefills the prediction as Results when AI only reports a hit', () => {

@@ -430,13 +430,19 @@ export default function SettlePage() {
         ...prev,
         [combo.id]: {
           ...current,
-          matches: current.matches.map((match, idx) => (idx === matchIdx
-            ? {
+          matches: current.matches.map((match, idx) => {
+            if (idx !== matchIdx) return match
+            const shouldDefaultRating = inferredHit === true && (match.matchRating === '' || match.matchRating === null || match.matchRating === undefined || Number(match.matchRating) === 0)
+            return {
               ...match,
               results: value,
               isCorrect: inferredHit === null ? (isEmpty ? null : match.isCorrect) : inferredHit,
+              matchRating: shouldDefaultRating ? '0.8' : match.matchRating,
+              matchRep: shouldDefaultRating && (match.matchRep === '' || match.matchRep === null || match.matchRep === undefined)
+                ? '0'
+                : match.matchRep,
             }
-            : match)),
+          }),
         },
       }
     })

@@ -53,6 +53,7 @@ describe('POST /api/parse-settlement', () => {
     expect(requestBody.messages[0].content).toContain('no 0.4')
     expect(requestBody.messages[0].content).toContain('必须将它与 PENDING_RECORDS')
     expect(requestBody.messages[0].content).toContain('matchRating 必须默认为 0.8')
+    expect(requestBody.messages[0].content).toContain('确定性判定为命中')
     expect(requestBody.messages[0].content).toContain('复制该场 prediction 作为 results')
   })
 

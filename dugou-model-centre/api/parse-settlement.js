@@ -35,7 +35,7 @@ export const SETTLEMENT_PARSE_SYSTEM_PROMPT = `
 - postNote 只保留用户明确提供的赛后备注，否则 ""。
 - INPUT_SCOPE="match" 表示用户正在某一场比赛下方的独立 AI 框中输入，PENDING_RECORDS 此时只含这一场：无需用户重复球队或序号，直接匹配该场。
 - 在 INPUT_SCOPE="match" 时：若 USER_TEXT 中唯一的数值参数是一个 0–0.8 的裸数（如“0.4”或“no 0.4”），它表示 matchRating；若已得到 matchRating 但用户未提 REP，则 matchRep=0。比分、金额以及明确标注为 REP 的数值不适用此规则。
-- 用户明确表达该场“中了、命中、hit、yes、拿下”等肯定命中，而没有提供 AJR 时，matchRating 必须默认为 0.8；因此若也未提供 REP，matchRep=0。仅由比分计算出命中时不要擅自补 AJR。
+- 用户明确表达命中，或根据实际比分与 prediction 确定性判定为命中时，若没有提供 AJR，matchRating 必须默认为 0.8；因此若也未提供 REP，matchRep=0。
 
 严格返回：
 {

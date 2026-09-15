@@ -254,13 +254,19 @@ export const resolveAiSettlementParse = (result, pendingCombos) => {
       claimedIndices.add(matchIndex)
       const pendingMatch = combo.matches[matchIndex]
       const inferredHit = inferIsCorrectFromResult(pendingMatch?.entry, parsedMatch.results)
+      const resolvedHit = parsedMatch.isCorrect === null || parsedMatch.isCorrect === undefined
+        ? inferredHit
+        : parsedMatch.isCorrect
+      const shouldDefaultRating = resolvedHit === true && (parsedMatch.matchRating === null || parsedMatch.matchRating === undefined)
       matchPatches.push({
         ...parsedMatch,
         matchIndex,
         results: parsedMatch.results || (parsedMatch.isCorrect === true ? String(pendingMatch?.entry || '') : ''),
-        isCorrect: parsedMatch.isCorrect === null || parsedMatch.isCorrect === undefined
-          ? inferredHit
-          : parsedMatch.isCorrect,
+        isCorrect: resolvedHit,
+        matchRating: shouldDefaultRating ? 0.8 : parsedMatch.matchRating,
+        matchRep: shouldDefaultRating && (parsedMatch.matchRep === null || parsedMatch.matchRep === undefined)
+          ? 0
+          : parsedMatch.matchRep,
       })
     })
     resolved.push({
