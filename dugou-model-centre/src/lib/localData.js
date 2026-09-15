@@ -1368,6 +1368,31 @@ export const updateInvestment = (investmentId, updater) => {
   return next.find((item) => item.id === investmentId) || null
 }
 
+export const updateInvestments = (updates) => {
+  if (!checkReadOnlyMode('Update Investments')) return []
+  const updateMap = new Map(
+    (Array.isArray(updates) ? updates : [])
+      .filter((item) => item?.id)
+      .map((item) => [item.id, item.updater]),
+  )
+  if (updateMap.size === 0) return []
+
+  const changed = []
+  const next = getInvestments().map((item) => {
+    if (!updateMap.has(item.id)) return item
+    const updater = updateMap.get(item.id)
+    const updated = typeof updater === 'function' ? updater(item) : { ...item, ...(updater || {}) }
+    const normalized = normalizeInvestmentRecord(updated)
+    changed.push(normalized)
+    return normalized
+  })
+  if (changed.length !== updateMap.size) return []
+  // A batch settlement becomes visible locally and in cloud sync as one
+  // coherent snapshot; no device can observe a partially settled batch.
+  writeJSON(STORAGE_KEYS.investments, next)
+  return changed
+}
+
 export const deleteInvestment = (investmentId) => {
   if (!checkReadOnlyMode('Delete Investment')) return false
   const existing = getInvestments()

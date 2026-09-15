@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp, Check, X, Trash2 } from 'lucide-react'
-import { deleteInvestment, getInvestments, updateInvestment } from '../lib/localData'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { ChevronDown, ChevronUp, ChevronRight, Check, X, Trash2, Sparkles, Loader2, ShieldCheck, Archive, RotateCcw } from 'lucide-react'
+import { deleteInvestment, getInvestments, updateInvestment, updateInvestments } from '../lib/localData'
 import { autoApplyAdaptiveWeights } from '../lib/analytics'
 import { handleNoteShortcut } from '../lib/noteFormatting'
 import { normalizeEntryName } from '../lib/entryParsing'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
 import { useLabels } from '../lib/labels'
 import { isPreviewMode } from '../lib/displayMode'
+import { requestAiSettlementParse } from '../lib/aiSettlementClient'
+import { AI_SETTLE_MAX_TEXT_LENGTH } from '../lib/aiSettlementSchema'
+import {
+  formatStructuredSettlementInput,
+  parseSettlementLocally,
+  resolveAiSettlementParse,
+} from '../lib/settlementQuickInput'
 
 // 演示态首屏「展卷」：进入待结算页 1.7s 后，自动把第一条记录从容「展卷」展开
 // （复用 qi-collapse 高度动效，但走待结算专属的 is-peek-unfurl 慢展 + 内容无回弹），
@@ -35,6 +42,7 @@ const createPendingCombos = () =>
     .map((item) => ({
       id: item.id,
       date: formatDate(item.created_at),
+      comboName: String(item.combo_name || ''),
       totalOdds: Number(item.combined_odds || 0).toFixed(2),
       totalInputs: Number(item.inputs || 0),
       matches:
@@ -51,13 +59,15 @@ const createPendingCombos = () =>
           matchRep: match.match_rep ?? '',
           postNote: match.post_note || '',
         })) || [],
-      revenues: Number(item.revenues || 0),
+      revenues: item.revenues === null || item.revenues === undefined || item.revenues === ''
+        ? null
+        : Number(item.revenues),
     }))
 
 const createInitialForms = (combos) =>
   combos.reduce((acc, combo) => {
     acc[combo.id] = {
-      revenues: String(combo.revenues || 0),
+      revenues: combo.revenues === null ? '' : String(combo.revenues),
       matches: combo.matches.map((match) => ({
         results: match.results,
         isCorrect: match.isCorrect,
@@ -164,6 +174,15 @@ export default function SettlePage() {
   const [batchRep, setBatchRep] = useState('')
   const [historyAutoFillSnapshots, setHistoryAutoFillSnapshots] = useState({})
   const [waxSealBurst, setWaxSealBurst] = useState({ active: false, token: 0, x: 0, y: 0 })
+  const [settleQuickOpen, setSettleQuickOpen] = useState(true)
+  const [settleQuickText, setSettleQuickText] = useState('')
+  const [settleQuickResult, setSettleQuickResult] = useState(null)
+  const [settleQuickPhase, setSettleQuickPhase] = useState('idle')
+  const [settleQuickMeta, setSettleQuickMeta] = useState(null)
+  const settleQuickSourceRef = useRef('')
+  const settleQuickAbortRef = useRef(null)
+
+  useEffect(() => () => settleQuickAbortRef.current?.abort(), [])
 
   const settledHistoryLookup = useMemo(() => {
     const lookup = new Map()
@@ -391,6 +410,102 @@ export default function SettlePage() {
     }))
   }
 
+  const applySettleQuickResult = (parsed) => {
+    const resolvedResult = resolveAiSettlementParse(parsed, pendingCombos)
+    setForms((prev) => {
+      const next = { ...prev }
+      resolvedResult.resolved.forEach((item) => {
+        const current = next[item.comboId]
+        if (!current) return
+        const patches = new Map(item.matchPatches.map((patch) => [patch.matchIndex, patch]))
+        next[item.comboId] = {
+          ...current,
+          revenues: item.revenues === null ? current.revenues : String(item.revenues),
+          matches: current.matches.map((match, matchIndex) => {
+            const patch = patches.get(matchIndex)
+            if (!patch) return match
+            return {
+              ...match,
+              results: patch.results || match.results,
+              isCorrect: patch.isCorrect === null ? match.isCorrect : patch.isCorrect,
+              matchRating: patch.matchRating === null ? match.matchRating : String(patch.matchRating),
+              matchRep: patch.matchRep === null ? match.matchRep : String(patch.matchRep),
+              postNote: patch.postNote || match.postNote,
+            }
+          }),
+        }
+      })
+      return next
+    })
+    if (resolvedResult.resolved.length > 0) {
+      const ids = new Set(resolvedResult.resolved.map((item) => item.comboId))
+      setSelectedComboIds(Object.fromEntries(pendingCombos.map((combo) => [combo.id, ids.has(combo.id)])))
+      setExpandedCombo(resolvedResult.resolved[0].comboId)
+    }
+    setSettleQuickResult(resolvedResult)
+    const formatted = formatStructuredSettlementInput(resolvedResult, pendingCombos)
+    if (formatted) setSettleQuickText(formatted)
+    return resolvedResult
+  }
+
+  const handleSettleQuickParse = async () => {
+    const text = settleQuickText.trim()
+    if (!text || pendingCombos.length === 0) return
+    settleQuickAbortRef.current?.abort()
+    settleQuickSourceRef.current = text
+    setSettleQuickResult(null)
+    setSettleQuickMeta(null)
+
+    if (isPreviewMode()) {
+      applySettleQuickResult(parseSettlementLocally(text, pendingCombos))
+      setSettleQuickPhase('local')
+      return
+    }
+
+    const controller = new AbortController()
+    settleQuickAbortRef.current = controller
+    setSettleQuickPhase('loading')
+    try {
+      const result = await requestAiSettlementParse(text, pendingCombos, { signal: controller.signal })
+      if (controller.signal.aborted) return
+      applySettleQuickResult(result)
+      setSettleQuickMeta({ model: result.model, totalTokens: result.usage?.totalTokens || 0 })
+      setSettleQuickPhase('ai')
+    } catch (error) {
+      if (controller.signal.aborted || error?.reason === 'request_cancelled') return
+      const fallbackReason = {
+        ai_not_configured: 'AI 尚未配置',
+        provider_rate_limited: 'AI 请求较多',
+        provider_timeout: 'AI 响应超时',
+        client_timeout: 'AI 响应超时',
+        provider_auth_failed: 'AI 密钥无效',
+        no_pending_records: '没有待结算记录',
+        text_too_long: '输入内容过长',
+      }[error?.reason] || 'AI 暂时不可用'
+      const local = parseSettlementLocally(text, pendingCombos)
+      applySettleQuickResult({
+        ...local,
+        diagnostics: [
+          { level: 'info', message: `${fallbackReason}，已切换为本地基础解析。` },
+          ...(local.diagnostics || []),
+        ],
+      })
+      setSettleQuickMeta({ reason: error?.reason || 'unknown' })
+      setSettleQuickPhase('fallback')
+    } finally {
+      if (settleQuickAbortRef.current === controller) settleQuickAbortRef.current = null
+    }
+  }
+
+  const resetSettleQuick = ({ restoreSource = false } = {}) => {
+    settleQuickAbortRef.current?.abort()
+    setSettleQuickText(restoreSource ? settleQuickSourceRef.current : '')
+    if (!restoreSource) settleQuickSourceRef.current = ''
+    setSettleQuickResult(null)
+    setSettleQuickPhase('idle')
+    setSettleQuickMeta(null)
+  }
+
   const revertHistoryAutoFillMatch = (comboId, matchIdx) => {
     const snapshot = historyAutoFillSnapshots[comboId]?.[matchIdx]
     if (!snapshot?.previousMatch || snapshot.status !== 'applied') return
@@ -432,7 +547,7 @@ export default function SettlePage() {
     return ''
   }
 
-  const applySettlement = (combo, form) => {
+  const buildSettlementUpdater = (combo, form) => (previous) => {
     const revenues = Number.parseFloat(form.revenues)
     const status = form.matches.every((match) => match.isCorrect === true) ? 'win' : 'lose'
     const profit = Number((revenues - combo.totalInputs).toFixed(2))
@@ -450,7 +565,7 @@ export default function SettlePage() {
       .filter(Boolean)
       .join('；')
 
-    updateInvestment(combo.id, (previous) => ({
+    return {
       ...previous,
       status,
       revenues: Number(revenues.toFixed(2)),
@@ -466,8 +581,17 @@ export default function SettlePage() {
         match_rep: toNumberOrNull(form.matches[idx]?.matchRep),
         post_note: String(form.matches[idx]?.postNote || '').trim(),
       })),
-    }))
+    }
   }
+
+  const applySettlement = (combo, form) => updateInvestment(combo.id, buildSettlementUpdater(combo, form))
+
+  const applySettlementsAtomically = (targetCombos) => updateInvestments(
+    targetCombos.map((combo) => ({
+      id: combo.id,
+      updater: buildSettlementUpdater(combo, forms[combo.id]),
+    })),
+  )
 
   const settleCombos = (targetCombos) => {
     const ids = new Set(targetCombos.map((combo) => combo.id))
@@ -527,7 +651,7 @@ export default function SettlePage() {
     applySettlement(combo, form)
 
     // 结算后自动微调自适应权重（安全约束：单次 ±0.02，总量 ≤0.08）
-    try { autoApplyAdaptiveWeights() } catch (_) { /* non-critical */ }
+    try { autoApplyAdaptiveWeights() } catch { /* non-critical */ }
 
     // 找到当前结算项的下一条，用于自动展开
     const currentIndex = pendingCombos.findIndex((c) => c.id === combo.id)
@@ -586,9 +710,56 @@ export default function SettlePage() {
     const ok = window.confirm(`确认批量结算已勾选的 ${targetCombos.length} 笔记录吗？`)
     if (!ok) return
 
+    const saved = applySettlementsAtomically(targetCombos)
+    if (saved.length !== targetCombos.length) {
+      window.alert('批量结算写入失败，表单已保留，请重试。')
+      return
+    }
     triggerWaxSealStamp(event?.currentTarget)
-    targetCombos.forEach((combo) => applySettlement(combo, forms[combo.id]))
+    try { autoApplyAdaptiveWeights() } catch { /* non-critical */ }
     settleCombos(targetCombos)
+  }
+
+  const handleSettleQuickArchive = (event) => {
+    const resolvedIds = [...new Set((settleQuickResult?.resolved || []).map((item) => item.comboId))]
+    const targetCombos = resolvedIds
+      .map((id) => pendingCombos.find((combo) => combo.id === id))
+      .filter(Boolean)
+    if (targetCombos.length === 0) {
+      window.alert('没有可结算的匹配记录。')
+      return
+    }
+    const invalid = targetCombos
+      .map((combo) => ({ combo, error: getValidationError(forms[combo.id]) }))
+      .filter((item) => item.error)
+    if (invalid.length > 0) {
+      setExpandedCombo(invalid[0].combo.id)
+      window.alert(`AI 已填入，但以下记录仍需补充：\n${invalid
+        .slice(0, 5)
+        .map(({ combo, error }) => `${combo.date} ${getComboLabel(combo.matches.length)}：${error}`)
+        .join('\n')}`)
+      return
+    }
+    const ok = window.confirm(`确认一键结算已匹配的 ${targetCombos.length} 笔记录吗？`)
+    if (!ok) return
+
+    const totalProfit = targetCombos.reduce((sum, combo) => {
+      const revenue = Number.parseFloat(forms[combo.id]?.revenues)
+      return sum + (Number.isFinite(revenue) ? revenue - combo.totalInputs : 0)
+    }, 0)
+    const allWin = targetCombos.every((combo) => forms[combo.id]?.matches.every((match) => match.isCorrect === true))
+    const saved = applySettlementsAtomically(targetCombos)
+    if (saved.length !== targetCombos.length) {
+      window.alert('一键结算写入失败，解析结果和表单已保留。')
+      return
+    }
+    triggerWaxSealStamp(event?.currentTarget, {
+      tone: allWin ? 'win' : 'neutral',
+      profit: Number(totalProfit.toFixed(2)),
+    })
+    try { autoApplyAdaptiveWeights() } catch { /* non-critical */ }
+    settleCombos(targetCombos)
+    resetSettleQuick()
   }
 
   const applyBatchFill = () => {
@@ -635,12 +806,116 @@ export default function SettlePage() {
     })
   }
 
+  const settleQuickHasResult = Boolean(
+    settleQuickResult?.resolved?.length > 0 && ['ai', 'fallback', 'local'].includes(settleQuickPhase),
+  )
+  const settleQuickResolvedCount = settleQuickResult?.resolved?.length || 0
+
   return (
     <div className="page-shell page-content-wide motion-v2-scope">
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-stone-800 font-display">待结算</h2>
         <p className="text-stone-400 text-sm mt-1">{pendingCombos.length} 笔投资待录入结果</p>
       </div>
+
+      {pendingCombos.length > 0 && (
+        <div className="settle-ai-quick-card motion-v2-surface glow-card mb-4 overflow-hidden rounded-2xl border">
+          <button
+            type="button"
+            onClick={() => setSettleQuickOpen((open) => !open)}
+            aria-expanded={settleQuickOpen}
+            className="settle-ai-trigger motion-v2-ghost-btn flex w-full items-center gap-2 px-4 py-3 text-left"
+          >
+            <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron settle-ai-chevron${settleQuickOpen ? ' is-open' : ''}`} />
+            <span className="settle-ai-title">Quick Settle</span>
+            <span className="settle-ai-beta-badge ml-1">Beta</span>
+            <span className="settle-ai-subtitle ml-1">大模型自然语言快捷结算</span>
+          </button>
+
+          <div className={`qi-collapse${settleQuickOpen ? ' is-open' : ''}`} inert={settleQuickOpen ? undefined : ''}>
+            <div className="qi-collapse-inner">
+              <div className="settle-ai-body space-y-2 px-4 pb-4">
+                <textarea
+                  value={settleQuickText}
+                  onChange={(event) => {
+                    settleQuickAbortRef.current?.abort()
+                    setSettleQuickText(event.target.value)
+                    if (settleQuickResult || settleQuickPhase === 'loading') {
+                      setSettleQuickResult(null)
+                      setSettleQuickPhase('idle')
+                      setSettleQuickMeta(null)
+                    }
+                  }}
+                  maxLength={AI_SETTLE_MAX_TEXT_LENGTH}
+                  readOnly={settleQuickHasResult}
+                  rows={settleQuickHasResult ? Math.min(14, 3 + settleQuickResolvedCount * 3) : 3}
+                  placeholder={'示例：1. 皇马2-1皇社，命中，收入98.80，AJR 0.68，REP 0.2\n2. 巴萨3-3皇马，未中，收入0，备注：红牌改变了走势'}
+                  aria-label={settleQuickHasResult ? '解析后的结构化结算数据' : '自然语言结算描述'}
+                  className={`settle-ai-textarea input-glow w-full resize-none rounded-xl border px-3 py-2 text-sm focus:outline-none${settleQuickHasResult ? ' is-structured' : ''}`}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {!settleQuickHasResult && (
+                    <button
+                      type="button"
+                      onClick={handleSettleQuickParse}
+                      disabled={!settleQuickText.trim() || settleQuickPhase === 'loading'}
+                      aria-busy={settleQuickPhase === 'loading'}
+                      className="settle-ai-parse-btn"
+                    >
+                      {settleQuickPhase === 'loading'
+                        ? <Loader2 size={13} className="qi-ai-spinner" aria-hidden="true" />
+                        : <Sparkles size={13} aria-hidden="true" />}
+                      <span>{settleQuickPhase === 'loading' ? '正在匹配…' : (isPreviewMode() ? '解析并填入' : 'AI 解析并填入')}</span>
+                    </button>
+                  )}
+                  {settleQuickHasResult && (
+                    <>
+                      <button type="button" onClick={handleSettleQuickArchive} className="settle-ai-archive-btn">
+                        <Archive size={13} aria-hidden="true" />
+                        <span>一键结算{settleQuickResolvedCount > 1 ? ` · ${settleQuickResolvedCount} 笔` : ''}</span>
+                      </button>
+                      <button type="button" onClick={() => resetSettleQuick({ restoreSource: true })} className="qi-reinput-btn">
+                        <RotateCcw size={12} aria-hidden="true" />
+                        重新输入
+                      </button>
+                    </>
+                  )}
+                  {settleQuickText.trim() && !settleQuickHasResult && settleQuickPhase !== 'loading' && (
+                    <button type="button" onClick={() => resetSettleQuick()} className="px-3 py-1.5 text-xs text-stone-500 transition-colors hover:text-stone-700">
+                      清空
+                    </button>
+                  )}
+                  <span className="settle-ai-privacy">
+                    <ShieldCheck size={11} aria-hidden="true" />
+                    {settleQuickHasResult ? '已填入对应记录 · 结算前仍会完整校验' : '只填表，不会自动结算'}
+                  </span>
+                </div>
+
+                {settleQuickResult && (
+                  <div className={`settle-ai-result is-${settleQuickPhase}`} role="status" aria-live="polite">
+                    <div className="qi-ai-result-heading">
+                      <span className="settle-ai-result-orb" aria-hidden="true"><Sparkles size={11} /></span>
+                      <span>
+                        {settleQuickPhase === 'ai' && 'DeepSeek 已完成结算匹配'}
+                        {settleQuickPhase === 'fallback' && '已切换至本地基础解析'}
+                        {settleQuickPhase === 'local' && '本地结算解析完成'}
+                      </span>
+                      {settleQuickPhase === 'ai' && settleQuickMeta?.model && <span className="qi-ai-model">{settleQuickMeta.model}</span>}
+                    </div>
+                    <p className="settle-ai-result-summary">
+                      已匹配 {settleQuickResolvedCount} 笔待结算记录
+                      {settleQuickPhase === 'ai' && settleQuickMeta?.totalTokens > 0 ? ` · ${settleQuickMeta.totalTokens} tokens` : ''}
+                    </p>
+                    {(settleQuickResult.diagnostics || []).map((diagnostic, index) => (
+                      <p key={index} className={`settle-ai-diagnostic is-${diagnostic.level || 'info'}`}>{diagnostic.message}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {pendingCombos.length > 0 && (
         <div className="mb-4 flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
@@ -888,7 +1163,7 @@ export default function SettlePage() {
                         <input
                           type="text"
                           inputMode="decimal"
-                          value={forms[combo.id]?.revenues ?? '0'}
+                          value={forms[combo.id]?.revenues ?? ''}
                           onChange={(event) => updateRevenue(combo.id, event.target.value)}
                           className="input-glow w-32 px-3 py-2.5 rounded-xl border border-stone-200 text-sm font-medium"
                         />

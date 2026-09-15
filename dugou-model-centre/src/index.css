@@ -4939,6 +4939,193 @@
   color: #b48029;
 }
 
+/* Settle AI quick input · light champagne-platinum material system. */
+.settle-ai-quick-card {
+  border-color: rgba(185, 157, 109, 0.17);
+  background:
+    radial-gradient(circle at 96% 0%, rgba(239, 225, 197, 0.2), transparent 34%),
+    rgba(255, 255, 255, 0.95);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.96), 0 12px 34px rgba(113, 92, 56, 0.055);
+}
+
+.settle-ai-trigger { color: #75684f; }
+.settle-ai-chevron { color: #a68147; }
+
+.settle-ai-title {
+  color: #7d6136;
+  font-size: 14px;
+  font-weight: 570;
+  letter-spacing: 0.004em;
+  text-shadow: 0 1px rgba(255, 255, 255, 0.7);
+}
+
+.settle-ai-subtitle {
+  color: #9a815b;
+  font-size: 11px;
+  font-weight: 540;
+  letter-spacing: 0.008em;
+}
+
+.settle-ai-beta-badge {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  overflow: hidden;
+  min-height: 16px;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 6px 0;
+  border: 1px solid rgba(166, 130, 73, 0.3);
+  border-radius: 5px;
+  background: linear-gradient(112deg, #f4ead8 0%, #d7be8e 22%, #eee1c9 42%, #c4a66d 59%, #e4d2b0 78%, #f2e8d7 100%);
+  background-position: 0% 50%;
+  background-size: 260% 100%;
+  box-shadow:
+    inset 0 1px rgba(255, 255, 255, 0.76),
+    inset 0 -1px rgba(117, 84, 36, 0.11),
+    0 2px 7px rgba(127, 96, 50, 0.12);
+  color: #70552d;
+  font-size: 7.5px;
+  font-weight: 720;
+  letter-spacing: 0.095em;
+  line-height: 1;
+  text-shadow: 0 1px rgba(255, 255, 255, 0.65);
+  text-transform: uppercase;
+  animation: settleChampagneFlow 3.9s ease-in-out infinite;
+}
+
+.settle-ai-beta-badge::after {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  background: linear-gradient(104deg, transparent 18%, rgba(255, 255, 255, 0.38) 42%, rgba(236, 221, 193, 0.12) 54%, transparent 76%);
+  content: '';
+  transform: translateX(-105%);
+  animation: settleChampagneSheen 3.9s cubic-bezier(0.45, 0, 0.25, 1) infinite;
+}
+
+@keyframes settleChampagneFlow {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+@keyframes settleChampagneSheen {
+  0%, 12% { transform: translateX(-105%); }
+  62%, 100% { transform: translateX(115%); }
+}
+
+.settle-ai-body { border-top: 1px solid rgba(185, 157, 109, 0.11); }
+
+.settle-ai-textarea {
+  border-color: rgba(180, 155, 113, 0.2);
+  background:
+    radial-gradient(circle at 98% 0%, rgba(239, 225, 199, 0.28), transparent 38%),
+    rgba(255, 255, 255, 0.9);
+  color: #4f493f;
+  transition: border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+
+.settle-ai-textarea:focus {
+  border-color: rgba(174, 137, 75, 0.4);
+  box-shadow: 0 0 0 3px rgba(190, 156, 97, 0.08), 0 11px 30px rgba(118, 92, 48, 0.055);
+}
+
+.settle-ai-textarea.is-structured {
+  background:
+    radial-gradient(circle at 98% 0%, rgba(234, 216, 181, 0.33), transparent 44%),
+    linear-gradient(145deg, rgba(255, 254, 251, 0.98), rgba(250, 247, 239, 0.95));
+  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 450;
+  line-height: 1.72;
+  cursor: default;
+}
+
+.settle-ai-parse-btn,
+.settle-ai-archive-btn {
+  display: inline-flex;
+  min-height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 610;
+  line-height: 1;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 180ms ease, opacity 180ms ease;
+}
+
+.settle-ai-parse-btn {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: linear-gradient(125deg, #9a7944, #b4935b 52%, #88704a);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.3), 0 7px 18px rgba(126, 91, 39, 0.17);
+}
+
+.settle-ai-archive-btn {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(125deg, #48433b, #666056 54%, #7a6a50);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.16), 0 7px 18px rgba(67, 57, 43, 0.18);
+}
+
+.settle-ai-parse-btn:hover:not(:disabled),
+.settle-ai-archive-btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.32), 0 10px 23px rgba(105, 81, 46, 0.21);
+}
+
+.settle-ai-parse-btn:active:not(:disabled),
+.settle-ai-archive-btn:active:not(:disabled) { transform: scale(0.98); }
+
+.settle-ai-parse-btn:disabled { cursor: not-allowed; opacity: 0.42; box-shadow: none; }
+
+.settle-ai-privacy {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  color: #aaa08f;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.settle-ai-result {
+  padding: 10px 12px;
+  border: 1px solid rgba(181, 149, 92, 0.14);
+  border-radius: 13px;
+  background:
+    radial-gradient(circle at 2% 0%, rgba(235, 218, 186, 0.38), transparent 38%),
+    linear-gradient(120deg, rgba(253, 252, 248, 0.97), rgba(249, 246, 238, 0.85));
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.96), 0 8px 24px rgba(126, 99, 52, 0.055);
+  animation: qiAiResultIn 360ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.settle-ai-result-orb {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: linear-gradient(145deg, #fbf5e9, #e8d5ad);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.95), 0 3px 9px rgba(140, 102, 45, 0.12);
+  color: #96723b;
+}
+
+.settle-ai-result-summary,
+.settle-ai-diagnostic {
+  margin: 5px 0 0 27px;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
+.settle-ai-result-summary { color: #70865d; }
+.settle-ai-diagnostic { color: #a8a29e; }
+.settle-ai-diagnostic.is-warning { color: #bd7d22; }
+.settle-ai-diagnostic.is-error { color: #e34f68; }
+
 .qi-ai-textarea {
   background:
     radial-gradient(circle at 98% 0%, rgba(224, 231, 255, 0.48), transparent 34%),
@@ -5254,6 +5441,11 @@
     width: 100%;
     margin-left: 0;
   }
+
+  .settle-ai-privacy {
+    width: 100%;
+    margin-left: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5282,6 +5474,10 @@
   }
   .qi-beta-badge,
   .qi-beta-badge::after {
+    animation: none;
+  }
+  .settle-ai-beta-badge,
+  .settle-ai-beta-badge::after {
     animation: none;
   }
   .qi-ai-parse-btn,
