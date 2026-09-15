@@ -12,6 +12,7 @@ import { AI_SETTLE_MAX_TEXT_LENGTH } from '../lib/aiSettlementSchema'
 import {
   formatStructuredSettlementInput,
   parseSettlementLocally,
+  parseSingleMatchSettlementLocally,
   resolveAiSettlementParse,
 } from '../lib/settlementQuickInput'
 
@@ -155,6 +156,19 @@ const sanitizeDecimalInputText = (value, { maxDecimals = null } = {}) => {
   return text
 }
 
+const getMatchAiKey = (comboId, matchIdx) => `${comboId}::${matchIdx}`
+
+const formatMatchAiReceipt = (patch) => {
+  const parts = []
+  if (patch?.isCorrect === true) parts.push('命中')
+  if (patch?.isCorrect === false) parts.push('未中')
+  if (patch?.results) parts.push(`赛果 ${patch.results}`)
+  if (patch?.matchRating !== null && patch?.matchRating !== undefined) parts.push(`AJR ${patch.matchRating}`)
+  if (patch?.matchRep !== null && patch?.matchRep !== undefined) parts.push(`REP ${patch.matchRep}`)
+  if (patch?.postNote) parts.push(`备注 ${patch.postNote}`)
+  return parts.join(' · ')
+}
+
 export default function SettlePage() {
   const labels = useLabels()
   const [pendingCombos, setPendingCombos] = useState(() => createPendingCombos())
@@ -174,15 +188,21 @@ export default function SettlePage() {
   const [batchRep, setBatchRep] = useState('')
   const [historyAutoFillSnapshots, setHistoryAutoFillSnapshots] = useState({})
   const [waxSealBurst, setWaxSealBurst] = useState({ active: false, token: 0, x: 0, y: 0 })
-  const [settleQuickOpen, setSettleQuickOpen] = useState(true)
+  const [settleQuickOpen, setSettleQuickOpen] = useState(false)
   const [settleQuickText, setSettleQuickText] = useState('')
   const [settleQuickResult, setSettleQuickResult] = useState(null)
   const [settleQuickPhase, setSettleQuickPhase] = useState('idle')
   const [settleQuickMeta, setSettleQuickMeta] = useState(null)
   const settleQuickSourceRef = useRef('')
   const settleQuickAbortRef = useRef(null)
+  const [matchAiStates, setMatchAiStates] = useState({})
+  const matchAiAbortRef = useRef(new Map())
 
-  useEffect(() => () => settleQuickAbortRef.current?.abort(), [])
+  useEffect(() => () => {
+    settleQuickAbortRef.current?.abort()
+    matchAiAbortRef.current.forEach((controller) => controller.abort())
+    matchAiAbortRef.current.clear()
+  }, [])
 
   const settledHistoryLookup = useMemo(() => {
     const lookup = new Map()
@@ -506,6 +526,183 @@ export default function SettlePage() {
     setSettleQuickMeta(null)
   }
 
+  const updateMatchAiText = (comboId, matchIdx, text) => {
+    const key = getMatchAiKey(comboId, matchIdx)
+    matchAiAbortRef.current.get(key)?.abort()
+    matchAiAbortRef.current.delete(key)
+    setMatchAiStates((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        text,
+        phase: 'idle',
+        result: null,
+        diagnostics: [],
+        meta: null,
+      },
+    }))
+  }
+
+  const applyMatchAiResult = (combo, matchIdx, parsed) => {
+    const targetMatch = combo.matches[matchIdx]
+    if (!targetMatch) return { patch: null, diagnostics: [{ level: 'warning', message: '目标比赛不存在。' }] }
+    const contextCombo = { ...combo, matches: [targetMatch] }
+    const resolved = resolveAiSettlementParse(parsed, [contextCombo])
+    const parsedPatch = resolved.resolved?.[0]?.matchPatches?.[0]
+    if (!parsedPatch) {
+      return { patch: null, diagnostics: resolved.diagnostics || [] }
+    }
+    const patch = {
+      ...parsedPatch,
+      // Per-match shorthand: once AJR is supplied, omitted REP means no
+      // random event, not an unfinished field.
+      matchRep:
+        parsedPatch.matchRating !== null &&
+        parsedPatch.matchRating !== undefined &&
+        (parsedPatch.matchRep === null || parsedPatch.matchRep === undefined)
+          ? 0
+          : parsedPatch.matchRep,
+    }
+    const hasPayload = Boolean(
+      patch.results ||
+      (patch.isCorrect !== null && patch.isCorrect !== undefined) ||
+      (patch.matchRating !== null && patch.matchRating !== undefined) ||
+      (patch.matchRep !== null && patch.matchRep !== undefined) ||
+      patch.postNote,
+    )
+    if (!hasPayload) {
+      return {
+        patch: null,
+        diagnostics: [...(resolved.diagnostics || []), { level: 'warning', message: '没有识别到可填入本场的结算信息。' }],
+      }
+    }
+
+    setForms((prev) => {
+      const current = prev[combo.id]
+      if (!current) return prev
+      return {
+        ...prev,
+        [combo.id]: {
+          ...current,
+          matches: current.matches.map((match, index) => index === matchIdx
+            ? {
+                ...match,
+                results: patch.results || match.results,
+                isCorrect: patch.isCorrect === null || patch.isCorrect === undefined ? match.isCorrect : patch.isCorrect,
+                matchRating: patch.matchRating === null || patch.matchRating === undefined ? match.matchRating : String(patch.matchRating),
+                matchRep: patch.matchRep === null || patch.matchRep === undefined ? match.matchRep : String(patch.matchRep),
+                postNote: patch.postNote || match.postNote,
+              }
+            : match),
+        },
+      }
+    })
+    return { patch, diagnostics: resolved.diagnostics || [] }
+  }
+
+  const finishMatchAiParse = (combo, matchIdx, parsed, phase, meta = null) => {
+    const key = getMatchAiKey(combo.id, matchIdx)
+    const applied = applyMatchAiResult(combo, matchIdx, parsed)
+    setMatchAiStates((prev) => {
+      const current = prev[key] || {}
+      if (!applied.patch) {
+        return {
+          ...prev,
+          [key]: {
+            ...current,
+            phase: 'error',
+            result: null,
+            diagnostics: applied.diagnostics,
+            meta,
+          },
+        }
+      }
+      return {
+        ...prev,
+        [key]: {
+          ...current,
+          text: formatMatchAiReceipt(applied.patch),
+          phase,
+          result: applied.patch,
+          diagnostics: applied.diagnostics,
+          meta,
+        },
+      }
+    })
+    return applied.patch
+  }
+
+  const handleMatchAiParse = async (combo, matchIdx) => {
+    const key = getMatchAiKey(combo.id, matchIdx)
+    const text = String(matchAiStates[key]?.text || '').trim()
+    const targetMatch = combo.matches[matchIdx]
+    if (!text || !targetMatch) return
+
+    matchAiAbortRef.current.get(key)?.abort()
+    const sourceText = text
+    setMatchAiStates((prev) => ({
+      ...prev,
+      [key]: {
+        ...(prev[key] || {}),
+        text,
+        sourceText,
+        phase: 'loading',
+        result: null,
+        diagnostics: [],
+        meta: null,
+      },
+    }))
+    const contextCombo = { ...combo, matches: [targetMatch] }
+
+    if (isPreviewMode()) {
+      finishMatchAiParse(combo, matchIdx, parseSingleMatchSettlementLocally(text, contextCombo), 'local')
+      return
+    }
+
+    const controller = new AbortController()
+    matchAiAbortRef.current.set(key, controller)
+    try {
+      const result = await requestAiSettlementParse(text, [contextCombo], { signal: controller.signal, scope: 'match' })
+      if (controller.signal.aborted) return
+      finishMatchAiParse(combo, matchIdx, result, 'ai', {
+        model: result.model,
+        totalTokens: result.usage?.totalTokens || 0,
+      })
+    } catch (error) {
+      if (controller.signal.aborted || error?.reason === 'request_cancelled') return
+      const local = parseSingleMatchSettlementLocally(text, contextCombo)
+      finishMatchAiParse(combo, matchIdx, {
+        ...local,
+        diagnostics: [
+          { level: 'info', message: 'AI 暂时不可用，已切换为本地基础解析。' },
+          ...(local.diagnostics || []),
+        ],
+      }, 'fallback', { reason: error?.reason || 'unknown' })
+    } finally {
+      if (matchAiAbortRef.current.get(key) === controller) matchAiAbortRef.current.delete(key)
+    }
+  }
+
+  const resetMatchAi = (comboId, matchIdx, { restoreSource = false } = {}) => {
+    const key = getMatchAiKey(comboId, matchIdx)
+    matchAiAbortRef.current.get(key)?.abort()
+    matchAiAbortRef.current.delete(key)
+    setMatchAiStates((prev) => {
+      const current = prev[key] || {}
+      return {
+        ...prev,
+        [key]: {
+          text: restoreSource ? String(current.sourceText || '') : '',
+          sourceText: restoreSource ? String(current.sourceText || '') : '',
+          phase: 'idle',
+          result: null,
+          diagnostics: [],
+          meta: null,
+        },
+      }
+    })
+  }
+
   const revertHistoryAutoFillMatch = (comboId, matchIdx) => {
     const snapshot = historyAutoFillSnapshots[comboId]?.[matchIdx]
     if (!snapshot?.previousMatch || snapshot.status !== 'applied') return
@@ -595,6 +792,13 @@ export default function SettlePage() {
 
   const settleCombos = (targetCombos) => {
     const ids = new Set(targetCombos.map((combo) => combo.id))
+    const isSettledMatchKey = (key) => ids.has(String(key).split('::')[0])
+    matchAiAbortRef.current.forEach((controller, key) => {
+      if (isSettledMatchKey(key)) {
+        controller.abort()
+        matchAiAbortRef.current.delete(key)
+      }
+    })
     setPendingCombos((prev) => prev.filter((item) => !ids.has(item.id)))
     setForms((prev) => {
       const next = { ...prev }
@@ -617,6 +821,9 @@ export default function SettlePage() {
       })
       return next
     })
+    setMatchAiStates((prev) => Object.fromEntries(
+      Object.entries(prev).filter(([key]) => !isSettledMatchKey(key)),
+    ))
     setExpandedCombo((prev) => (prev && ids.has(prev) ? null : prev))
   }
 
@@ -827,7 +1034,7 @@ export default function SettlePage() {
             className="settle-ai-trigger motion-v2-ghost-btn flex w-full items-center gap-2 px-4 py-3 text-left"
           >
             <ChevronRight size={14} strokeWidth={2.2} className={`qi-chevron settle-ai-chevron${settleQuickOpen ? ' is-open' : ''}`} />
-            <span className="settle-ai-title">Quick Settle</span>
+            <span className="settle-ai-title">General Quick Settle</span>
             <span className="settle-ai-beta-badge ml-1">LAB · AI</span>
             <span className="settle-ai-subtitle ml-1">大模型自然语言快捷结算</span>
           </button>
@@ -1015,6 +1222,9 @@ export default function SettlePage() {
                 {combo.matches.map((match, matchIdx) => {
                   const matchAutoFillSnapshot = historyAutoFillSnapshots[combo.id]?.[matchIdx]
                   const showAutoFillTag = matchAutoFillSnapshot?.status === 'applied'
+                  const matchAiKey = getMatchAiKey(combo.id, matchIdx)
+                  const matchAiState = matchAiStates[matchAiKey] || { text: '', phase: 'idle', result: null, diagnostics: [] }
+                  const matchAiHasResult = Boolean(matchAiState.result)
                   return (
                   <div key={`${combo.id}-${matchIdx}`} className={`motion-v2-match-card ${matchIdx > 0 ? 'pt-6 border-t border-stone-100' : ''}`}>
                     <div className="flex items-center justify-between mb-3">
@@ -1051,6 +1261,65 @@ export default function SettlePage() {
                         </div>
                         {match.preNote && <span className="text-xs text-stone-400">赛前备注: {match.preNote}</span>}
                       </div>
+                    </div>
+
+                    <div className={`settle-match-ai-card mb-4${matchAiHasResult ? ' is-resolved' : ''}`}>
+                      <div className="settle-match-ai-heading">
+                        <span className="settle-match-ai-orb" aria-hidden="true"><Sparkles size={10} /></span>
+                        <span className="settle-match-ai-title">AI 快捷结算</span>
+                        <span className="settle-match-ai-caption">随口写，自动填本场</span>
+                        {matchAiState.phase === 'ai' && matchAiState.meta?.totalTokens > 0 && (
+                          <span className="settle-match-ai-tokens">{matchAiState.meta.totalTokens} tokens</span>
+                        )}
+                      </div>
+                      <div className="settle-match-ai-row">
+                        <textarea
+                          rows={1}
+                          maxLength={AI_SETTLE_MAX_TEXT_LENGTH}
+                          readOnly={matchAiHasResult}
+                          value={matchAiState.text}
+                          onChange={(event) => updateMatchAiText(combo.id, matchIdx, event.target.value)}
+                          onKeyDown={(event) => {
+                            if ((event.metaKey || event.ctrlKey) && event.key === 'Enter' && !matchAiHasResult) {
+                              event.preventDefault()
+                              handleMatchAiParse(combo, matchIdx)
+                            }
+                          }}
+                          placeholder="例如：没中，AJR 0.4 / no 0.4 / 0.4"
+                          aria-label={`${match.match} AI 快捷结算`}
+                          className={`settle-match-ai-input${matchAiHasResult ? ' is-structured' : ''}`}
+                        />
+                        {!matchAiHasResult ? (
+                          <button
+                            type="button"
+                            onClick={() => handleMatchAiParse(combo, matchIdx)}
+                            disabled={!matchAiState.text.trim() || matchAiState.phase === 'loading'}
+                            className="settle-match-ai-button"
+                          >
+                            {matchAiState.phase === 'loading'
+                              ? <Loader2 size={12} className="qi-ai-spinner" aria-hidden="true" />
+                              : <Sparkles size={12} aria-hidden="true" />}
+                            <span>{matchAiState.phase === 'loading' ? '理解中…' : '理解并填入'}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => resetMatchAi(combo.id, matchIdx, { restoreSource: true })}
+                            className="settle-match-ai-reset"
+                          >
+                            <RotateCcw size={11} aria-hidden="true" />
+                            重输
+                          </button>
+                        )}
+                      </div>
+                      {matchAiState.phase === 'error' && (
+                        <p className="settle-match-ai-message is-error">
+                          {matchAiState.diagnostics?.[0]?.message || '没有理解到可填入的信息，请换一种说法。'}
+                        </p>
+                      )}
+                      {matchAiHasResult && (
+                        <p className="settle-match-ai-message">已写入下方字段，最终仍由「确认结算」统一保存。</p>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">

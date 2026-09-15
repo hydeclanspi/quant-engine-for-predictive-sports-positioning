@@ -176,7 +176,7 @@ const extractParameters = (text) => {
     if (Number.isFinite(n) && n > 0) params.actualInput = Math.max(1, Math.round(n))
   }
   cleaned = cleaned.replace(amountForwardRe, ' ')
-  const amountReverseRe = /([0-9]+(?:\.[0-9]+)?)\s*(?:input|inputs|invest|stake|bet)\b/gi
+  const amountReverseRe = /([0-9]+(?:\.[0-9]+)?)\s*(?:(?:input|inputs|invest|stake|bet)\b|元|块|rmb\b)/gi
   while ((amountM = amountReverseRe.exec(cleaned)) !== null) {
     const n = Number.parseFloat(amountM[1])
     if (Number.isFinite(n) && n > 0) params.actualInput = Math.max(1, Math.round(n))
@@ -307,6 +307,33 @@ const extractParameters = (text) => {
     }
   }
   cleaned = cleaned.replace(fidRevRe, ' ')
+
+  // ── Unlabelled decimal odds ──
+  // All tunable numeric parameters live in 0–1. Once labelled parameters,
+  // scores/handicaps, ordinals, dates and currency amounts have been stripped,
+  // a remaining standalone value >1 is the adjacent entry's odds.
+  const bareOddsRe = /(^|[^\p{L}\p{N}.:+-])(\d+(?:\.\d+)?)(?=$|[^\p{L}\p{N}.])/gu
+  const bareOddsMatches = []
+  let bareOddsMatch
+  while ((bareOddsMatch = bareOddsRe.exec(cleaned)) !== null) {
+    const value = Number.parseFloat(bareOddsMatch[2])
+    const numberStart = bareOddsMatch.index + bareOddsMatch[1].length
+    const after = cleaned[numberStart + bareOddsMatch[2].length] || ''
+    if (!Number.isFinite(value) || value <= 1 || value > 1000 || /[-:]/.test(after)) continue
+    bareOddsMatches.push({ start: numberStart, end: numberStart + bareOddsMatch[2].length, value })
+  }
+  if (bareOddsMatches.length > 0) {
+    bareOddsMatches.forEach(({ value }) => {
+      params.odds.push(value)
+      params.oddsGroups.push([value])
+    })
+    let cursor = 0
+    cleaned = bareOddsMatches.map(({ start, end }) => {
+      const prefix = cleaned.slice(cursor, start)
+      cursor = end
+      return prefix
+    }).join('') + cleaned.slice(cursor)
+  }
 
   cleaned = cleaned.replace(/\s+/g, ' ').trim()
   return { params, warnings, contentText: cleaned }
@@ -757,8 +784,8 @@ const buildMatchDraft = (parsed) => {
     tys_home: parsed.tys_home || 'M',
     tys_away: parsed.tys_away || 'M',
     fid: parsed.fid || '0.4',
-    fse_home: parsed.fse_home ?? 50,
-    fse_away: parsed.fse_away ?? 50,
+    fse_home: parsed.fse_home ?? 'default',
+    fse_away: parsed.fse_away ?? 'default',
     note: parsed.remark || '',
     _nlMeta: {
       homeResolution: parsed.home ? { teamId: parsed.home.teamId, alias: parsed.home.alias } : null,

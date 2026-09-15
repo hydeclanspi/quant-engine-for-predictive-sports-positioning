@@ -107,6 +107,12 @@ Content-Type: application/json
 { "text": "皇马 vs 皇社，-1 win，odds 1.52，conf 0.55，投入 30" }
 ```
 
+Missing FSE fields are returned as the literal `"default"`; the browser then
+resolves each side from that team's latest recorded FSE, falling back to `0.1`
+when no history exists. Unlabelled standalone numbers above `1` are treated as
+odds only after scores, handicaps, dates, ordinals, and currency amounts have
+been excluded.
+
 Set these in Vercel, then redeploy:
 
 | Variable              | Required | Default                    |
@@ -118,6 +124,13 @@ Set these in Vercel, then redeploy:
 
 For an OpenAI-compatible replacement, the endpoint also accepts the generic
 aliases `AI_API_KEY`, `AI_BASE_URL`, and `AI_MODEL`.
+
+The Settle page uses the same provider through `POST /api/parse-settlement`.
+It sends an allow-listed pending-record context plus `scope: "general"` for
+the top parser or `scope: "match"` for a per-match parser. Match scope permits
+colloquial shorthand such as `"no 0.4"`; a lone 0–0.8 number becomes AJR and
+an omitted REP becomes `0`. AI results only populate the settlement form—the
+existing confirm action remains the sole persistence and cloud-sync path.
 
 ---
 

@@ -102,6 +102,8 @@ describe('POST /api/parse-investment', () => {
       response_format: { type: 'json_object' },
     })
     expect(requestBody.messages[0].content.toLowerCase()).toContain('json')
+    expect(requestBody.messages[0].content).toContain('"default"')
+    expect(requestBody.messages[0].content).toContain('大于 1')
     expect(requestBody.messages[1].content).toContain('皇马vs皇社')
   })
 

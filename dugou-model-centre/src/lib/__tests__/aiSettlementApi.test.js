@@ -36,6 +36,7 @@ describe('POST /api/parse-settlement', () => {
     const res = makeResponse()
     await handler(ownerRequest({
       text: '皇马2-1皇社 收入58',
+      scope: 'match',
       pending: [{ id: 'inv_1', secret: 'drop', matches: [{ homeTeam: '皇马', awayTeam: '皇社', entry: 'win' }] }],
     }), res)
 
@@ -48,6 +49,8 @@ describe('POST /api/parse-settlement', () => {
       response_format: { type: 'json_object' },
     })
     expect(requestBody.messages[1].content).not.toContain('secret')
+    expect(requestBody.messages[1].content).toContain('"INPUT_SCOPE":"match"')
+    expect(requestBody.messages[0].content).toContain('no 0.4')
   })
 
   it('rejects requests without pending context before calling the provider', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   formatStructuredSettlementInput,
   parseSettlementLocally,
+  parseSingleMatchSettlementLocally,
   resolveAiSettlementParse,
 } from '../settlementQuickInput.js'
 
@@ -46,5 +47,22 @@ describe('settlement Quick Input matching', () => {
     expect(local.settlements[0]).toMatchObject({ pendingId: 'inv_1', revenues: 58 })
     expect(local.settlements[0].matches[0]).toMatchObject({ results: '2-1', isCorrect: true })
     expect(local.settlements[1].matches[0]).toMatchObject({ results: '3-3', isCorrect: true })
+  })
+
+  it('supports colloquial per-match input and defaults omitted REP to zero', () => {
+    const singleContext = { ...pending[0], matches: [pending[0].matches[0]] }
+    const local = parseSingleMatchSettlementLocally('no 0.4', singleContext)
+    expect(local.settlements[0].matches[0]).toMatchObject({
+      isCorrect: false,
+      matchRating: 0.4,
+      matchRep: 0,
+    })
+
+    const loneNumber = parseSingleMatchSettlementLocally('0.56', singleContext)
+    expect(loneNumber.settlements[0].matches[0]).toMatchObject({ matchRating: 0.56, matchRep: 0 })
+
+    const invalid = parseSingleMatchSettlementLocally('AJR 0.9', singleContext)
+    expect(invalid.settlements[0].matches[0].matchRating).toBeNull()
+    expect(invalid.warnings).toContain('AJR 需在 0–0.8 之间')
   })
 })

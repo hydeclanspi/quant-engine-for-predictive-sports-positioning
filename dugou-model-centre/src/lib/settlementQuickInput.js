@@ -86,6 +86,80 @@ export const parseSettlementLocally = (rawText, pendingCombos) => {
   }
 }
 
+const parseColloquialHit = (text) => {
+  const normalized = String(text || '').trim().toLowerCase()
+  // Negative phrases must win because “没中/不中” also contain the positive
+  // character 中.
+  if (/(?:没中|未中|不中|错了?|输了?|挂了?|寄了?|败了?|\bno\b|\bmiss(?:ed)?\b|\bwrong\b|\blos(?:e|t|s)\b)/i.test(normalized)) return false
+  if (/(?:命中|中了?|对了?|拿下|收米|\byes\b|\bhit\b|\bwon\b|\bwin\b)/i.test(normalized)) return true
+  return null
+}
+
+/**
+ * Small deterministic safety net for the per-match AI box. DeepSeek remains
+ * the primary parser; this only covers obvious offline/demo phrases and the
+ * documented lone-number → AJR rule.
+ */
+export const parseSingleMatchSettlementLocally = (rawText, combo) => {
+  const text = String(rawText || '').trim()
+  const match = combo?.matches?.[0]
+  if (!text || !combo?.id || !match) {
+    return { ok: false, confidence: 0, settlements: [], warnings: ['缺少可解析的单场上下文'], diagnostics: [{ level: 'warning', message: '缺少可解析的单场上下文' }] }
+  }
+
+  const scoreMatch = text.match(/(?:^|[^\d.])(\d{1,2})\s*(?:-|:|：)\s*(\d{1,2})(?![\d.])/)
+  const ratingMatch = text.match(/(?:ajr|rating|评分)\s*[:：=]?\s*(0(?:\.\d+)?)/i)
+  const repMatch = text.match(/(?:rep|随机(?:事件)?参数)\s*[:：=]?\s*(\d+(?:\.\d+)?)/i)
+  const postNoteMatch = text.match(/(?:备注|复盘|note)\s*[:：=]?\s*([^\n]+)/i)
+  const textWithoutScores = text.replace(/\d{1,2}\s*(?:-|:|：)\s*\d{1,2}/g, ' ')
+  const bareNumbers = [...textWithoutScores.matchAll(/(?:^|[^\d.])(\d+(?:\.\d+)?)(?![\d.])/g)]
+    .map((item) => Number(item[1]))
+    .filter(Number.isFinite)
+
+  const parsedRating = ratingMatch ? Number(ratingMatch[1]) : null
+  const parsedRep = repMatch ? Number(repMatch[1]) : null
+  let matchRating = parsedRating !== null && parsedRating >= 0 && parsedRating <= 0.8 ? parsedRating : null
+  const matchRep = parsedRep !== null && parsedRep >= 0 && parsedRep <= 1.8 ? parsedRep : null
+  if (matchRating === null && matchRep === null && bareNumbers.length === 1 && bareNumbers[0] >= 0 && bareNumbers[0] <= 0.8) {
+    matchRating = bareNumbers[0]
+  }
+  const normalizedRep = matchRating !== null && matchRep === null ? 0 : matchRep
+  const score = scoreMatch ? { home: Number(scoreMatch[1]), away: Number(scoreMatch[2]) } : null
+  const explicitHit = parseColloquialHit(text)
+  const isCorrect = explicitHit !== null
+    ? explicitHit
+    : score ? evaluateEntry(match.entry, score.home, score.away) : null
+  const results = score ? `${score.home}-${score.away}` : ''
+  const postNote = postNoteMatch?.[1]?.trim() || ''
+  const hasPayload = results || isCorrect !== null || matchRating !== null || normalizedRep !== null || postNote
+  const warnings = []
+  if (parsedRating !== null && matchRating === null) warnings.push('AJR 需在 0–0.8 之间')
+  if (parsedRep !== null && matchRep === null) warnings.push('REP 需在 0–1.8 之间')
+  if (!hasPayload) warnings.push('没有识别到可填入的结算信息')
+
+  return {
+    ok: true,
+    confidence: hasPayload ? 0.72 : 0.2,
+    settlements: [{
+      pendingId: combo.id,
+      reference: combo.comboName || combo.date || '',
+      revenues: null,
+      matches: [{
+        matchIndex: 0,
+        homeTeam: match.homeTeam || '',
+        awayTeam: match.awayTeam || '',
+        results,
+        isCorrect,
+        matchRating,
+        matchRep: normalizedRep,
+        postNote,
+      }],
+    }],
+    warnings,
+    diagnostics: warnings.map((message) => ({ level: 'warning', message })),
+  }
+}
+
 const matchupScore = (parsedMatch, pendingMatch) => {
   const parsedHome = normalize(parsedMatch?.homeTeam)
   const parsedAway = normalize(parsedMatch?.awayTeam)

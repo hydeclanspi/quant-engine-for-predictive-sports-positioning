@@ -11,6 +11,7 @@ export const AI_PARSE_MAX_TEXT_LENGTH = 1500
 export const AI_PARSE_MAX_COMBOS = 5
 export const AI_PARSE_MAX_MATCHES = 5
 export const AI_PARSE_MAX_ENTRIES = 5
+export const AI_FSE_DEFAULT = 'default'
 
 export const AI_MODE_OPTIONS = [
   '常规',
@@ -44,6 +45,12 @@ const normalizePercent = (value, fallback = 50) => {
   if (parsed === null || parsed < 0) return fallback
   const percent = parsed <= 1 ? parsed * 100 : parsed > 1 && parsed < 10 ? parsed * 10 : parsed
   return Number(clamp(percent, 0, 100).toFixed(1))
+}
+
+const normalizeFse = (value) => {
+  const text = String(value ?? '').trim().toLowerCase()
+  if (!text || text === AI_FSE_DEFAULT) return AI_FSE_DEFAULT
+  return normalizePercent(value, AI_FSE_DEFAULT)
 }
 
 const normalizeConfidence = (value) => {
@@ -93,8 +100,8 @@ const normalizeMatch = (match) => {
     tys_home: normalizeTys(match?.tys_home),
     tys_away: normalizeTys(match?.tys_away),
     fid: normalizeFid(match?.fid),
-    fse_home: normalizePercent(match?.fse_home, 50),
-    fse_away: normalizePercent(match?.fse_away, 50),
+    fse_home: normalizeFse(match?.fse_home),
+    fse_away: normalizeFse(match?.fse_away),
     note: cleanText(match?.note, 400),
   }
 }

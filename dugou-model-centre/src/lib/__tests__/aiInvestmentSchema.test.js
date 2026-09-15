@@ -100,6 +100,17 @@ describe('AI investment payload allow-list', () => {
     expect(result.combos[0]).toMatchObject({ actualInput: 30, comboName: '旧格式' })
   })
 
+  it('preserves unresolved FSE as the client-side team-history default marker', () => {
+    const match = validMatch()
+    delete match.fse_home
+    match.fse_away = 'default'
+    const result = sanitizeAiInvestmentParse({ confidence: 0.8, matches: [match] })
+    expect(result.combos[0].matches[0]).toMatchObject({
+      fse_home: 'default',
+      fse_away: 'default',
+    })
+  })
+
   it('accepts raw or fenced JSON and rejects non-objects', () => {
     expect(parseJsonObjectText('{"matches":[]}')).toEqual({ matches: [] })
     expect(parseJsonObjectText('```json\n{"matches":[]}\n```')).toEqual({ matches: [] })

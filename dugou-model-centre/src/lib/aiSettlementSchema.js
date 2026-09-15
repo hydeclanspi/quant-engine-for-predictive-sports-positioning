@@ -26,8 +26,8 @@ const boundedNumber = (value, min, max, decimals = 2) => {
 const normalizeBoolean = (value) => {
   if (typeof value === 'boolean') return value
   const normalized = cleanText(value, 16).toLowerCase()
-  if (['true', 'hit', 'win', '中', '命中', '对'].includes(normalized)) return true
-  if (['false', 'miss', 'lose', 'loss', '未中', '错', '输'].includes(normalized)) return false
+  if (['true', 'yes', 'hit', 'win', 'won', '中', '命中', '对', '中了', '拿下'].includes(normalized)) return true
+  if (['false', 'no', 'miss', 'missed', 'lose', 'lost', 'loss', '未中', '没中', '不中', '错', '错了', '输', '输了', '挂了', '寄了'].includes(normalized)) return false
   return null
 }
 

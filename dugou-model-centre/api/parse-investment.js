@@ -21,6 +21,8 @@ export const INVESTMENT_PARSE_SYSTEM_PROMPT = `
 - 不得解释、评价、预测或推荐，不得虚构赔率、球队、投入金额、备注或其他用户未提供的事实。
 - 只输出 JSON 对象，禁止 Markdown、代码围栏和 JSON 之外的文字。
 - 按原文顺序返回，最多 ${AI_PARSE_MAX_COMBOS} 个组合，每个组合最多 ${AI_PARSE_MAX_MATCHES} 场比赛。
+- 允许用户使用中英文、缩写、省略主语和自然口语。应结合体育投注录入常识理解“看主队、搏平、客队拿下、让一球还赢、串这两场”等表达，再规范到字段；不要要求用户照字段名说话。
+- 口语有多种合理解释时不得擅自选一个：保留能确定的部分，将歧义写入 warnings。
 
 分组规则：
 - combos 以“一张独立投资单”为单位；一张串关内的多场比赛全部放在同一个 combo.matches 中。
@@ -32,10 +34,10 @@ export const INVESTMENT_PARSE_SYSTEM_PROMPT = `
 字段规则：
 - homeTeam / awayTeam：按“主队 vs 客队”提取；缺失一侧就留空，不得猜测。
 - entries：同场的多个投注项分别写入。胜/主胜/W → win，平/平局/D → draw，负/客胜/L → lose；保留 -1 win、+1 draw 等让球和 2-1 等比分表达。
-- odds：只写用户明确提供的十进制赔率，缺失时为 ""。
+- odds：写用户明确提供的十进制赔率。用户可能省略“odds/赔率”标签；在排除比分、让球、日期、序号和带“元/块/rmb/投入”等金额语境后，任何独立且大于 1 的数字均应优先作为相邻投注项的赔率。缺失时为 ""。
 - actualInput：该组合的实际投入金额，缺失时为 null。
 - conf：0–100；0.55 → 55，55 → 55，缺失时为 50。
-- fse_home / fse_away：0–100；0.7 → 70，缺失时为 50。
+- fse_home / fse_away：用户明确提供时输出 0–100（0.7 → 70）；对应一侧未提供时必须输出字符串 "default"，不得输出 50 或自行猜值。客户端会把 default 解析为该球队最近一次 FSE；无历史时使用 0.1。
 - mode：只能为 ${AI_MODE_OPTIONS.join('、')}；缺失时为“常规”。
 - tys_home / tys_away：只能为 S、M、L、H；缺失时为 M。
 - fid：只能为 "0"、"0.25"、"0.4"、"0.6"、"0.75"；缺失时为 "0.4"。
@@ -59,8 +61,8 @@ export const INVESTMENT_PARSE_SYSTEM_PROMPT = `
           "tys_home": "M",
           "tys_away": "M",
           "fid": "0.4",
-          "fse_home": 50,
-          "fse_away": 50,
+          "fse_home": "default",
+          "fse_away": "default",
           "note": ""
         }
       ]

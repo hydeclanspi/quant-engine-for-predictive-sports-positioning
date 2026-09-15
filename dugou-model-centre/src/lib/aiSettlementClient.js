@@ -23,7 +23,7 @@ const getOwnerHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : null
 }
 
-export const requestAiSettlementParse = async (rawText, pending, { signal } = {}) => {
+export const requestAiSettlementParse = async (rawText, pending, { signal, scope = 'general' } = {}) => {
   if (!isFullMode()) throw new AiSettlementParseError('preview_mode')
   const text = String(rawText || '').trim()
   if (!text) throw new AiSettlementParseError('text_required')
@@ -44,7 +44,7 @@ export const requestAiSettlementParse = async (rawText, pending, { signal } = {}
     const response = await fetch(ENDPOINT, {
       method: 'POST',
       headers: { ...ownerHeaders, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, pending: pendingContext }),
+      body: JSON.stringify({ text, pending: pendingContext, scope: scope === 'match' ? 'match' : 'general' }),
       signal: controller.signal,
     })
     const payload = await response.json().catch(() => null)

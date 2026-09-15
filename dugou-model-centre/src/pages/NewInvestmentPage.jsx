@@ -16,13 +16,14 @@ import {
 } from '../lib/atomicParlay'
 import { parseNaturalInput } from '../lib/naturalInputParser'
 import { requestAiInvestmentParse } from '../lib/aiInvestmentClient'
-import { AI_PARSE_MAX_TEXT_LENGTH } from '../lib/aiInvestmentSchema'
+import { AI_FSE_DEFAULT, AI_PARSE_MAX_TEXT_LENGTH } from '../lib/aiInvestmentSchema'
 import { formatStructuredQuickInput } from '../lib/quickInputPresentation'
 import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
+const DEFAULT_FSE_PERCENT = 10
 const QI_AUTO_UNFURL_DELAY_MS = 4300
 const QI_AUTO_UNFURL_GLOW_MS = 1250
 const QI_AUTO_UNFURL_SESSION_KEY = 'dugou.quick_input_intro_seen.v2'
@@ -86,8 +87,8 @@ const createEmptyMatch = () => ({
   tys_home: 'M',
   tys_away: 'M',
   fid: '0.4',
-  fse_home: 50,
-  fse_away: 50,
+  fse_home: DEFAULT_FSE_PERCENT,
+  fse_away: DEFAULT_FSE_PERCENT,
   note: '',
 })
 
@@ -149,8 +150,8 @@ const createResettableMatchFields = () => ({
   tys_home: 'M',
   tys_away: 'M',
   fid: '0.4',
-  fse_home: 50,
-  fse_away: 50,
+  fse_home: DEFAULT_FSE_PERCENT,
+  fse_away: DEFAULT_FSE_PERCENT,
   note: '',
 })
 
@@ -439,8 +440,8 @@ export default function NewInvestmentPage() {
               tys_home: normalizeTysValue(match?.tys_home),
               tys_away: normalizeTysValue(match?.tys_away),
               fid: normalizeFidOption(match?.fid),
-              fse_home: normalizeSliderPercent(match?.fse_home, 50),
-              fse_away: normalizeSliderPercent(match?.fse_away, 50),
+              fse_home: normalizeSliderPercent(match?.fse_home, DEFAULT_FSE_PERCENT),
+              fse_away: normalizeSliderPercent(match?.fse_away, DEFAULT_FSE_PERCENT),
               note: String(match?.note || ''),
             }
           })
@@ -612,7 +613,17 @@ export default function NewInvestmentPage() {
       const next = [...prev]
       const normalizedValue =
         field === 'homeTeam' || field === 'awayTeam' ? normalizeTeamNameInput(value) : value
-      next[idx] = { ...next[idx], [field]: normalizedValue }
+      if (field === 'homeTeam' || field === 'awayTeam') {
+        const fseField = field === 'homeTeam' ? 'fse_home' : 'fse_away'
+        const latestFse = latestTeamFseMap.get(normalizeTeamKey(normalizedValue))
+        next[idx] = {
+          ...next[idx],
+          [field]: normalizedValue,
+          [fseField]: latestFse?.value ?? DEFAULT_FSE_PERCENT,
+        }
+      } else {
+        next[idx] = { ...next[idx], [field]: normalizedValue }
+      }
       return next
     })
     if (field === 'homeTeam' || field === 'awayTeam') {
@@ -1113,9 +1124,18 @@ export default function NewInvestmentPage() {
   const normalizeQuickMatch = (draft) => {
     const { _nlMeta: ignoredMeta, ...safeDraft } = draft || {}
     void ignoredMeta
+    const homeTeam = canonicalizeTeamName(safeDraft.homeTeam)
+    const awayTeam = canonicalizeTeamName(safeDraft.awayTeam)
+    const resolveFse = (value, teamName) => {
+      const usesTeamDefault = value === null || value === undefined || value === '' || String(value).trim().toLowerCase() === AI_FSE_DEFAULT
+      if (!usesTeamDefault) return normalizeSliderPercent(value, DEFAULT_FSE_PERCENT)
+      return latestTeamFseMap.get(normalizeTeamKey(teamName))?.value ?? DEFAULT_FSE_PERCENT
+    }
     return {
       ...createEmptyMatch(),
       ...safeDraft,
+      homeTeam,
+      awayTeam,
       entries: Array.isArray(safeDraft.entries) && safeDraft.entries.length > 0
         ? safeDraft.entries.slice(0, 5).map((entry) => ({
             name: String(entry?.name || ''),
@@ -1127,8 +1147,8 @@ export default function NewInvestmentPage() {
       tys_home: normalizeTysValue(safeDraft.tys_home),
       tys_away: normalizeTysValue(safeDraft.tys_away),
       fid: normalizeFidOption(safeDraft.fid),
-      fse_home: normalizeSliderPercent(safeDraft.fse_home, 50),
-      fse_away: normalizeSliderPercent(safeDraft.fse_away, 50),
+      fse_home: resolveFse(safeDraft.fse_home, homeTeam),
+      fse_away: resolveFse(safeDraft.fse_away, awayTeam),
     }
   }
 
