@@ -846,13 +846,13 @@
   --wr-ink-2: var(--lab-muted);
   --wr-line: var(--lab-line);
 }
-.theme-modern.lab-editions .wr-showcase {
+.theme-modern.lab-editions:not(.inspiration-2609-body) .wr-showcase {
   background:
     linear-gradient(125deg, #ffffff50, transparent 60%), var(--lab-card);
   border: 1px solid var(--lab-rim);
   box-shadow: var(--lab-edge), var(--lab-shadow);
 }
-.theme-modern.lab-editions .wr-liquid-field {
+.theme-modern.lab-editions:not(.inspiration-2609-body) .wr-liquid-field {
   opacity: 0.48;
 }
 .theme-modern.lab-editions .wr-panel {
@@ -860,15 +860,15 @@
   border: 1px solid var(--lab-rim);
   box-shadow: var(--lab-edge), var(--lab-shadow);
 }
-.theme-modern.lab-editions .wr-cycle-browser {
+.theme-modern.lab-editions:not(.inspiration-2609-body) .wr-cycle-browser {
   background: var(--lab-glass);
   border-color: var(--lab-line);
 }
-.theme-modern.lab-editions .wr-period-card {
+.theme-modern.lab-editions:not(.inspiration-2609-body) .wr-period-card {
   background: var(--lab-well);
   border-color: var(--lab-line);
 }
-.theme-modern.lab-editions .wr-banner__kpis {
+.theme-modern.lab-editions:not(.inspiration-2609-body) .wr-banner__kpis {
   background: var(--lab-glass);
 }
 .theme-modern.lab-editions .wr-section-lead {

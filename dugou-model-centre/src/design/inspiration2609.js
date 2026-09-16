@@ -2,8 +2,7 @@ export const INSPIRATION_2609_NAME = 'inspiration 2609'
 export const INSPIRATION_2609_EDITION = '2609'
 export const INSPIRATION_2609_PREVIEW = '/design/inpiration/new?edition=2609'
 
-// Explicit exceptions are intentional: Seasons and Console never inherit a
-// laboratory palette, even though Seasons lives beneath /dashboard.
+// Teams retains Modern cards with a peach optical canvas. Console stays Modern.
 export const INSPIRATION_2609_MATERIALS = Object.freeze({
   '/': 'folio',
   '/new': 'folio',
@@ -12,9 +11,9 @@ export const INSPIRATION_2609_MATERIALS = Object.freeze({
   '/dashboard': 'prism',
   '/dashboard/analysis': 'prism',
   '/dashboard/metrics': 'prism',
-  '/dashboard/report': 'seasons',
+  '/dashboard/report': 'prism',
   '/history': 'prism',
-  '/history/teams': 'prism',
+  '/history/teams': 'peach',
   '/params': 'modern',
 })
 

@@ -16,13 +16,13 @@ import UnlockModal from './UnlockModal'
  * unlocked UI looks essentially identical to the pre-existing product.
  */
 
-export default function PreviewModeToggle() {
+export default function PreviewModeToggle({ previewOnly = false }) {
   const mode = useDisplayMode()
   const ownerRoute = isOwnerRoute()
   const [modalOpen, setModalOpen] = useState(false)
 
   const handleClick = () => {
-    if (ownerRoute) return
+    if (ownerRoute || previewOnly) return
     if (mode === FULL_MODE) {
       lockToPreview()
       return
@@ -35,10 +35,10 @@ export default function PreviewModeToggle() {
       <button
         type="button"
         onClick={handleClick}
-        disabled={ownerRoute}
+        disabled={ownerRoute || previewOnly}
         className={mode === FULL_MODE ? 'pm-toggle pm-toggle-full' : 'pm-toggle pm-toggle-preview'}
-        title={ownerRoute ? '完整数据模式' : mode === FULL_MODE ? '点击锁回预览模式' : '点击解锁完整模式'}
-        aria-label={ownerRoute ? 'Full data mode' : mode === FULL_MODE ? 'Lock to preview mode' : 'Unlock full mode'}
+        title={previewOnly ? '设计预览 · 演示数据' : ownerRoute ? '完整数据模式' : mode === FULL_MODE ? '点击锁回预览模式' : '点击解锁完整模式'}
+        aria-label={previewOnly ? 'Demo preview' : ownerRoute ? 'Full data mode' : mode === FULL_MODE ? 'Lock to preview mode' : 'Unlock full mode'}
       >
         {mode === FULL_MODE ? (
           <>
@@ -49,7 +49,7 @@ export default function PreviewModeToggle() {
           <>
             <span className="pm-toggle-preview-dot" aria-hidden="true" />
             <span className="pm-toggle-preview-text">demo · preview</span>
-            <span className="pm-toggle-preview-hint" aria-hidden="true">unlock</span>
+            {!previewOnly && <span className="pm-toggle-preview-hint" aria-hidden="true">unlock</span>}
           </>
         )}
       </button>

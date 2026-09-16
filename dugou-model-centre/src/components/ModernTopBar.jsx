@@ -123,10 +123,10 @@ function LayoutMorphSwitch({ layoutMode, onPreviewChange }) {
         aria-pressed={visualMode === 'inpiration'}
         title={INSPIRATION_2609_NAME}
         onClick={() => selectMode('inpiration')}
-        className={`mn-layout-choice mn-layout-choice--inpiration ${visualMode === 'inpiration' ? 'is-active' : ''}`}
+        className={`mn-layout-choice mn-layout-choice--inspiration ${visualMode === 'inpiration' ? 'is-active' : ''}`}
       >
         <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
-        <span>inpiration</span>
+        <span>inspiration</span>
       </button>
     </div>
   )
@@ -265,7 +265,7 @@ export default function ModernTopBar({ layoutMode = 'modern', designLink = null,
       <span className="mn-page-title">{pageTitle}</span>
 
       {/* ── Preview / Full mode toggle ── */}
-      {designPreview ? <span className="lab-workspace-badge">LAB</span> : <PreviewModeToggle />}
+      <PreviewModeToggle previewOnly={designPreview} />
 
       {/* ── Separator ── */}
       <div className="h-4 w-px bg-gradient-to-b from-transparent via-neutral-200 to-transparent mx-2 flex-shrink-0" />

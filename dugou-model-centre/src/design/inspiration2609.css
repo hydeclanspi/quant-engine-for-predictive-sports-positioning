@@ -1,6 +1,6 @@
 /* The selected mixed theme. Header geometry is entirely the existing Modern
  * geometry; it sits before the Lab scope, flush to the viewport's top edge.
- * No selectors below restyle the Seasons or Console body. */
+ * Console remains untouched; Seasons keeps its original iridescent hero. */
 .theme-inspiration-2609 {
   background: #f7f8fa;
 }
@@ -31,15 +31,15 @@
 }
 .theme-inspiration-2609
   .lab-editions[data-lab-edition='prism']
-  :is(.glow-card, .lab-metrics-grid > div, .rounded-2xl, .history-float-panel) {
+  :is(.glow-card, .lab-metrics-grid > div, .rounded-2xl, .history-float-panel, .wr-panel):not(.wr-showcase *) {
   border-radius: 10px;
 }
-.theme-inspiration-2609 .lab-editions[data-lab-edition='prism'] .rounded-xl {
+.theme-inspiration-2609 .lab-editions[data-lab-edition='prism'] .rounded-xl:not(.wr-showcase *) {
   border-radius: 8px;
 }
 .theme-inspiration-2609
   .lab-editions[data-lab-edition='prism']
-  :is(.rounded-lg, .input-glow, .btn-primary, .btn-secondary, select) {
+  :is(.rounded-lg, .input-glow, .btn-primary, .btn-secondary, select):not(.wr-showcase *) {
   border-radius: 6px;
 }
 .theme-inspiration-2609
@@ -50,7 +50,7 @@
 }
 
 /* Folio's Portfolio panels use the same sheet edge as New, while keeping the
- * existing two-column portfolio construction, folding and calculations. */
+ * existing folding controls and calculations. */
 .theme-inspiration-2609
   .lab-editions[data-lab-edition='folio']
   .combo-left-card {
@@ -70,4 +70,120 @@
   .theme-inspiration-2609 > .mn-bar .inspiration-preview-return > span {
     display: none;
   }
+}
+
+/* Preserve the original warm range controls across all 2609 materials. */
+.theme-inspiration-2609 .lab-editions input[type='range'] {
+  accent-color: #f59e0b;
+}
+.theme-inspiration-2609 .lab-editions input[type='range']::-webkit-slider-thumb {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+}
+.theme-inspiration-2609 .lab-editions input[type='range']::-moz-range-thumb {
+  background: linear-gradient(135deg, #fbbf24, #f97316);
+  border: 0;
+}
+
+/* Original Modern widths and spacing for Settle and Records, not scaled text. */
+.theme-inspiration-2609 .inspiration-2609-body:is([data-lab-page='settle'], [data-lab-page='history']) .page-shell {
+  width: min(100%, 1320px);
+  max-width: none;
+  padding: clamp(24px, 3vw, 48px) clamp(20px, 4vw, 56px);
+}
+.theme-inspiration-2609 .inspiration-2609-body:is([data-lab-page='settle'], [data-lab-page='history']) .page-shell > :is(.mb-6, .mb-8):first-child {
+  margin-bottom: 24px;
+}
+.theme-inspiration-2609 .inspiration-2609-body:is([data-lab-page='settle'], [data-lab-page='history']) .page-shell > :is(.mb-6, .mb-8):first-child h2 {
+  font-size: 24px;
+  letter-spacing: normal;
+}
+.theme-inspiration-2609 .lab-editions[data-lab-edition='glacier'] .lab-settle-list { display: block; }
+.theme-inspiration-2609 .lab-editions .lab-settle-list > .lab-settle-combo + .lab-settle-combo { margin-top: 16px; }
+.theme-inspiration-2609 .lab-editions .lab-settle-combo > .motion-v2-row {
+  padding: 16px 24px;
+  flex-wrap: nowrap;
+}
+@media (min-width: 1440px) {
+  .theme-inspiration-2609 .inspiration-2609-body:is([data-lab-page='settle'], [data-lab-page='history']) .page-shell {
+    padding: 48px 64px;
+  }
+}
+@media (min-width: 1680px) {
+  .theme-inspiration-2609 .inspiration-2609-body:is([data-lab-page='settle'], [data-lab-page='history']) .page-shell {
+    width: min(100%, 1440px);
+    padding: 56px 80px;
+  }
+}
+
+/* Actual existing Portfolio cards, reordered once rather than duplicated. */
+.theme-inspiration-2609 :is(.portfolio-primary-grid, .portfolio-research-grid) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+.theme-inspiration-2609 :is(.portfolio-primary-grid, .portfolio-research-grid) > * {
+  min-width: 0;
+  margin-top: 0;
+}
+.theme-inspiration-2609 .portfolio-primary-grid > .glow-card { padding: 22px; }
+.theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) > .flex:first-of-type {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.theme-inspiration-2609 .portfolio-research-grid > :nth-child(2) .flex.items-start {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.theme-inspiration-2609 .portfolio-research-grid > :nth-child(2) .flex.min-w-0 { flex-wrap: wrap; }
+.theme-inspiration-2609 .portfolio-research-grid > :nth-child(2) h3 { white-space: normal; }
+@media (min-width: 1000px) {
+  .theme-inspiration-2609 .portfolio-primary-grid { grid-template-columns: minmax(260px, .8fr) minmax(0, 1.35fr); }
+  .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) { grid-column: 1 / -1; }
+  .theme-inspiration-2609 .portfolio-research-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (min-width: 1380px) {
+  .theme-inspiration-2609 .portfolio-primary-grid {
+    grid-template-columns: minmax(290px, .95fr) minmax(430px, 1.5fr) minmax(300px, 1fr);
+    gap: 22px;
+  }
+  .theme-inspiration-2609 .portfolio-primary-grid[data-left-collapsed='true'] {
+    grid-template-columns: minmax(240px, .75fr) minmax(450px, 1.55fr) minmax(310px, 1fr);
+  }
+  .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) { grid-column: auto; }
+}
+
+/* Season panels use Prism; the original large iridescent poster is not restyled. */
+.theme-inspiration-2609 .lab-editions .warreport-scope::before { background: transparent; }
+.theme-inspiration-2609 .wr-showcase {
+  --wr-ink: #1d1d1f;
+  --wr-ink-2: #3a3a3c;
+  --wr-line: rgba(60, 60, 67, .11);
+}
+
+/* Teams: Modern cards and proportions, only a pale orange geometric canvas. */
+.theme-inspiration-2609[data-inspiration-material='peach'] > .mn-bar {
+  background: rgba(255, 244, 230, .95);
+  border-bottom-color: rgba(206, 162, 109, .22);
+}
+.theme-inspiration-2609 .inspiration-peach-canvas {
+  position: relative;
+  isolation: isolate;
+  background: #f5e7d7;
+}
+.theme-inspiration-2609 .inspiration-peach-canvas .lab-optical-field {
+  background: radial-gradient(ellipse at 85% 5%, #fff7eacc, transparent 55%),
+    linear-gradient(125deg, #ead9c7, #faedde 50%, #f2dfc7);
+}
+.theme-inspiration-2609 .inspiration-peach-canvas .lab-optical-field i {
+  border-radius: 4px 80px 4px 4px;
+  transform: rotate(-10deg);
+  border-color: #fffaf2ad;
+  background: linear-gradient(135deg, #fff9e94d, #f6d6b033);
+  box-shadow: inset 1px 1px 0 #fff9, 20px 28px 32px #b3834d12;
+}
+.theme-inspiration-2609 .inspiration-peach-canvas .app-main-scroll {
+  position: relative;
+  z-index: 1;
 }

@@ -11,6 +11,7 @@ import {
 import { FragilityHeatmapCard } from '../components/FragilityHeatmapCard'
 import ComboExpandHint from '../components/ComboExpandHint'
 import ComboOrbReveal from '../components/ComboOrbReveal'
+import PortfolioComposition from '../components/PortfolioComposition'
 import CountUp from '../components/CountUp'
 import ExplainHover from '../components/ExplainHover'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
@@ -3822,7 +3823,7 @@ const generateRecommendations = (
   }
 }
 
-export default function ComboPage({ openModal }) {
+export default function ComboPage({ openModal, inspirationLayout = false }) {
   const navigate = useNavigate()
   const labels = useLabels()
   const maskMode = useModeLabelMap()
@@ -5348,6 +5349,7 @@ export default function ComboPage({ openModal }) {
         <p className="text-stone-400 text-sm mt-1">基于 Portfolio Optimization 的最优投资方案</p>
       </div>
 
+      <PortfolioComposition inspiration={inspirationLayout} main={
       <div className={`combo-main-grid mb-6${leftPanelCollapsed ? ' combo-left-collapsed' : ''}`}>
         <div className={`combo-left-card motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 ${leftPanelCollapsed ? 'px-4 py-4' : 'p-6'} transition-[padding] duration-300`}>
           <div className={`flex items-center justify-between ${leftPanelCollapsed ? 'mb-2' : 'mb-4'}`}>
@@ -6818,6 +6820,7 @@ export default function ComboPage({ openModal }) {
         </div>
       </div>
 
+      } details={<>
       {/* ═══ Detailed Recommendations (moved from hero) ═══ */}
       {recommendations.length > 0 && showRecommendationDetailCard && (
         <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-6">
@@ -6948,6 +6951,7 @@ export default function ComboPage({ openModal }) {
         )}
       </div>
 
+      </>} secondary={
       <div className="combo-secondary-grid mb-6">
         <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -7118,6 +7122,7 @@ export default function ComboPage({ openModal }) {
         </div>
       </div>
 
+      } algorithm={
       <div className="motion-v2-surface glow-card relative overflow-hidden mt-6 rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/90 via-white/92 to-cyan-50/78 p-6 backdrop-blur-sm shadow-[0_18px_42px_rgba(56,189,248,0.14),inset_0_1px_0_rgba(255,255,255,0.86)]">
         <div className="pointer-events-none absolute -top-14 right-20 h-40 w-40 rounded-full bg-sky-200/25 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-cyan-200/22 blur-3xl" />
@@ -7155,6 +7160,7 @@ export default function ComboPage({ openModal }) {
         <div className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-sky-300/70 to-transparent" />
       </div>
 
+      } />
       <div className="glow-card relative overflow-hidden rounded-2xl border border-cyan-100 bg-gradient-to-br from-white via-cyan-50/35 to-violet-50/30 p-6 mt-6">
         <div className="pointer-events-none absolute -top-12 right-14 h-36 w-36 rounded-full bg-cyan-200/25 blur-3xl" />
         <div className="pointer-events-none absolute -bottom-14 -left-10 h-36 w-36 rounded-full bg-violet-200/20 blur-3xl" />

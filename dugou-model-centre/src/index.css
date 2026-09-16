@@ -2859,6 +2859,10 @@
   transition-delay: 55ms;
 }
 
+/* Same neutral material as Modern; only the icon and label differ. */
+.mn-layout-choice--inspiration.is-active { width: 77px; }
+.mn-layout-choice--inspiration.is-active > span { max-width: 55px; }
+
 .mn-layout-choice.is-active::after {
   animation: mnLayoutLiquidGlint 680ms cubic-bezier(0.22, 1, 0.36, 1) 1;
 }

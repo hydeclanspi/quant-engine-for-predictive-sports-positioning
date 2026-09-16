@@ -18,16 +18,16 @@ export default function Inspiration2609Shell({
   )
   return (
     <div
-      className="flex flex-col h-screen theme-modern theme-inpiration theme-inspiration-2609"
+      className={`flex flex-col h-screen theme-modern${layoutMode === 'inpiration' ? ' theme-inpiration theme-inspiration-2609' : ''}`}
       data-inspiration-material={material}
     >
       {header}
       <div
-        className={`inspiration-2609-body flex flex-col flex-1 min-h-0${laboratory ? ' theme-modern lab-editions' : ''}`}
+        className={`inspiration-2609-body flex flex-col flex-1 min-h-0${laboratory ? ' theme-modern lab-editions' : ''}${material === 'peach' ? ' inspiration-peach-canvas' : ''}`}
         data-lab-edition={laboratory ? material : undefined}
         data-lab-page={laboratory ? pageKey : undefined}
       >
-        {laboratory && (
+        {(laboratory || material === 'peach') && (
           <div className="lab-optical-field" aria-hidden="true">
             <i />
             <i />

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { readFileSync } from 'node:fs'
 import postcss from 'postcss'
 import Inspiration2609Shell from '../../components/Inspiration2609Shell'
+import PortfolioComposition from '../../components/PortfolioComposition'
 import {
   INSPIRATION_2609_NAME,
   INSPIRATION_2609_MATERIALS,
@@ -34,9 +35,9 @@ describe('inspiration 2609 selected page composition', () => {
       '/dashboard': 'prism',
       '/dashboard/analysis': 'prism',
       '/dashboard/metrics': 'prism',
-      '/dashboard/report': 'seasons',
+      '/dashboard/report': 'prism',
       '/history': 'prism',
-      '/history/teams': 'prism',
+      '/history/teams': 'peach',
       '/params': 'modern',
     })
     for (const [route, material] of Object.entries(
@@ -67,10 +68,8 @@ describe('inspiration 2609 selected page composition', () => {
     }
   })
 
-  it('never mounts laboratory styles or optical layers around Seasons and Console', () => {
+  it('never mounts laboratory styles or optical layers around Console', () => {
     for (const route of [
-      '/dashboard/report',
-      '/dashboard/report/',
       '/params',
       '/params/',
     ]) {
@@ -84,6 +83,15 @@ describe('inspiration 2609 selected page composition', () => {
     expect(getInspiration2609Surface('/unknown').laboratory).toBe(false)
   })
 
+  it('gives Seasons a Prism canvas and Teams only a peach canvas, not Lab cards', () => {
+    expect(renderShell('/dashboard/report')).toContain('data-lab-edition="prism"')
+    const teams = renderShell('/history/teams')
+    expect(teams).toContain('inspiration-peach-canvas')
+    expect(teams).toContain('lab-optical-field')
+    expect(teams).not.toContain('lab-editions')
+    expect(teams).toContain('Original business page')
+  })
+
   it('can compare against Modern without changing the route or business components', () => {
     for (const route of Object.keys(INSPIRATION_2609_MATERIALS)) {
       expect(getInspiration2609Surface(route, 'modern')).toEqual({
@@ -91,6 +99,7 @@ describe('inspiration 2609 selected page composition', () => {
         laboratory: false,
       })
       expect(renderShell(route, 'modern')).not.toContain('lab-editions')
+      expect(renderShell(route, 'modern')).not.toContain('theme-inspiration-2609')
     }
   })
 
@@ -117,5 +126,36 @@ describe('inspiration 2609 selected page composition', () => {
         ).toBe('10px')
       }
     })
+  })
+})
+
+describe('Portfolio presentation-only composition', () => {
+  const cards = {
+    main: <div className="combo-main-grid combo-left-collapsed"><article>candidates</article><article>package</article></div>,
+    secondary: <div className="combo-secondary-grid"><article>ranking</article><article>layers</article></div>,
+    algorithm: <article>algorithm</article>,
+    details: <section>details</section>,
+  }
+
+  it('keeps Modern markup and ordering unchanged', () => {
+    expect(renderToStaticMarkup(<PortfolioComposition {...cards} />)).toBe(
+      renderToStaticMarkup(<>{cards.main}{cards.details}{cards.secondary}{cards.algorithm}</>),
+    )
+  })
+
+  it('moves existing cards into 3 + 2 rows without duplicating controls', () => {
+    const [primary, research] = PortfolioComposition({ ...cards, inspiration: true }).props.children
+    for (const row of [primary, research]) {
+      const keys = row.props.children.map((card) => card.key)
+      expect(new Set(keys).size).toBe(keys.length)
+    }
+    const markup = renderToStaticMarkup(<PortfolioComposition {...cards} inspiration />)
+    expect(markup).toContain('data-left-collapsed="true"')
+    expect(markup).toContain('combo-main-grid combo-left-collapsed')
+    expect(markup).toContain('<article>candidates</article><article>package</article><article>layers</article></div>')
+    expect(markup).toContain('class="portfolio-research-grid"><article>ranking</article><article>algorithm</article></div>')
+    for (const label of ['candidates', 'package', 'ranking', 'layers', 'algorithm', 'details']) {
+      expect(markup.match(new RegExp(`>${label}<`, 'g'))).toHaveLength(1)
+    }
   })
 })

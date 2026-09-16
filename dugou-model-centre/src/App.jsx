@@ -60,6 +60,8 @@ function App() {
     if (designPreview) return 'inpiration'
     return initializeLayoutMode(getSystemConfig().layoutMode, localStorage)
   })
+  // Both themes share a stable component tree so switching never clears drafts.
+  const inspiration2609Active = inspiration2609Preview || (!designPreview && ['inpiration', 'modern'].includes(layoutMode))
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [modalData, setModalData] = useState(null)
   const [systemConfigSnapshot, setSystemConfigSnapshot] = useState(() => getSystemConfig())
@@ -162,8 +164,10 @@ function App() {
   const ambientThemes = systemConfigSnapshot?.pageAmbientThemes || PAGE_AMBIENT_THEME_DEFAULTS
   const ambientToneCandidate = ambientThemes[ambientPageKey] || PAGE_AMBIENT_THEME_DEFAULTS[ambientPageKey] || 'classic_white'
   const ambientTone = VALID_AMBIENT_TONES.includes(ambientToneCandidate) ? ambientToneCandidate : 'classic_white'
-  const usesLabMaterial = designPreview && (!inspiration2609Preview || getInspiration2609Surface(location.pathname, layoutMode).laboratory)
-  const ambientClassName = usesLabMaterial ? '' : `app-ambient-scope app-ambient-tone-${ambientTone}`
+  const surface2609 = getInspiration2609Surface(location.pathname, layoutMode)
+  const usesLabMaterial = inspiration2609Active ? surface2609.laboratory : designPreview
+  const usesOpticalCanvas = usesLabMaterial || (inspiration2609Active && surface2609.material === 'peach')
+  const ambientClassName = usesOpticalCanvas ? '' : `app-ambient-scope app-ambient-tone-${ambientTone}`
   const mainContentClassName = `page-enter app-main-content ${location.pathname === '/dashboard/report' ? 'app-main-content--seasons' : ''} ${ambientClassName}`
 
   // Demo nudge — bottom-right glass bubble, preview mode + homepage only.
@@ -174,7 +178,7 @@ function App() {
     <Routes>
       <Route path="/" element={<NewInvestmentPage openModal={openModal} />} />
       <Route path="/new" element={<NewInvestmentPage openModal={openModal} />} />
-      <Route path="/combo" element={<ComboPage openModal={openModal} />} />
+      <Route path="/combo" element={<ComboPage openModal={openModal} inspirationLayout={inspiration2609Active && layoutMode === 'inpiration'} />} />
       <Route path="/settle" element={<SettlePage openModal={openModal} />} />
       <Route path="/dashboard" element={<DashboardPage openModal={openModal} />} />
       <Route path="/dashboard/analysis" element={<AnalysisPage openModal={openModal} />} />
@@ -186,9 +190,9 @@ function App() {
     </Routes>
   )
 
-  // Selected design, still isolated from the live theme until visual approval.
+  // Approved theme, shared by live routes and the isolated design preview.
   // The existing top bar is outside the Lab scope, including at mobile sizes.
-  if (inspiration2609Preview) {
+  if (inspiration2609Active) {
     return (
       <Inspiration2609Shell
         pathname={location.pathname}
@@ -198,14 +202,14 @@ function App() {
         contentClassName={mainContentClassName}
         header={<ModernTopBar
           layoutMode={layoutMode}
-          designPreview
-          onPreviewLayoutChange={setLayoutMode}
-          designLink={<a className="mn-settings-link inspiration-preview-return" href={getLabReturnPath(window.location.pathname)} title="返回应用 · 当前为 inspiration 2609 设计预览">
+          designPreview={designPreview}
+          onPreviewLayoutChange={designPreview ? setLayoutMode : null}
+          designLink={designPreview ? <a className="mn-settings-link inspiration-preview-return" href={getLabReturnPath(window.location.pathname)} title="返回应用 · 当前为 inspiration 2609 设计预览">
             <ArrowLeft size={13} /><span>返回应用</span>
-          </a>}
+          </a> : null}
         />}
         footer={<BottomBar />}
-        modal={modalData && <Modal data={modalData} onClose={closeModal} />}
+        modal={<>{modalData && <Modal data={modalData} onClose={closeModal} />}{demoBubble}</>}
       >
         {pageRoutes}
       </Inspiration2609Shell>
