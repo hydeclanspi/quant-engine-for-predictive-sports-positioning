@@ -127,7 +127,7 @@ function LayoutMorphSwitch({ layoutMode }) {
   )
 }
 
-export default function ModernTopBar({ layoutMode = 'modern', designLink = null }) {
+export default function ModernTopBar({ layoutMode = 'modern', designLink = null, designPreview = false }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dataVersion, setDataVersion] = useState(0)
   const [brandNameOffset, setBrandNameOffset] = useState(0)
@@ -251,7 +251,7 @@ export default function ModernTopBar({ layoutMode = 'modern', designLink = null 
       <span ref={brandSepRef} className="mn-brand-measure" aria-hidden="true" />
 
       {/* ── Modern / inpiration liquid morph switch ── */}
-      <LayoutMorphSwitch layoutMode={layoutMode} />
+      {!designPreview && <LayoutMorphSwitch layoutMode={layoutMode} />}
 
       {/* ── Breadcrumb separator ── */}
       <span className="mn-sep">/</span>
@@ -260,7 +260,7 @@ export default function ModernTopBar({ layoutMode = 'modern', designLink = null 
       <span className="mn-page-title">{pageTitle}</span>
 
       {/* ── Preview / Full mode toggle ── */}
-      <PreviewModeToggle />
+      {designPreview ? <span className="lab-workspace-badge">LAB</span> : <PreviewModeToggle />}
 
       {/* ── Separator ── */}
       <div className="h-4 w-px bg-gradient-to-b from-transparent via-neutral-200 to-transparent mx-2 flex-shrink-0" />

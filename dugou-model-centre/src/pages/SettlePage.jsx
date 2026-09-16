@@ -1186,9 +1186,9 @@ export default function SettlePage() {
         </div>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-4 lab-settle-list">
         {pendingCombos.map((combo) => (
-          <div key={combo.id} className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden">
+          <div key={combo.id} className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-settle-combo">
             <div
               onClick={() => setExpandedCombo(expandedCombo === combo.id ? null : combo.id)}
               className="motion-v2-row px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-stone-50/50 transition-colors"

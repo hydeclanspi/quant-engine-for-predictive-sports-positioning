@@ -1,0 +1,1206 @@
+/* Second-generation visual studies. All business components are reused.
+ * No selector in this file applies to Modern or the normal inpiration shell.
+ * Static optical fields + edge highlights; no canvas, shader or new icon art. */
+.theme-modern.lab-editions {
+  --lab-ink: #233747;
+  --lab-muted: #5f7383;
+  --lab-accent: #3475a7;
+  --lab-line: #91a9be55;
+  --lab-canvas: #cedbe6;
+  --lab-card: #eef4f9e0;
+  --lab-glass: #e6f1fa9c;
+  --lab-well: #ffffff9c;
+  --lab-rim: #ffffffdb;
+  --lab-radius: 28px;
+  --lab-shadow: 0 18px 42px -28px #31577770, 0 3px 8px -5px #355b8c42;
+  --lab-edge:
+    inset 0 1px 1px #fff, inset 1px 0 1px #ffffffc7,
+    inset -1px -1px 1px #7899b33b, inset 0 -4px 7px #b7d6e930;
+  position: relative;
+  isolation: isolate;
+  color: var(--lab-ink);
+  background: var(--lab-canvas);
+  font-family:
+    'DM Sans',
+    -apple-system,
+    BlinkMacSystemFont,
+    'PingFang SC',
+    sans-serif;
+}
+.lab-editions[data-lab-edition='glacier'] {
+  --lab-ink: #163e51;
+  --lab-muted: #476d7e;
+  --lab-accent: #007d9f;
+  --lab-line: #438ca83d;
+  --lab-canvas: #b6dce7;
+  --lab-card: #dcf4f6d6;
+  --lab-glass: #c7eef1aa;
+  --lab-well: #edfbfcc4;
+  --lab-radius: 32px;
+  --lab-edge:
+    inset 0 2px 1px #ffffffd9, inset 2px 0 3px #ecffffa1,
+    inset -1px -2px 3px #529db949, inset 0 -8px 18px #45bfd21c;
+  --lab-shadow: 0 22px 50px -30px #117d9b80, 0 2px 7px #4d839d12;
+}
+.lab-editions[data-lab-edition='folio'] {
+  --lab-ink: #393e42;
+  --lab-muted: #686d73;
+  --lab-accent: #527b93;
+  --lab-line: #9a9d9e55;
+  --lab-canvas: #d9d9d5;
+  --lab-card: #f1f0e9e3;
+  --lab-glass: #f3f1e79e;
+  --lab-well: #fffffaad;
+  --lab-radius: 7px 27px 7px 7px;
+  --lab-edge:
+    inset 0 1px 0 #fff, inset 1px 0 0 #ffffff9c, inset -1px -1px 0 #aab1b033;
+  --lab-shadow: 0 15px 34px -27px #32434e73;
+}
+.lab-editions[data-lab-edition='cobalt'] {
+  --lab-ink: #12345a;
+  --lab-muted: #335c83;
+  --lab-accent: #064f9b;
+  --lab-line: #d3ecff82;
+  --lab-canvas: #438cde;
+  --lab-card: #a4cff5e6;
+  --lab-glass: #93c8f5a6;
+  --lab-well: #c6e3faae;
+  --lab-rim: #e3f5fff0;
+  --lab-radius: 30px;
+  --lab-edge:
+    inset 0 2px 1px #e1f6ffd4, inset 2px 0 2px #d0f0ffba,
+    inset -1px -2px 2px #1a5ca449, inset 0 -8px 15px #599cde4a;
+  --lab-shadow: 0 24px 45px -26px #155ca47a, 0 3px 7px #125aaa25;
+}
+
+/* The canvas is designed as a material, not a white page with accent icons. */
+.lab-optical-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 9% 80%, #cabef080, transparent 45%),
+    radial-gradient(ellipse at 93% 10%, #c9eeffaa, transparent 42%),
+    linear-gradient(128deg, #c7d5e2, #e0e8ee 47%, #c2d5e6);
+}
+.lab-optical-field i {
+  position: absolute;
+  display: block;
+  border: 1px solid #fff8;
+  box-shadow:
+    inset 2px 1px 3px #fffc,
+    inset -6px -9px 18px #809fbc27,
+    15px 30px 70px #5f859915;
+  background: linear-gradient(135deg, #ffffff29, #e5faff14 45%, #beccf028);
+  border-radius: 45%;
+  transform: rotate(-26deg);
+}
+.lab-optical-field i:nth-child(1) {
+  width: 83vw;
+  height: 74vw;
+  left: -37vw;
+  top: -35vw;
+}
+.lab-optical-field i:nth-child(2) {
+  width: 66vw;
+  height: 82vw;
+  right: -45vw;
+  top: 8vh;
+  border-radius: 44% 30%;
+}
+.lab-optical-field i:nth-child(3) {
+  width: 78vw;
+  height: 22vw;
+  right: -5vw;
+  bottom: -20vw;
+  border-radius: 50%;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-optical-field {
+  background:
+    radial-gradient(ellipse at 98% 78%, #77bfd4c2, transparent 52%),
+    radial-gradient(ellipse at 35% 0%, #e1f3f8d1, transparent 52%),
+    linear-gradient(115deg, #abd2e2, #c1e6e9 68%, #acd4ed);
+}
+.lab-editions[data-lab-edition='glacier'] .lab-optical-field i {
+  border-radius: 38px;
+  transform: rotate(-30deg);
+  background: linear-gradient(165deg, #fff4, #b5edf123 50%, #4fadbd20);
+}
+.lab-editions[data-lab-edition='glacier'] .lab-optical-field i:nth-child(1) {
+  left: -58vw;
+  top: -23vw;
+  width: 95vw;
+  height: 105vw;
+}
+.lab-editions[data-lab-edition='folio'] .lab-optical-field {
+  background: linear-gradient(
+    115deg,
+    #c9cecf 0%,
+    #dbe0e1 22%,
+    #e6e4dc 56%,
+    #d8d7d3 100%
+  );
+}
+.lab-editions[data-lab-edition='folio'] .lab-optical-field i {
+  border-radius: 4px 80px 4px 4px;
+  transform: rotate(-10deg);
+  background: linear-gradient(135deg, #ffffef35, #ebeff64d);
+  box-shadow:
+    inset 1px 1px 0 #fff9,
+    20px 28px 32px #3e4b6512;
+}
+.lab-editions[data-lab-edition='folio'] .lab-optical-field i:nth-child(1) {
+  width: 36vw;
+  height: 90vh;
+  left: -29vw;
+  top: 8vh;
+}
+.lab-editions[data-lab-edition='folio'] .lab-optical-field i:nth-child(2) {
+  width: 48vw;
+  height: 90vh;
+  right: -39vw;
+  top: 10vh;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-optical-field {
+  background:
+    radial-gradient(ellipse at 2% 100%, #3682dfee, transparent 70%),
+    radial-gradient(ellipse at 86% 2%, #8bcff8a6, transparent 60%),
+    linear-gradient(122deg, #347fce, #599dea 46%, #3280d4);
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-optical-field i {
+  border-color: #b9ebff7d;
+  background: linear-gradient(128deg, #beedff14, #3386e708 50%, #5aaff927);
+  box-shadow:
+    inset 3px 2px 3px #cef4ffb3,
+    inset -8px -12px 22px #1268c62b,
+    14px 30px 80px #2664bb22;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-optical-field i:nth-child(1) {
+  width: 86vw;
+  height: 103vw;
+  left: -60vw;
+  top: -38vw;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-optical-field i:nth-child(2) {
+  width: 76vw;
+  height: 88vw;
+  right: -60vw;
+  top: 5vh;
+}
+
+/* A small comparison rail, then the actual product top bar and unchanged Logo. */
+.lab-edition-bar {
+  position: relative;
+  z-index: 45;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px clamp(20px, 3.2vw, 54px) 10px;
+  flex-shrink: 0;
+  color: var(--lab-muted);
+}
+.lab-return {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.lab-return:hover {
+  color: var(--lab-ink);
+}
+.lab-edition-picker {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px;
+  border: 1px solid #ffffff6b;
+  background: #e8f1f545;
+  border-radius: 15px;
+  box-shadow:
+    inset 0 1px 1px #ffffffb3,
+    0 3px 9px #42688b0c;
+}
+.lab-edition-picker button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 13px;
+  border-radius: 10px;
+  color: var(--lab-muted);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  transition:
+    background 0.24s,
+    box-shadow 0.24s;
+}
+.lab-edition-picker button[aria-pressed='true'] {
+  color: var(--lab-ink);
+  background: var(--lab-card);
+  border-color: var(--lab-rim);
+  box-shadow:
+    var(--lab-edge),
+    0 4px 10px #25578616;
+}
+.lab-edition-picker button:hover {
+  background: var(--lab-well);
+}
+.lab-edition-swatch {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle at 25% 20%, #fff, var(--swatch) 65%);
+  border: 1px solid #ffffffb3;
+  box-shadow:
+    inset -1px -2px 3px #3b679425,
+    0 1px 3px #49698322;
+  color: #25445b;
+}
+.lab-edition-number {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+.lab-edition-name {
+  font-size: 11px;
+  letter-spacing: 0.07em;
+  font-weight: 650;
+}
+.lab-edition-label {
+  font-size: 11px;
+  opacity: 0.85;
+}
+.lab-preview-note {
+  font-size: 11px;
+  white-space: nowrap;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-edition-bar {
+  color: #123e70;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-edition-picker {
+  background: #91c8f24d;
+}
+.theme-modern.lab-editions .mn-bar {
+  margin: 0 clamp(18px, 2.5vw, 42px);
+  height: 68px;
+  padding: 0 24px;
+  gap: 0;
+  border: 1px solid var(--lab-rim);
+  border-radius: 22px;
+  background: var(--lab-glass);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+  backdrop-filter: blur(28px) saturate(125%);
+  -webkit-backdrop-filter: blur(28px) saturate(125%);
+  z-index: 40;
+}
+.theme-modern.lab-editions .mn-nav {
+  margin-left: auto;
+  justify-content: center;
+}
+.theme-modern.lab-editions .mn-nav-item {
+  height: 42px;
+  border-radius: 13px;
+  padding: 0 18px;
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .mn-nav-active {
+  background: var(--lab-well);
+  color: var(--lab-ink);
+  box-shadow:
+    inset 0 1px 1px #fff,
+    0 3px 8px #35617c14;
+}
+.theme-modern.lab-editions .mn-nav-active::after {
+  height: 3px;
+  width: 15px;
+  left: calc(50% - 7.5px);
+  bottom: 3px;
+  border-radius: 4px;
+  background: var(--lab-accent);
+  opacity: 0.6;
+}
+.theme-modern.lab-editions .mn-nav-group {
+  height: 100%;
+  display: flex;
+  align-items: center;
+}
+.theme-modern.lab-editions .mn-page-title {
+  color: var(--lab-muted);
+  font-size: 12px;
+}
+.theme-modern.lab-editions .mn-sep {
+  margin-left: 17px;
+  margin-right: 14px;
+  color: var(--lab-muted);
+  opacity: 0.6;
+}
+.lab-workspace-badge {
+  display: inline-flex;
+  padding: 3px 7px;
+  border: 1px solid var(--lab-line);
+  border-radius: 6px;
+  font-size: 9px;
+  line-height: 1.2;
+  letter-spacing: 0.12em;
+  margin-left: 12px;
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .mn-right {
+  margin-left: 16px;
+  gap: 15px;
+}
+.theme-modern.lab-editions .mn-settings-link {
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .mn-settings-link-active {
+  color: var(--lab-ink);
+}
+.theme-modern.lab-editions .mn-dropdown {
+  margin-top: 9px;
+  border: 1px solid var(--lab-rim);
+  border-radius: 20px;
+  background: var(--lab-card);
+  box-shadow:
+    var(--lab-edge),
+    0 20px 45px #173e6233;
+  backdrop-filter: blur(32px);
+}
+.theme-modern.lab-editions .mn-dropdown-item {
+  border-radius: 11px;
+  color: var(--lab-ink);
+}
+.theme-modern.lab-editions .mn-dropdown-active {
+  background: var(--lab-well);
+}
+.theme-modern.lab-editions .mn-dropdown-featured {
+  background: linear-gradient(125deg, #ffffff64, #8dcff133);
+}
+
+/* Existing page content takes the full research canvas; no additional hero copy. */
+.theme-modern.lab-editions .app-main-scroll {
+  position: relative;
+  z-index: 1;
+  background: transparent;
+}
+.theme-modern.lab-editions .app-ambient-scope {
+  background: transparent;
+}
+.theme-modern.lab-editions .app-ambient-scope::before,
+.theme-modern.lab-editions .app-ambient-scope::after {
+  display: none;
+}
+.theme-modern.lab-editions .app-main-content {
+  padding-bottom: 36px;
+}
+.theme-modern.lab-editions .app-main-content--seasons {
+  padding-bottom: 0;
+}
+.theme-modern.lab-editions .page-shell {
+  width: min(100%, 1600px);
+  max-width: 1600px;
+  margin: 0 auto;
+  padding: 32px clamp(22px, 3vw, 50px) 24px;
+}
+.theme-modern.lab-editions .page-shell > :is(.mb-8, .mb-6):first-child {
+  margin-bottom: 25px;
+}
+.theme-modern.lab-editions .page-shell > :is(.mb-8, .mb-6):first-child h2 {
+  font-size: 26px;
+  letter-spacing: -0.04em;
+  font-weight: 600;
+}
+.theme-modern.lab-editions .text-stone-800 {
+  color: var(--lab-ink);
+}
+.theme-modern.lab-editions .text-stone-600 {
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .text-stone-500 {
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .text-stone-400 {
+  color: var(--lab-muted);
+}
+.theme-modern.lab-editions .glow-card:where(:not(.settle-ai-quick-card)) {
+  border: 1px solid var(--lab-rim);
+  border-radius: var(--lab-radius);
+  background:
+    linear-gradient(135deg, #ffffff25, transparent 50%), var(--lab-card);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions .glow-card:where(:not(.settle-ai-quick-card)):hover {
+  transform: none;
+  border-color: var(--lab-rim);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions .glow-card::after {
+  display: none;
+}
+.theme-modern.lab-editions
+  .glow-card:not(.settle-ai-quick-card)
+  > :is(.bg-stone-50, .bg-stone-50\/50) {
+  background: var(--lab-glass);
+}
+.theme-modern.lab-editions .input-glow:where(:not(.settle-ai-textarea)) {
+  background: var(--lab-well);
+  border-color: var(--lab-line);
+  box-shadow:
+    inset 0 1px 2px #3c658712,
+    0 1px 0 #fff9;
+  border-radius: 13px;
+}
+.theme-modern.lab-editions .input-glow:where(:not(.settle-ai-textarea)):focus {
+  border-color: var(--lab-accent);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--lab-accent) 12%, transparent),
+    inset 0 1px 0 #fff9;
+}
+.theme-modern.lab-editions .btn-primary {
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--lab-accent) 82%, white),
+    var(--lab-accent)
+  );
+  border: 1px solid color-mix(in srgb, var(--lab-accent) 60%, white);
+  color: #fff;
+  border-radius: 13px;
+  box-shadow:
+    inset 0 1px 0 #ffffff66,
+    0 4px 12px color-mix(in srgb, var(--lab-accent) 18%, transparent);
+}
+.theme-modern.lab-editions .btn-secondary {
+  background: var(--lab-glass);
+  border-color: var(--lab-rim);
+  color: var(--lab-ink);
+  box-shadow: var(--lab-edge);
+  border-radius: 13px;
+}
+.theme-modern.lab-editions input[type='range'] {
+  accent-color: var(--lab-accent);
+}
+.theme-modern.lab-editions input[type='range']::-webkit-slider-thumb {
+  background: var(--lab-accent);
+}
+.theme-modern.lab-editions :is(button, a, summary):focus-visible {
+  outline: 2px solid var(--lab-accent);
+  outline-offset: 4px;
+}
+.theme-modern.lab-editions .app-bottom-bar {
+  background: transparent;
+  border-top: 1px solid var(--lab-line);
+}
+.theme-modern.lab-editions .app-bottom-bar__inner {
+  width: min(100%, 1500px);
+  padding-block: 17px;
+  color: var(--lab-muted);
+}
+
+/* Protected AI components: only the outer mounting/material changes. Textarea,
+ * gold LAB label, parse state, animation and one-click archive remain original. */
+.theme-modern.lab-editions .settle-ai-quick-card {
+  border-color: var(--lab-rim);
+  border-radius: 23px;
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions .settle-ai-quick-card:hover {
+  transform: none;
+}
+.theme-modern.lab-editions .lab-new-quick {
+  align-self: start;
+}
+.theme-modern.lab-editions .lab-new-construction {
+  background: var(--lab-glass);
+  border-color: var(--lab-line);
+  padding: 18px 24px;
+}
+.theme-modern.lab-editions .lab-new-footer {
+  background: var(--lab-glass) !important;
+  border-color: var(--lab-line);
+}
+.theme-modern.lab-editions .lab-new-matches {
+  padding: 25px;
+}
+.theme-modern.lab-editions .lab-new-match {
+  min-width: 0;
+}
+.theme-modern.lab-editions .lab-new-footer > div {
+  flex-wrap: wrap;
+  gap: 22px;
+}
+.theme-modern.lab-editions .lab-new-footer > div > div {
+  flex-wrap: wrap;
+  row-gap: 16px;
+}
+.theme-modern.lab-editions .lab-new-construction > div > div:first-child {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.theme-modern.lab-editions .lab-new-ticket {
+  overflow: visible;
+}
+.theme-modern.lab-editions .lab-new-construction {
+  border-radius: var(--lab-radius) var(--lab-radius) 0 0;
+}
+.theme-modern.lab-editions .lab-new-footer {
+  border-radius: 0 0 var(--lab-radius) var(--lab-radius);
+}
+.theme-modern.lab-editions .lab-settle-combo > .motion-v2-row {
+  background: var(--lab-glass);
+  border-bottom-color: var(--lab-line);
+}
+.theme-modern.lab-editions .lab-settle-combo > .motion-v2-row:hover {
+  background: var(--lab-well);
+}
+.theme-modern.lab-editions .lab-settle-combo .motion-v2-match-card {
+  border-color: var(--lab-line);
+}
+
+/* PRISM: an asymmetric split workspace. The AI module becomes a working lens
+ * beside the original full form, not another generic card above it. */
+@media (min-width: 1280px) {
+  .lab-editions[data-lab-edition='prism'] .lab-new-page,
+  .lab-editions[data-lab-edition='folio'] .lab-new-page {
+    display: grid;
+    grid-template-columns: minmax(325px, 0.37fr) minmax(0, 0.63fr);
+    gap: 24px 30px;
+    align-items: start;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-page-heading,
+  .lab-editions[data-lab-edition='folio'] .lab-page-heading {
+    grid-column: 1 / -1;
+    margin-bottom: 0;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-quick,
+  .lab-editions[data-lab-edition='folio'] .lab-new-quick {
+    grid-column: 1;
+    grid-row: 2;
+    position: sticky;
+    top: 24px;
+    margin-bottom: 0;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-ticket,
+  .lab-editions[data-lab-edition='folio'] .lab-new-ticket {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-quick textarea,
+  .lab-editions[data-lab-edition='folio'] .lab-new-quick textarea {
+    min-height: 230px;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-quick .settle-ai-trigger,
+  .lab-editions[data-lab-edition='folio'] .lab-new-quick .settle-ai-trigger {
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 20px 20px 13px;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-quick .settle-ai-subtitle,
+  .lab-editions[data-lab-edition='folio'] .lab-new-quick .settle-ai-subtitle {
+    flex-basis: 100%;
+    margin-left: 22px;
+  }
+  .lab-editions[data-lab-edition='prism'] .lab-new-quick .settle-ai-body,
+  .lab-editions[data-lab-edition='folio'] .lab-new-quick .settle-ai-body {
+    padding: 12px 20px 20px;
+  }
+}
+.lab-editions[data-lab-edition='prism'] .lab-new-ticket {
+  position: relative;
+}
+.lab-editions[data-lab-edition='prism'] .lab-new-ticket::before {
+  content: '';
+  position: absolute;
+  inset: 7px -7px -7px 7px;
+  z-index: -1;
+  pointer-events: none;
+  border-radius: 30px;
+  border: 1px solid #ffffffad;
+  background: #f0f6fa28;
+}
+.lab-editions[data-lab-edition='prism'] .lab-metrics-grid {
+  gap: 14px;
+}
+.lab-editions[data-lab-edition='prism'] .lab-metrics-grid > div {
+  border-radius: 22px;
+}
+
+/* GLACIER: a connected, cyan optical deck with broad horizontal instruments. */
+.lab-editions[data-lab-edition='glacier'] .mn-bar {
+  border-radius: 38px;
+  margin-inline: 32px;
+  padding-inline: 29px;
+}
+.lab-editions[data-lab-edition='glacier'] .mn-nav-active {
+  border-radius: 24px;
+  background: #e4f9fac2;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-new-page {
+  max-width: 1480px;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-new-quick {
+  margin-bottom: 26px;
+  border-radius: 29px;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-new-construction {
+  padding-block: 22px;
+  background: #b1dce642;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-new-matches {
+  padding: 30px;
+}
+.lab-editions[data-lab-edition='glacier'] .lab-metrics-grid {
+  gap: 1px;
+  border: 1px solid var(--lab-rim);
+  border-radius: 28px;
+  overflow: hidden;
+  background: #88b7c44a;
+  box-shadow: var(--lab-shadow);
+}
+.lab-editions[data-lab-edition='glacier'] .lab-metrics-grid > .glow-card {
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 24px;
+  background: linear-gradient(150deg, #e6fbffd1, #cbe8e9de);
+}
+@media (min-width: 1380px) {
+  .lab-editions[data-lab-edition='glacier']
+    .lab-new-matches:has(> .lab-new-match:nth-child(2)),
+  .lab-editions[data-lab-edition='cobalt']
+    .lab-new-matches:has(> .lab-new-match:nth-child(2)) {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 30px;
+  }
+  .lab-editions[data-lab-edition='glacier'] .lab-new-matches > .lab-new-match,
+  .lab-editions[data-lab-edition='cobalt'] .lab-new-matches > .lab-new-match {
+    margin-top: 0;
+  }
+  .lab-editions[data-lab-edition='glacier']
+    .lab-new-matches:has(> .lab-new-match:nth-child(2))
+    > .lab-new-match,
+  .lab-editions[data-lab-edition='cobalt']
+    .lab-new-matches:has(> .lab-new-match:nth-child(2))
+    > .lab-new-match {
+    padding: 20px;
+    border: 1px solid var(--lab-line);
+    border-radius: 20px;
+    background: var(--lab-well);
+  }
+}
+
+/* FOLIO LAB: platinum sheets, rules and offset layers. Typography remains the
+ * product's sans-serif: no invented masthead or replacement branding. */
+.lab-editions[data-lab-edition='folio'] .mn-bar {
+  border-radius: 7px 26px 7px 7px;
+  background: #eeeee69e;
+}
+.lab-editions[data-lab-edition='folio'] .mn-nav-active {
+  background: #fffff65c;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.lab-editions[data-lab-edition='folio'] .mn-nav-active::after {
+  width: 28px;
+  left: calc(50% - 14px);
+  height: 1px;
+  bottom: 1px;
+}
+.lab-editions[data-lab-edition='folio']
+  .page-shell
+  > :is(.mb-8, .mb-6):first-child {
+  border-bottom: 1px solid var(--lab-line);
+  padding-bottom: 20px;
+}
+.lab-editions[data-lab-edition='folio'] .lab-new-page {
+  grid-template-columns: minmax(340px, 0.4fr) minmax(0, 0.6fr);
+}
+.lab-editions[data-lab-edition='folio'] .lab-new-quick {
+  border-radius: 7px 26px 7px 7px;
+}
+.lab-editions[data-lab-edition='folio'] .lab-new-ticket {
+  background: #f1f0e9bf;
+  border-color: #ffffff94;
+  box-shadow:
+    inset 0 1px 1px #fff,
+    6px 6px 0 -1px #edf1f12e,
+    6px 6px 0 0 #ffffff96,
+    var(--lab-shadow);
+}
+.lab-editions[data-lab-edition='folio'] .lab-new-construction {
+  border-radius: 7px 26px 0 0;
+  border-bottom: 1px solid #8d979e55;
+}
+.lab-editions[data-lab-edition='folio'] .lab-new-footer {
+  border-radius: 0 0 7px 7px;
+}
+.lab-editions[data-lab-edition='folio'] .lab-metrics-grid {
+  gap: 0;
+  border: 1px solid var(--lab-line);
+  background: #edf0eba6;
+}
+.lab-editions[data-lab-edition='folio'] .lab-metrics-grid > .glow-card {
+  background: transparent;
+  border-radius: 0;
+  border: 0;
+  border-bottom: 1px solid var(--lab-line);
+  border-right: 1px solid var(--lab-line);
+  box-shadow: none;
+  padding: 25px;
+}
+.lab-editions[data-lab-edition='folio'] .lab-metrics-grid > .glow-card:hover {
+  background: #fff7;
+  box-shadow: none;
+}
+.lab-editions[data-lab-edition='folio'] table thead {
+  border-bottom: 1px solid #8d979e85;
+}
+.lab-editions[data-lab-edition='folio'] .combo-left-card {
+  border-radius: 7px;
+}
+
+/* COBALT: blue all the way through. Blue content slabs + paler inset wells,
+ * rather than white rectangles on a blue wallpaper. Gold AI remains an anchor. */
+.lab-editions[data-lab-edition='cobalt'] .mn-bar {
+  background: linear-gradient(130deg, #bce4ff70, #90c5f49c);
+  border-color: #d6f2ffad;
+  border-radius: 24px;
+}
+.lab-editions[data-lab-edition='cobalt'] .mn-nav-active {
+  background: #b6e0ffc7;
+  box-shadow:
+    inset 0 1px 1px #e9fbff,
+    0 4px 10px #2664a827;
+}
+.lab-editions[data-lab-edition='cobalt'] .mn-nav-item,
+.lab-editions[data-lab-edition='cobalt'] .mn-page-title,
+.lab-editions[data-lab-edition='cobalt'] .mn-settings-link {
+  color: #214e7c;
+}
+.lab-editions[data-lab-edition='cobalt'] .mn-nav-active {
+  color: #093966;
+}
+.lab-editions[data-lab-edition='cobalt']
+  .page-shell
+  > :is(.mb-8, .mb-6):first-child
+  h2 {
+  color: #103e70;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-page {
+  max-width: 1500px;
+}
+.lab-editions[data-lab-edition='cobalt'] .glow-card:not(.settle-ai-quick-card) {
+  background: linear-gradient(145deg, #bedfff40, #78b6ec20), var(--lab-card);
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-quick {
+  background: #d7e8eddf;
+  border-color: #e3f6ffc4;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-ticket {
+  border-radius: 30px;
+  border: 1px solid #ceeeffb3;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-construction {
+  background: #87bce996;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-footer {
+  background: #8ac1efa6;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-new-match > details > div {
+  border-left-color: #4c88b975;
+}
+.lab-editions[data-lab-edition='cobalt']
+  .glow-card
+  :is(.bg-white, .bg-stone-50, .bg-stone-50\/50):not(.settle-ai-quick-card *) {
+  background-color: var(--lab-well);
+}
+.lab-editions[data-lab-edition='cobalt']
+  .lab-settle-combo
+  .qi-collapse-inner
+  > div {
+  background: #b4d8f57a;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-metrics-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+.lab-editions[data-lab-edition='cobalt'] .lab-metrics-grid > .glow-card {
+  border-radius: 24px;
+  background: linear-gradient(145deg, #c4e6f994, #9bc9f1d1);
+}
+.lab-editions[data-lab-edition='cobalt']
+  .lab-metrics-grid
+  > .glow-card:nth-child(4n + 2) {
+  background: #acd2f2cf;
+}
+
+/* Seasons is the original, complete report — same twelve metrics, editing,
+ * curve, pagination and detail panes. Its glass is re-lit by each environment. */
+.theme-modern.lab-editions .warreport-scope {
+  --wr-ink: var(--lab-ink);
+  --wr-ink-2: var(--lab-muted);
+  --wr-line: var(--lab-line);
+}
+.theme-modern.lab-editions .wr-showcase {
+  background:
+    linear-gradient(125deg, #ffffff50, transparent 60%), var(--lab-card);
+  border: 1px solid var(--lab-rim);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions .wr-liquid-field {
+  opacity: 0.48;
+}
+.theme-modern.lab-editions .wr-panel {
+  background: var(--lab-card);
+  border: 1px solid var(--lab-rim);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions .wr-cycle-browser {
+  background: var(--lab-glass);
+  border-color: var(--lab-line);
+}
+.theme-modern.lab-editions .wr-period-card {
+  background: var(--lab-well);
+  border-color: var(--lab-line);
+}
+.theme-modern.lab-editions .wr-banner__kpis {
+  background: var(--lab-glass);
+}
+.theme-modern.lab-editions .wr-section-lead {
+  margin-top: 32px;
+  margin-bottom: 16px;
+}
+.theme-modern.lab-editions .wr-section-lead h2 {
+  font-size: 26px;
+}
+.lab-editions[data-lab-edition='folio'] :is(.wr-showcase, .wr-panel) {
+  border-radius: 7px 28px 7px 7px;
+}
+.lab-editions[data-lab-edition='folio'] .wr-liquid-field {
+  opacity: 0.2;
+}
+.lab-editions[data-lab-edition='cobalt'] .wr-showcase {
+  background: linear-gradient(135deg, #8ac1f1f5, #a5d8f5ef 52%, #75b2ebf0);
+}
+.lab-editions[data-lab-edition='cobalt'] .wr-panel {
+  background: linear-gradient(145deg, #b3d9f4ed, #9dccf3ed);
+}
+.lab-editions[data-lab-edition='cobalt'] .wr-banner__kpis {
+  background: #b4dbf26e;
+}
+.lab-editions[data-lab-edition='cobalt'] .wr-cycle-browser {
+  background: #84bde79c;
+}
+.lab-editions[data-lab-edition='cobalt'] .wr-period-card {
+  background: #bbdef3ad;
+}
+
+/* Existing research and Console cards retain their individual anatomy. */
+.theme-modern.lab-editions .console-interactive-surface {
+  border-color: var(--lab-rim) !important;
+  background:
+    linear-gradient(125deg, #ffffff47, transparent 65%), var(--lab-card) !important;
+  box-shadow: var(--lab-edge), var(--lab-shadow) !important;
+}
+.theme-modern.lab-editions .combo-main-grid {
+  gap: 24px;
+}
+.theme-modern.lab-editions .history-float-panel {
+  background: var(--lab-card);
+  border-color: var(--lab-rim);
+  box-shadow: var(--lab-edge), var(--lab-shadow);
+}
+.theme-modern.lab-editions > .fixed.z-50 {
+  backdrop-filter: blur(8px);
+  background: #1e456350;
+}
+.theme-modern.lab-editions > .fixed.z-50 > .custom-scrollbar {
+  background: var(--lab-card);
+  border-color: var(--lab-rim);
+  border-radius: 28px;
+  box-shadow:
+    var(--lab-edge),
+    0 32px 100px #163f6555;
+}
+
+/* Small screens retain every control. The comparison switch wraps; navigation
+ * remains a top bar, never becoming a sidebar. */
+@media (min-width: 1600px) {
+  .lab-editions[data-lab-edition='glacier'] .lab-settle-list,
+  .lab-editions[data-lab-edition='cobalt'] .lab-settle-list {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 20px;
+  }
+  .lab-editions .lab-settle-list > .lab-settle-combo {
+    margin-top: 0;
+  }
+  .lab-editions .lab-settle-combo:has(> .qi-collapse.is-open) {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1279px) {
+  .lab-edition-label {
+    display: none;
+  }
+  .lab-edition-bar {
+    padding-inline: 22px;
+  }
+  .theme-modern.lab-editions .mn-bar {
+    margin-inline: 20px;
+    padding-inline: 18px;
+  }
+  .theme-modern.lab-editions .mn-nav-item {
+    padding-inline: 12px;
+  }
+  .theme-modern.lab-editions .mn-page-title {
+    display: none;
+  }
+  .theme-modern.lab-editions .mn-sep {
+    display: none;
+  }
+  .theme-modern.lab-editions .page-shell {
+    padding: 28px 24px;
+  }
+  .lab-editions[data-lab-edition='folio'] .lab-new-page {
+    display: block;
+  }
+}
+@media (max-width: 900px) {
+  .lab-preview-note {
+    display: none;
+  }
+  .lab-edition-bar {
+    padding: 10px 16px;
+    gap: 12px;
+  }
+  .lab-edition-picker {
+    margin-left: auto;
+  }
+  .lab-edition-picker button {
+    padding: 8px 10px;
+    gap: 6px;
+  }
+  .lab-edition-number {
+    display: none;
+  }
+  .theme-modern.lab-editions .mn-bar {
+    height: auto;
+    min-height: 62px;
+    flex-wrap: wrap;
+    row-gap: 8px;
+    padding: 12px 18px;
+    border-radius: 22px;
+    margin-inline: 14px;
+  }
+  .theme-modern.lab-editions .mn-nav {
+    order: 5;
+    width: 100%;
+    margin: 0;
+    border-top: 1px solid var(--lab-line);
+    padding-top: 8px;
+    display: flex;
+    justify-content: space-between;
+    flex-wrap: nowrap;
+  }
+  .theme-modern.lab-editions .mn-nav-group {
+    flex: 1;
+    justify-content: center;
+  }
+  .theme-modern.lab-editions .mn-nav-item {
+    justify-content: center;
+    padding: 0 12px;
+    width: 100%;
+    height: 38px;
+    font-size: 13px;
+  }
+  .theme-modern.lab-editions .mn-right {
+    margin-left: auto;
+  }
+  .theme-modern.lab-editions .mn-bar > .w-px {
+    display: none;
+  }
+  .theme-modern.lab-editions .page-shell {
+    padding: 25px 18px;
+  }
+  .theme-modern.lab-editions .lab-metrics-grid,
+  .lab-editions[data-lab-edition='cobalt'] .lab-metrics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .theme-modern.lab-editions .lab-new-matches {
+    padding: 22px;
+  }
+}
+@media (max-width: 600px) {
+  .lab-edition-bar {
+    flex-wrap: wrap;
+    padding: 8px 12px 10px;
+    gap: 8px;
+  }
+  .lab-return {
+    font-size: 11px;
+  }
+  .lab-preview-note {
+    display: block;
+    margin-left: auto;
+    font-size: 10px;
+  }
+  .lab-edition-picker {
+    order: 3;
+    width: 100%;
+    margin: 0;
+    justify-content: space-between;
+    border-radius: 13px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .lab-edition-picker button {
+    flex: 1;
+    justify-content: center;
+    gap: 5px;
+    padding: 9px 3px;
+    border-radius: 9px;
+  }
+  .lab-edition-name {
+    font-size: 10px;
+    letter-spacing: 0.03em;
+  }
+  .lab-edition-swatch {
+    width: 15px;
+    height: 15px;
+  }
+  .theme-modern.lab-editions .mn-bar {
+    margin-inline: 10px;
+    padding: 10px 13px;
+    border-radius: 20px;
+  }
+  .theme-modern.lab-editions .mn-nav-item {
+    padding-inline: 7px;
+    font-size: 12px;
+    gap: 4px;
+  }
+  .theme-modern.lab-editions .mn-badge {
+    min-width: 14px;
+    height: 14px;
+    font-size: 9px;
+  }
+  .theme-modern.lab-editions .mn-right {
+    gap: 10px;
+  }
+  .theme-modern.lab-editions .mn-settings-link {
+    font-size: 12px;
+  }
+  .theme-modern.lab-editions .mn-dropdown {
+    min-width: 185px;
+  }
+  .theme-modern.lab-editions .page-shell {
+    padding: 24px 12px;
+  }
+  .theme-modern.lab-editions .page-shell > :is(.mb-8, .mb-6):first-child h2 {
+    font-size: 24px;
+  }
+  .theme-modern.lab-editions .glow-card:not(.settle-ai-quick-card) {
+    border-radius: 22px;
+  }
+  .theme-modern.lab-editions .lab-new-construction {
+    padding: 16px;
+    border-radius: 22px 22px 0 0;
+  }
+  .theme-modern.lab-editions .lab-new-construction > div > div:first-child {
+    gap: 10px;
+  }
+  .theme-modern.lab-editions
+    .lab-new-construction
+    > div
+    > div:first-child
+    > span:last-child {
+    margin-left: 0;
+  }
+  .theme-modern.lab-editions .lab-new-matches {
+    padding: 18px 15px;
+  }
+  .theme-modern.lab-editions .lab-new-footer {
+    padding: 20px 16px;
+    border-radius: 0 0 22px 22px;
+  }
+  .theme-modern.lab-editions .lab-new-footer > div > div:first-child {
+    gap: 14px;
+  }
+  .theme-modern.lab-editions .lab-new-footer .w-px {
+    display: none;
+  }
+  .theme-modern.lab-editions .lab-new-quick .settle-ai-trigger {
+    flex-wrap: wrap;
+  }
+  .theme-modern.lab-editions .lab-new-quick .settle-ai-subtitle {
+    font-size: 12px;
+  }
+  .theme-modern.lab-editions .lab-new-match .grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .theme-modern.lab-editions .lab-new-match .grid-cols-3 > .col-span-2 {
+    grid-column: auto;
+  }
+  .theme-modern.lab-editions .lab-new-match .grid-cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .theme-modern.lab-editions .lab-new-match .grid-cols-11 {
+    gap: 6px;
+  }
+  .theme-modern.lab-editions .lab-new-match .grid-cols-11 input {
+    padding-inline: 9px;
+  }
+  .theme-modern.lab-editions .lab-new-match input {
+    font-size: 14px;
+  }
+  .theme-modern.lab-editions
+    .lab-new-match
+    .grid-cols-11
+    input
+    + .pointer-events-none {
+    display: none;
+  }
+  .theme-modern.lab-editions .lab-settle-combo > .motion-v2-row {
+    padding: 18px 15px;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+  .theme-modern.lab-editions .lab-metrics-grid {
+    gap: 10px;
+  }
+  .theme-modern.lab-editions .lab-metrics-grid > .glow-card {
+    padding: 17px;
+    border-radius: 17px;
+  }
+  .lab-editions[data-lab-edition='folio'] .lab-metrics-grid,
+  .lab-editions[data-lab-edition='glacier'] .lab-metrics-grid {
+    gap: 1px;
+  }
+  .lab-editions[data-lab-edition='folio'] .lab-metrics-grid > .glow-card,
+  .lab-editions[data-lab-edition='glacier'] .lab-metrics-grid > .glow-card {
+    border-radius: 0;
+  }
+  .theme-modern.lab-editions .wr-section-lead h2 {
+    font-size: 23px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lab-editions .lab-edition-picker button {
+    transition: none;
+  }
+}
+@supports not (backdrop-filter: blur(1px)) {
+  .theme-modern.lab-editions :is(.mn-bar, .mn-dropdown) {
+    background: var(--lab-card);
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .theme-modern.lab-editions {
+    --lab-glass: var(--lab-card);
+  }
+}

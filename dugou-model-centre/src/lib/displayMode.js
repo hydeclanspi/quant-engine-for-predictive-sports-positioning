@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { isDesignPreview } from '../design/labEditions'
 
 /**
  * Display Mode — Preview vs Full
@@ -100,6 +101,9 @@ export const getStoredToken = () => safeGetSession(TOKEN_KEY)
 const isSessionUnlocked = () => safeGetSession(UNLOCK_LATCH_KEY) === '1'
 
 export const getDisplayMode = () => {
+  // Design comparisons reuse real components, but never owner data or writes,
+  // even when opened below /arsenal or from an already-unlocked browser tab.
+  if (isDesignPreview()) return PREVIEW_MODE
   if (isOwnerRoute()) return FULL_MODE
   // Sticky: an already-unlocked tab stays FULL even if the token's exp has
   // since passed. Only an explicit relock (lockToPreview) or closing the
@@ -118,6 +122,7 @@ const dispatchModeChanged = (mode) => {
 }
 
 export const lockToPreview = () => {
+  if (isDesignPreview()) return
   safeSetSession(TOKEN_KEY, null)
   safeSetSession(UNLOCK_LATCH_KEY, null)
   // `/arsenal` is intentionally permanent-full; the only way back to preview
@@ -126,6 +131,7 @@ export const lockToPreview = () => {
 }
 
 export const unlockWithToken = (token) => {
+  if (isDesignPreview()) return { ok: false, reason: 'design_preview_only' }
   if (!isTokenLive(token)) {
     return { ok: false, reason: 'invalid_or_expired_token' }
   }

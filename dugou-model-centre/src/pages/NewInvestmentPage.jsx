@@ -1429,13 +1429,13 @@ export default function NewInvestmentPage() {
   ) || 0
 
   return (
-    <div className="page-shell page-content-fluid motion-v2-scope">
-      <div className="mb-8">
+    <div className="page-shell page-content-fluid motion-v2-scope lab-new-page">
+      <div className="mb-8 lab-page-heading">
         <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
         <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">录入比赛信息与预测参数 · Record match predictions & calibration parameters</p>
       </div>
 
-      <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border">
+      <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border lab-new-quick">
         <button
           onClick={() => {
             quickUnfurlTimersRef.current.forEach((timer) => window.clearTimeout(timer))
@@ -1595,8 +1595,8 @@ export default function NewInvestmentPage() {
         </div>
       </div>
 
-      <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden">
-        <div className="px-6 py-5 border-b border-stone-100 bg-stone-50/50">
+      <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
+        <div className="px-6 py-5 border-b border-stone-100 bg-stone-50/50 lab-new-construction">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4 flex-nowrap min-w-0">
               <span className="text-sm text-stone-600 whitespace-nowrap">Portfolio Construction</span>
@@ -1632,7 +1632,7 @@ export default function NewInvestmentPage() {
           </div>
         </div>
 
-        <div className="p-6 space-y-6">
+        <div className="p-6 space-y-6 lab-new-matches">
           {matches.map((match, idx) => {
             const homeSuggestions =
               activeTeamInput?.matchIdx === idx && activeTeamInput?.side === 'home' ? getTeamSuggestions(match.homeTeam) : []
@@ -1648,7 +1648,7 @@ export default function NewInvestmentPage() {
             const awayFseHistorySuggestion = awayTeamKey ? (latestTeamFseMap.get(awayTeamKey) ?? null) : null
 
             return (
-              <div key={idx} className={`motion-v2-match-card relative ${idx > 0 ? 'pt-6 border-t border-stone-100' : ''}`}>
+              <div key={idx} className={`motion-v2-match-card relative lab-new-match ${idx > 0 ? 'pt-6 border-t border-stone-100' : ''}`}>
                 {appliedHistory ? (
                   <div className="absolute right-1 top-0 z-30 history-float-wrap">
                     <div className="history-float-panel history-float-enter px-2.5 py-2">
@@ -2124,7 +2124,7 @@ export default function NewInvestmentPage() {
           })}
         </div>
 
-        <div className="px-6 py-6 bg-gradient-to-r from-stone-50 to-orange-50/30 border-t border-stone-100">
+        <div className="px-6 py-6 bg-gradient-to-r from-stone-50 to-orange-50/30 border-t border-stone-100 lab-new-footer">
           <div className="flex items-center justify-between gap-4 max-[960px]:flex-wrap">
             <div className="flex items-center gap-6 min-w-0 flex-nowrap">
               <div className="flex flex-col items-start">

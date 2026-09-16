@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
 
 // Components
@@ -8,6 +8,8 @@ import InpirationTopBar from './components/InpirationTopBar'
 import BottomBar from './components/BottomBar'
 import Modal from './components/Modal'
 import DemoBubble from './components/DemoBubble'
+import LabEditionBar from './components/LabEditionBar'
+import { isDesignPreview, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 
 // Pages
 import NewInvestmentPage from './pages/NewInvestmentPage'
@@ -27,7 +29,6 @@ import { useDisplayMode, PREVIEW_MODE } from './lib/displayMode'
 
 import { initializeLayoutMode, LAYOUT_KEY, normalizeLayoutMode } from './lib/layoutMode'
 
-const DesignStudioPage = lazy(() => import('./pages/DesignStudioPage'))
 const SYSTEM_CONFIG_KEY = 'dugou.system_config.v1'
 const PAGE_AMBIENT_ROUTE_MAP = {
   '/': 'new',
@@ -45,7 +46,14 @@ const PAGE_AMBIENT_ROUTE_MAP = {
 const VALID_AMBIENT_TONES = ['classic_white', 'soft_blue', 'soft_orange']
 
 function App() {
+  const designPreview = isDesignPreview()
+  const navigate = useNavigate()
+  const [labEdition, setLabEdition] = useState(() => {
+    try { return readLabEdition(window.location.search, window.sessionStorage) }
+    catch { return readLabEdition(window.location.search, null) }
+  })
   const [layoutMode, setLayoutMode] = useState(() => {
+    if (designPreview) return 'inpiration'
     return initializeLayoutMode(getSystemConfig().layoutMode, localStorage)
   })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
@@ -59,6 +67,7 @@ function App() {
   // Listen for layout mode changes from ParamsPage
   useEffect(() => {
     const onLayoutChange = (e) => {
+      if (designPreview) return
       const mode = e.detail?.mode
       const normalizedMode = normalizeLayoutMode(mode)
       if (normalizedMode) {
@@ -68,7 +77,28 @@ function App() {
     }
     window.addEventListener('dugou:layout-changed', onLayoutChange)
     return () => window.removeEventListener('dugou:layout-changed', onLayoutChange)
-  }, [])
+  }, [designPreview])
+
+  // Theme changes do not remount any business page: unsaved form state stays put.
+  useEffect(() => {
+    if (!designPreview) return
+    const params = new URLSearchParams(location.search)
+    const requested = params.get('edition')
+    if (requested) {
+      const next = normalizeLabEdition(requested)
+      setLabEdition(next)
+      try { window.sessionStorage.setItem(LAB_EDITION_KEY, next) } catch { /* optional preference */ }
+      if (requested === next) return
+      params.set('edition', next)
+    } else params.set('edition', labEdition)
+    navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true })
+  }, [designPreview, labEdition, location.pathname, location.search, location.hash, navigate])
+
+  const changeLabEdition = (edition) => {
+    const params = new URLSearchParams(location.search)
+    params.set('edition', normalizeLabEdition(edition))
+    navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true })
+  }
 
   useEffect(() => {
     const onDataChanged = (event) => {
@@ -113,9 +143,9 @@ function App() {
   }, [location.pathname])
 
   useEffect(() => {
-    if (location.pathname.replace(/\/$/, '') === '/design/inpiration') return
+    if (designPreview) return
     trackRouteAccess(location.pathname)
-  }, [location.pathname])
+  }, [designPreview, location.pathname])
 
   const openModal = (data) => setModalData(data)
   const closeModal = () => setModalData(null)
@@ -123,12 +153,12 @@ function App() {
   const ambientThemes = systemConfigSnapshot?.pageAmbientThemes || PAGE_AMBIENT_THEME_DEFAULTS
   const ambientToneCandidate = ambientThemes[ambientPageKey] || PAGE_AMBIENT_THEME_DEFAULTS[ambientPageKey] || 'classic_white'
   const ambientTone = VALID_AMBIENT_TONES.includes(ambientToneCandidate) ? ambientToneCandidate : 'classic_white'
-  const ambientClassName = `app-ambient-scope app-ambient-tone-${ambientTone}`
+  const ambientClassName = designPreview ? '' : `app-ambient-scope app-ambient-tone-${ambientTone}`
   const mainContentClassName = `page-enter app-main-content ${location.pathname === '/dashboard/report' ? 'app-main-content--seasons' : ''} ${ambientClassName}`
 
   // Demo nudge — bottom-right glass bubble, preview mode + homepage only.
   const isHomeRoute = location.pathname === '/' || location.pathname === '/new'
-  const demoBubble = displayMode === PREVIEW_MODE && isHomeRoute ? <DemoBubble /> : null
+  const demoBubble = !designPreview && displayMode === PREVIEW_MODE && isHomeRoute ? <DemoBubble /> : null
 
   const pageRoutes = (
     <Routes>
@@ -145,10 +175,6 @@ function App() {
       <Route path="/params" element={<ParamsPage openModal={openModal} />} />
     </Routes>
   )
-
-  if (location.pathname.replace(/\/$/, '') === '/design/inpiration') {
-    return <Suspense fallback={<p style={{ padding: 32 }}>正在打开设计提案…</p>}><DesignStudioPage /></Suspense>
-  }
 
   /* ── Modern layout — Vercel/Linear design language ── */
   if (layoutMode === 'modern') {
@@ -175,8 +201,10 @@ function App() {
   /* ── inpiration — isolated workspace for the next UI/theme generation ── */
   if (layoutMode === 'inpiration') {
     return (
-      <div className="flex flex-col h-screen theme-modern theme-inpiration" style={{ background: '#f7f8fa' }}>
-        <InpirationTopBar />
+      <div className={`flex flex-col h-screen theme-modern theme-inpiration${designPreview ? ' lab-editions' : ''}`} data-lab-edition={designPreview ? labEdition : undefined} data-lab-page={designPreview ? ambientPageKey : undefined} style={designPreview ? undefined : { background: '#f7f8fa' }}>
+        {designPreview && <LabEditionBar edition={labEdition} onChange={changeLabEdition} />}
+        {designPreview && <div className="lab-optical-field" aria-hidden="true"><i /><i /><i /></div>}
+        <InpirationTopBar designPreview={designPreview} />
         <main
           ref={mainScrollRef}
           className="app-main-scroll flex-1 overflow-auto custom-scrollbar min-w-0"

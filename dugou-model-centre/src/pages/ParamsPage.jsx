@@ -65,6 +65,7 @@ import { LogoGalleryExplorer, LogoGalleryPreview } from '../components/LogoGalle
 import TimeMachineModalContent from '../components/TimeMachineModalContent'
 import { LAYOUT_MODES as LAYOUT_MODE_OPTIONS, getPreferredLayoutMode } from '../lib/layoutMode'
 import { isPreviewMode } from '../lib/displayMode'
+import { isDesignPreview } from '../design/labEditions'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -3938,6 +3939,7 @@ export default function ParamsPage({ openModal }) {
   )
 
   const getCurrentLayoutMode = () => {
+    if (isDesignPreview()) return config.layoutMode || 'inpiration'
     return getPreferredLayoutMode(config.layoutMode, typeof window === 'undefined' ? null : window.localStorage)
   }
 
@@ -3945,7 +3947,7 @@ export default function ParamsPage({ openModal }) {
     const normalized = normalizeAmbientThemeMap(nextThemes)
     const layoutMode = LAYOUT_MODE_OPTIONS.includes(options.layoutMode) ? options.layoutMode : getCurrentLayoutMode()
     saveSystemConfig({ pageAmbientThemes: normalized, layoutMode })
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !isDesignPreview()) {
       window.localStorage.setItem('dugou:layout-mode', layoutMode)
       window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
     }
@@ -4255,17 +4257,19 @@ export default function ParamsPage({ openModal }) {
   const selectLayoutMode = (layoutMode) => {
     if (!LAYOUT_MODE_OPTIONS.includes(layoutMode)) return
     saveSystemConfig({ layoutMode })
-    localStorage.setItem('dugou:layout-mode', layoutMode)
-    window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
+    if (!isDesignPreview()) {
+      localStorage.setItem('dugou:layout-mode', layoutMode)
+      window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
+    }
     setConfig((prev) => ({ ...prev, layoutMode }))
   }
 
   return (
     <div className="page-shell page-content-wide console-motion-scope">
       {/* demo/preview 专属：右侧分区滚动导航（fixed 定位，DOM 位置不影响布局） */}
-      {isPreviewMode() && <ConsoleAnchorRail />}
+      {isPreviewMode() && !isDesignPreview() && <ConsoleAnchorRail />}
       {/* demo/preview 专属：覆盖右半区的光标星点拖尾（fixed 全屏 canvas，pointer-events:none） */}
-      {isPreviewMode() && <ConsoleCursorTrail />}
+      {isPreviewMode() && !isDesignPreview() && <ConsoleCursorTrail />}
       <div className="mb-6">
         <div className="mb-2.5">
           <span className="inline-flex max-w-[460px] rounded-r-xl rounded-l-none border border-sky-200/90 bg-gradient-to-r from-sky-100/75 via-cyan-50/85 to-blue-100/75 px-3 py-1.5 text-[10.5px] font-semibold leading-4 tracking-[0.03em] text-sky-700/90 backdrop-blur-md">

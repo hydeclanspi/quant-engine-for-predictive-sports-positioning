@@ -1,4 +1,5 @@
 import { getStoredToken, isFullMode, isOwnerRoute } from './displayMode'
+import { isDesignPreview } from '../design/labEditions'
 
 /**
  * Git-as-sync client — the cross-device live-sync layer.
@@ -31,6 +32,8 @@ const DEFAULT_STATE = {
 }
 
 const isBrowser = typeof window !== 'undefined'
+// Console controls remain usable in design studies without changing live preferences.
+let designPreviewState = { ...DEFAULT_STATE }
 
 // Once we learn the endpoints aren't deployed (e.g. local `vite dev`, which
 // doesn't run Vercel functions), stop hammering them for the session.
@@ -41,6 +44,7 @@ let commitInFlight = false
 let lastSnapshotFactory = null
 
 const readState = () => {
+  if (isDesignPreview()) return { ...designPreviewState }
   if (!isBrowser) return { ...DEFAULT_STATE }
   try {
     const raw = window.localStorage.getItem(STATE_KEY)
@@ -51,6 +55,10 @@ const readState = () => {
 }
 
 const writeState = (next) => {
+  if (isDesignPreview()) {
+    designPreviewState = { ...next }
+    return
+  }
   if (!isBrowser) return
   try {
     window.localStorage.setItem(STATE_KEY, JSON.stringify(next))

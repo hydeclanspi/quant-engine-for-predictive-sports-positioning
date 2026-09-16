@@ -848,7 +848,7 @@ export default function MetricsPage({ openModal }) {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-4 gap-4 lab-metrics-grid">
         {metrics.map((metric) => (
           <div
             key={metric.label}
