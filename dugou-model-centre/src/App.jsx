@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom'
+import { ArrowLeft } from 'lucide-react'
 
 // Components
 import Sidebar from './components/Sidebar'
@@ -9,7 +10,9 @@ import BottomBar from './components/BottomBar'
 import Modal from './components/Modal'
 import DemoBubble from './components/DemoBubble'
 import LabEditionBar from './components/LabEditionBar'
-import { isDesignPreview, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
+import Inspiration2609Shell from './components/Inspiration2609Shell'
+import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
+import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
 
 // Pages
 import NewInvestmentPage from './pages/NewInvestmentPage'
@@ -52,6 +55,7 @@ function App() {
     try { return readLabEdition(window.location.search, window.sessionStorage) }
     catch { return readLabEdition(window.location.search, null) }
   })
+  const inspiration2609Preview = designPreview && labEdition === INSPIRATION_2609_EDITION
   const [layoutMode, setLayoutMode] = useState(() => {
     if (designPreview) return 'inpiration'
     return initializeLayoutMode(getSystemConfig().layoutMode, localStorage)
@@ -67,9 +71,14 @@ function App() {
   // Listen for layout mode changes from ParamsPage
   useEffect(() => {
     const onLayoutChange = (e) => {
-      if (designPreview) return
       const mode = e.detail?.mode
       const normalizedMode = normalizeLayoutMode(mode)
+      if (designPreview) {
+        if (inspiration2609Preview && e.detail?.preview && ['modern', 'inpiration'].includes(normalizedMode)) {
+          setLayoutMode(normalizedMode)
+        }
+        return
+      }
       if (normalizedMode) {
         setLayoutMode(normalizedMode)
         localStorage.setItem(LAYOUT_KEY, normalizedMode)
@@ -77,7 +86,7 @@ function App() {
     }
     window.addEventListener('dugou:layout-changed', onLayoutChange)
     return () => window.removeEventListener('dugou:layout-changed', onLayoutChange)
-  }, [designPreview])
+  }, [designPreview, inspiration2609Preview])
 
   // Theme changes do not remount any business page: unsaved form state stays put.
   useEffect(() => {
@@ -153,7 +162,8 @@ function App() {
   const ambientThemes = systemConfigSnapshot?.pageAmbientThemes || PAGE_AMBIENT_THEME_DEFAULTS
   const ambientToneCandidate = ambientThemes[ambientPageKey] || PAGE_AMBIENT_THEME_DEFAULTS[ambientPageKey] || 'classic_white'
   const ambientTone = VALID_AMBIENT_TONES.includes(ambientToneCandidate) ? ambientToneCandidate : 'classic_white'
-  const ambientClassName = designPreview ? '' : `app-ambient-scope app-ambient-tone-${ambientTone}`
+  const usesLabMaterial = designPreview && (!inspiration2609Preview || getInspiration2609Surface(location.pathname, layoutMode).laboratory)
+  const ambientClassName = usesLabMaterial ? '' : `app-ambient-scope app-ambient-tone-${ambientTone}`
   const mainContentClassName = `page-enter app-main-content ${location.pathname === '/dashboard/report' ? 'app-main-content--seasons' : ''} ${ambientClassName}`
 
   // Demo nudge — bottom-right glass bubble, preview mode + homepage only.
@@ -172,9 +182,35 @@ function App() {
       <Route path="/dashboard/report" element={<WarReportPage openModal={openModal} />} />
       <Route path="/history" element={<HistoryPage openModal={openModal} />} />
       <Route path="/history/teams" element={<TeamsPage openModal={openModal} />} />
-      <Route path="/params" element={<ParamsPage openModal={openModal} />} />
+      <Route path="/params" element={<ParamsPage openModal={openModal} previewLayoutMode={inspiration2609Preview ? layoutMode : undefined} />} />
     </Routes>
   )
+
+  // Selected design, still isolated from the live theme until visual approval.
+  // The existing top bar is outside the Lab scope, including at mobile sizes.
+  if (inspiration2609Preview) {
+    return (
+      <Inspiration2609Shell
+        pathname={location.pathname}
+        layoutMode={layoutMode}
+        pageKey={ambientPageKey}
+        mainScrollRef={mainScrollRef}
+        contentClassName={mainContentClassName}
+        header={<ModernTopBar
+          layoutMode={layoutMode}
+          designPreview
+          onPreviewLayoutChange={setLayoutMode}
+          designLink={<a className="mn-settings-link inspiration-preview-return" href={getLabReturnPath(window.location.pathname)} title="返回应用 · 当前为 inspiration 2609 设计预览">
+            <ArrowLeft size={13} /><span>返回应用</span>
+          </a>}
+        />}
+        footer={<BottomBar />}
+        modal={modalData && <Modal data={modalData} onClose={closeModal} />}
+      >
+        {pageRoutes}
+      </Inspiration2609Shell>
+    )
+  }
 
   /* ── Modern layout — Vercel/Linear design language ── */
   if (layoutMode === 'modern') {

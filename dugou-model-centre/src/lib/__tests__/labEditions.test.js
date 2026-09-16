@@ -53,15 +53,18 @@ describe('lab preview routes and visual-only preferences', () => {
       'cobalt',
     )
     expect(readLabEdition('', { getItem: () => 'folio' })).toBe('folio')
-    expect(readLabEdition('?edition=unknown', {})).toBe('cobalt')
+    expect(readLabEdition('?edition=2609', { getItem: () => 'folio' })).toBe(
+      '2609',
+    )
+    expect(readLabEdition('?edition=unknown', {})).toBe('2609')
     expect(
       readLabEdition('', {
         getItem() {
           throw Error('blocked')
         },
       }),
-    ).toBe('cobalt')
-    expect(normalizeLabEdition('modern')).toBe('cobalt')
+    ).toBe('2609')
+    expect(normalizeLabEdition('modern')).toBe('2609')
     expect(getLabReturnPath('/arsenal/design/inpiration/new')).toBe(
       '/arsenal/new',
     )

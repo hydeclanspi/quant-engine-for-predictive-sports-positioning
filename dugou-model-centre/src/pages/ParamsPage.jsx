@@ -66,6 +66,7 @@ import TimeMachineModalContent from '../components/TimeMachineModalContent'
 import { LAYOUT_MODES as LAYOUT_MODE_OPTIONS, getPreferredLayoutMode } from '../lib/layoutMode'
 import { isPreviewMode } from '../lib/displayMode'
 import { isDesignPreview } from '../design/labEditions'
+import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -2716,7 +2717,7 @@ function ConsoleCursorTrail() {
   )
 }
 
-export default function ParamsPage({ openModal }) {
+export default function ParamsPage({ openModal, previewLayoutMode }) {
   const labels = useLabels()
   const maskText = usePreviewTextMask()
   const maskMode = useModeLabelMap()
@@ -3939,6 +3940,7 @@ export default function ParamsPage({ openModal }) {
   )
 
   const getCurrentLayoutMode = () => {
+    if (isDesignPreview() && previewLayoutMode) return previewLayoutMode
     if (isDesignPreview()) return config.layoutMode || 'inpiration'
     return getPreferredLayoutMode(config.layoutMode, typeof window === 'undefined' ? null : window.localStorage)
   }
@@ -4259,8 +4261,8 @@ export default function ParamsPage({ openModal }) {
     saveSystemConfig({ layoutMode })
     if (!isDesignPreview()) {
       localStorage.setItem('dugou:layout-mode', layoutMode)
-      window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
     }
+    window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode, preview: isDesignPreview() } }))
     setConfig((prev) => ({ ...prev, layoutMode }))
   }
 
@@ -4873,12 +4875,12 @@ export default function ParamsPage({ openModal }) {
                 <div className="h-[5px] bg-gradient-to-r from-sky-500 to-indigo-500 w-full" />
                 <div className="flex-1 bg-sky-50/60" />
               </div>
-              <span className="text-sm font-medium text-stone-700">inpiration</span>
+              <span className="text-sm font-medium text-stone-700">{INSPIRATION_2609_NAME}</span>
               {currentLayoutMode === 'inpiration' && (
                 <span className="text-[10px] px-2 py-0.5 bg-sky-600 text-white rounded-full ml-auto">Active</span>
               )}
             </div>
-            <p className="text-xs text-stone-400">Next-generation UI workspace. Future theme upgrades land here.</p>
+            <p className="text-xs text-stone-400">Folio · Glacier · Prism。Seasons 与 Console 保留原色。</p>
           </button>
           {/* Sidebar */}
           <button

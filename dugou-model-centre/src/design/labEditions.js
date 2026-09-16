@@ -1,3 +1,5 @@
+import { INSPIRATION_2609_EDITION } from './inspiration2609'
+
 // Visual preferences only. The preview mounts the existing product routes.
 export const LAB_EDITIONS = [
   {
@@ -39,7 +41,10 @@ export const isDesignPreview = () =>
   Boolean(getDesignPreviewBase(window.location?.pathname))
 
 export const normalizeLabEdition = (value) =>
-  LAB_EDITIONS.some((edition) => edition.id === value) ? value : 'cobalt'
+  value === INSPIRATION_2609_EDITION ||
+  LAB_EDITIONS.some((edition) => edition.id === value)
+    ? value
+    : INSPIRATION_2609_EDITION
 
 export const getLabReturnPath = (pathname = '') =>
   String(pathname).startsWith('/arsenal/') ? '/arsenal/new' : '/new'
@@ -52,6 +57,6 @@ export const readLabEdition = (search, storage) => {
   try {
     return normalizeLabEdition(storage?.getItem(LAB_EDITION_KEY))
   } catch {
-    return 'cobalt'
+    return INSPIRATION_2609_EDITION
   }
 }

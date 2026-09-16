@@ -1,6 +1,7 @@
 import ModernTopBar from './ModernTopBar'
 import { Link } from 'react-router-dom'
 import { Palette } from 'lucide-react'
+import { INSPIRATION_2609_PREVIEW } from '../design/inspiration2609'
 
 /**
  * Dedicated navigation seam for the next visual generation.
@@ -8,5 +9,5 @@ import { Palette } from 'lucide-react'
  * stable Modern layout remains untouched.
  */
 export default function InpirationTopBar({ designPreview = false }) {
-  return <ModernTopBar layoutMode="inpiration" designPreview={designPreview} designLink={designPreview ? null : <Link reloadDocument className="mn-settings-link" to="/design/inpiration"><Palette size={13} />设计提案</Link>} />
+  return <ModernTopBar layoutMode="inpiration" designPreview={designPreview} designLink={designPreview ? null : <Link reloadDocument className="mn-settings-link" to={INSPIRATION_2609_PREVIEW}><Palette size={13} />2609 预览</Link>} />
 }

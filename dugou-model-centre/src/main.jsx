@@ -7,6 +7,7 @@ import { isOwnerRoute, OWNER_ROUTE_BASENAME } from './lib/displayMode'
 import { getDesignPreviewBase } from './design/labEditions'
 import './index.css'
 import './design/labEditions.css'
+import './design/inspiration2609.css'
 
 const renderApp = () => {
   // The hidden owner entry behaves like a complete copy of the app mounted at

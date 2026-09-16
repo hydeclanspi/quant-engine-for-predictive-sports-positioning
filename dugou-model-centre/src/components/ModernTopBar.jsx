@@ -17,6 +17,7 @@ import {
 import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode, saveSystemConfig } from '../lib/localData'
 import C15DiamondCutV1Logo from './C15DiamondCutV1Logo'
 import PreviewModeToggle from './PreviewModeToggle'
+import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 
 /* ──────────────────────────────────────────────────
    Modern Navigation — Vercel/Linear design language
@@ -77,7 +78,7 @@ const ConsoleIcon = ({ size = 14, className = '' }) => (
 
 const LAYOUT_SWITCH_DELAY_MS = 240
 
-function LayoutMorphSwitch({ layoutMode }) {
+function LayoutMorphSwitch({ layoutMode, onPreviewChange }) {
   const activeMode = layoutMode === 'inpiration' || layoutMode === 'temp_title' ? 'inpiration' : 'modern'
   const [visualMode, setVisualMode] = useState(activeMode)
   const switchTimerRef = useRef(null)
@@ -93,8 +94,12 @@ function LayoutMorphSwitch({ layoutMode }) {
     setVisualMode(nextMode)
     switchTimerRef.current = window.setTimeout(() => {
       saveSystemConfig({ layoutMode: nextMode })
-      window.localStorage.setItem('dugou:layout-mode', nextMode)
-      window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: nextMode } }))
+      if (onPreviewChange) {
+        onPreviewChange(nextMode)
+      } else {
+        window.localStorage.setItem('dugou:layout-mode', nextMode)
+        window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: nextMode } }))
+      }
       switchTimerRef.current = null
     }, LAYOUT_SWITCH_DELAY_MS)
   }
@@ -114,9 +119,9 @@ function LayoutMorphSwitch({ layoutMode }) {
       </button>
       <button
         type="button"
-        aria-label="切换到 inpiration"
+        aria-label={`切换到 ${INSPIRATION_2609_NAME}`}
         aria-pressed={visualMode === 'inpiration'}
-        title="inpiration"
+        title={INSPIRATION_2609_NAME}
         onClick={() => selectMode('inpiration')}
         className={`mn-layout-choice mn-layout-choice--inpiration ${visualMode === 'inpiration' ? 'is-active' : ''}`}
       >
@@ -127,7 +132,7 @@ function LayoutMorphSwitch({ layoutMode }) {
   )
 }
 
-export default function ModernTopBar({ layoutMode = 'modern', designLink = null, designPreview = false }) {
+export default function ModernTopBar({ layoutMode = 'modern', designLink = null, designPreview = false, onPreviewLayoutChange = null }) {
   const [openDropdown, setOpenDropdown] = useState(null)
   const [dataVersion, setDataVersion] = useState(0)
   const [brandNameOffset, setBrandNameOffset] = useState(0)
@@ -251,7 +256,7 @@ export default function ModernTopBar({ layoutMode = 'modern', designLink = null,
       <span ref={brandSepRef} className="mn-brand-measure" aria-hidden="true" />
 
       {/* ── Modern / inpiration liquid morph switch ── */}
-      {!designPreview && <LayoutMorphSwitch layoutMode={layoutMode} />}
+      {(!designPreview || onPreviewLayoutChange) && <LayoutMorphSwitch layoutMode={layoutMode} onPreviewChange={onPreviewLayoutChange} />}
 
       {/* ── Breadcrumb separator ── */}
       <span className="mn-sep">/</span>

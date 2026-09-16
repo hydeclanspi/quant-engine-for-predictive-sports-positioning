@@ -1,5 +1,9 @@
 import { ArrowLeft, Check } from 'lucide-react'
 import { LAB_EDITIONS, getLabReturnPath } from '../design/labEditions'
+import {
+  INSPIRATION_2609_EDITION,
+  INSPIRATION_2609_NAME,
+} from '../design/inspiration2609'
 
 export default function LabEditionBar({ edition, onChange }) {
   return (
@@ -36,7 +40,13 @@ export default function LabEditionBar({ edition, onChange }) {
           </button>
         ))}
       </div>
-      <span className="lab-preview-note">原页面 · 演示数据</span>
+      <button
+        type="button"
+        className="lab-return"
+        onClick={() => onChange(INSPIRATION_2609_EDITION)}
+      >
+        {INSPIRATION_2609_NAME} →
+      </button>
     </div>
   )
 }

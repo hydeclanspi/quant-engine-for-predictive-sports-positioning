@@ -1,0 +1,73 @@
+/* The selected mixed theme. Header geometry is entirely the existing Modern
+ * geometry; it sits before the Lab scope, flush to the viewport's top edge.
+ * No selectors below restyle the Seasons or Console body. */
+.theme-inspiration-2609 {
+  background: #f7f8fa;
+}
+
+.theme-inspiration-2609[data-inspiration-material='folio'] > .mn-bar {
+  background: rgba(241, 240, 233, 0.94);
+  border-bottom-color: rgba(157, 161, 161, 0.24);
+}
+.theme-inspiration-2609[data-inspiration-material='glacier'] > .mn-bar {
+  background: rgba(224, 241, 245, 0.96);
+  border-bottom-color: rgba(100, 157, 176, 0.22);
+}
+.theme-inspiration-2609[data-inspiration-material='prism'] > .mn-bar {
+  background: rgba(234, 241, 247, 0.96);
+  border-bottom-color: rgba(145, 169, 190, 0.24);
+}
+
+/* Page materials own the full remaining viewport, never the header. */
+.inspiration-2609-body.lab-editions {
+  min-width: 0;
+}
+
+/* Prism: engineered corners, not soft pillows. Keep truly circular controls,
+ * chart markers, badges and the original brand mark exactly as they are. */
+.theme-inspiration-2609 .lab-editions[data-lab-edition='prism'] {
+  --lab-radius: 10px;
+  --lab-shadow: 0 14px 30px -23px #31577760, 0 2px 5px -3px #355b8c30;
+}
+.theme-inspiration-2609
+  .lab-editions[data-lab-edition='prism']
+  :is(.glow-card, .lab-metrics-grid > div, .rounded-2xl, .history-float-panel) {
+  border-radius: 10px;
+}
+.theme-inspiration-2609 .lab-editions[data-lab-edition='prism'] .rounded-xl {
+  border-radius: 8px;
+}
+.theme-inspiration-2609
+  .lab-editions[data-lab-edition='prism']
+  :is(.rounded-lg, .input-glow, .btn-primary, .btn-secondary, select) {
+  border-radius: 6px;
+}
+.theme-inspiration-2609
+  .lab-editions[data-lab-edition='prism']
+  > .fixed.z-50
+  > .custom-scrollbar {
+  border-radius: 10px;
+}
+
+/* Folio's Portfolio panels use the same sheet edge as New, while keeping the
+ * existing two-column portfolio construction, folding and calculations. */
+.theme-inspiration-2609
+  .lab-editions[data-lab-edition='folio']
+  .combo-left-card {
+  border-radius: 7px 24px 7px 7px;
+  box-shadow:
+    inset 0 1px 1px #fff,
+    4px 4px 0 -1px #edf1f12e,
+    4px 4px 0 #ffffff96,
+    var(--lab-shadow);
+}
+
+/* The comparison is a subtle existing-navbar link, not another bar above it. */
+.theme-inspiration-2609 > .mn-bar .inspiration-preview-return {
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .theme-inspiration-2609 > .mn-bar .inspiration-preview-return > span {
+    display: none;
+  }
+}
