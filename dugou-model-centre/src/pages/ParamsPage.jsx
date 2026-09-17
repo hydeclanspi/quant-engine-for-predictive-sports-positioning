@@ -4880,7 +4880,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 <span className="text-[10px] px-2 py-0.5 bg-sky-600 text-white rounded-full ml-auto">Active</span>
               )}
             </div>
-            <p className="text-xs text-stone-400">Geometric composition, luminous glass, editorial rhythm. A fresh perspective.</p>
+            <p className="text-xs text-stone-400">Geometric composition, luminous glass, editorial rhythm. A fresh perspective. Released in September 2026.</p>
           </button>
           {/* Sidebar */}
           <button
