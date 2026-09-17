@@ -3883,9 +3883,8 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   // 在【最优】折回后接力开演（见下方编排 effect 的 ⑤→⑧ 段）。
   const [comboPeekIdx, setComboPeekIdx] = useState(null)
   const [comboPeekDawnIdx, setComboPeekDawnIdx] = useState(null)
-  // Demo/预览模式下：今日备选比赛固定不变，默认折叠左栏，让页面更紧凑、
-  // 把下方「依赖风险矩阵」卡片露出来，提示访客往下滑还有内容。
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(() => isPreviewMode())
+  // Every visit starts compact in both Demo and Live; manual expansion stays local.
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(true)
   const [ftCellOverrides, setFtCellOverrides] = useState({}) // { portfolioKey: { "rowKey|colKey": "decouple"|"release" } }
   const [ftDirtyPortfolios, setFtDirtyPortfolios] = useState(() => new Set()) // Set<portfolioKey>
   const [ftConflictResolution, setFtConflictResolution] = useState(null)
@@ -6434,7 +6433,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           {/* Package List */}
           {recommendations.length === 0 ? (
-            <div className="py-8 text-center">
+            <div className="portfolio-empty-state portfolio-package-empty py-8 text-center">
               <p className="text-sm text-stone-400">点击左侧「生成最优组合」查看推荐组合包</p>
             </div>
           ) : (
@@ -6962,7 +6961,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
             </span>
           </div>
           {rankingRows.length === 0 ? (
-            <p className="text-sm text-stone-400">先点击「生成最优组合」查看 Top 排序。</p>
+            <p className="portfolio-empty-state text-sm text-stone-400">先点击「生成最优组合」查看 Top 排序。</p>
           ) : (
             <>
             <div className="space-y-2">
@@ -7074,7 +7073,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           </div>
 
           {layerSummary.length === 0 ? (
-            <p className="text-sm text-stone-400">暂无分层结果，生成方案后自动计算。</p>
+            <p className="portfolio-empty-state text-sm text-stone-400">暂无分层结果，生成方案后自动计算。</p>
           ) : (
             <div className="space-y-3">
               {layerSummary.map((layer) => {

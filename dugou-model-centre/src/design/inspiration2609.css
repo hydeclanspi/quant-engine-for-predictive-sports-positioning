@@ -139,10 +139,35 @@
 }
 .theme-inspiration-2609 .portfolio-research-grid > :nth-child(2) .flex.min-w-0 { flex-wrap: wrap; }
 .theme-inspiration-2609 .portfolio-research-grid > :nth-child(2) h3 { white-space: normal; }
+
+/* Give sparse panels a deliberate vertical canvas, not a shallow message strip.
+ * Empty desktop rows share a baseline. Once populated, the long package and
+ * expanded settings can grow independently without stretching every side panel. */
+.theme-inspiration-2609 :is(.portfolio-primary-grid, .portfolio-research-grid) > :has(> .portfolio-empty-state) {
+  display: flex;
+  flex-direction: column;
+}
+.theme-inspiration-2609 :is(.portfolio-primary-grid, .portfolio-research-grid) .portfolio-empty-state {
+  flex: 1;
+  display: grid;
+  align-content: center;
+  text-align: center;
+  padding: 32px 12px;
+  line-height: 1.8;
+}
 @media (min-width: 1000px) {
   .theme-inspiration-2609 .portfolio-primary-grid { grid-template-columns: minmax(260px, .8fr) minmax(0, 1.35fr); }
   .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) { grid-column: 1 / -1; }
-  .theme-inspiration-2609 .portfolio-research-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .theme-inspiration-2609 .portfolio-research-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: stretch;
+  }
+  .theme-inspiration-2609 .portfolio-research-grid > * { min-height: clamp(320px, 25vw, 420px); }
+  .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(2) { min-height: 360px; }
+  .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) { min-height: 280px; }
+  .theme-inspiration-2609 .portfolio-primary-grid[data-left-collapsed='true']:has(.portfolio-package-empty) {
+    align-items: stretch;
+  }
 }
 @media (min-width: 1380px) {
   .theme-inspiration-2609 .portfolio-primary-grid {
@@ -153,6 +178,9 @@
     grid-template-columns: minmax(240px, .75fr) minmax(450px, 1.55fr) minmax(310px, 1fr);
   }
   .theme-inspiration-2609 .portfolio-primary-grid > :nth-child(3) { grid-column: auto; }
+  .theme-inspiration-2609 .portfolio-primary-grid > :is(:nth-child(2), :nth-child(3)) {
+    min-height: clamp(360px, 24vw, 420px);
+  }
 }
 
 /* Season panels use Prism; the original large iridescent poster is not restyled. */

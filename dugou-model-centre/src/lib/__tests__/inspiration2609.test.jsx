@@ -152,6 +152,30 @@ describe('inspiration 2609 selected page composition', () => {
 })
 
 describe('Portfolio presentation-only composition', () => {
+  it('gives desktop cards breathing room without fixed heights or Modern overrides', () => {
+    const sheet = postcss.parse(readFileSync(
+      new URL('../../design/inspiration2609.css', import.meta.url), 'utf8',
+    ))
+    const heights = []
+    sheet.walkRules((rule) => {
+      if (!rule.selector.includes('.portfolio-')) return
+      expect(rule.selector).toContain('.theme-inspiration-2609')
+      for (const node of rule.nodes) {
+        expect(node.prop).not.toBe('height')
+        if (node.prop === 'min-height') {
+          expect(rule.parent.type).toBe('atrule')
+          heights.push(node.value)
+        }
+      }
+      if (rule.selector.includes(':has(.portfolio-package-empty)')) {
+        expect(rule.selector).toContain("[data-left-collapsed='true']")
+        expect(rule.nodes.some(node => node.prop === 'align-items' && node.value === 'stretch')).toBe(true)
+      }
+    })
+    expect(heights).toContain('clamp(360px, 24vw, 420px)')
+    expect(heights).toContain('clamp(320px, 25vw, 420px)')
+  })
+
   const cards = {
     main: <div className="combo-main-grid combo-left-collapsed"><article>candidates</article><article>package</article></div>,
     secondary: <div className="combo-secondary-grid"><article>ranking</article><article>layers</article></div>,
