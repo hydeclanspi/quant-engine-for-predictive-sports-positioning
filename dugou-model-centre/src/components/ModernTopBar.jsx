@@ -12,12 +12,12 @@ import {
   Flag,
   Swords,
   PanelsTopLeft,
-  Sparkles,
 } from 'lucide-react'
 import { getInvestments, getTimeMachineSessionInfo, isInTimeMachineMode, saveSystemConfig } from '../lib/localData'
 import C15DiamondCutV1Logo from './C15DiamondCutV1Logo'
 import PreviewModeToggle from './PreviewModeToggle'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
+import InspirationIcon from './InspirationIcon'
 
 /* ──────────────────────────────────────────────────
    Modern Navigation — Vercel/Linear design language
@@ -125,8 +125,8 @@ function LayoutMorphSwitch({ layoutMode, onPreviewChange }) {
         onClick={() => selectMode('inpiration')}
         className={`mn-layout-choice mn-layout-choice--inspiration ${visualMode === 'inpiration' ? 'is-active' : ''}`}
       >
-        <Sparkles size={13} strokeWidth={1.9} aria-hidden="true" />
-        <span>inspiration</span>
+        <InspirationIcon size={13} />
+        <span>{INSPIRATION_2609_NAME}</span>
       </button>
     </div>
   )

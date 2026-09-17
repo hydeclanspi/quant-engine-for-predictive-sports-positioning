@@ -1,9 +1,12 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import { Search } from 'lucide-react'
 import { getTeamsSnapshot } from '../lib/analytics'
 import { getInvestments, getTeamProfiles } from '../lib/localData'
 import { lookupTeam, LEAGUE_TAGS } from '../lib/teamDatabase'
 import TimeRangePicker from '../components/TimeRangePicker'
+import TeamPagination from '../components/TeamPagination'
+import { paginateItems, TEAM_PAGE_SIZE } from '../lib/pagination'
+import '../design/teamArchive.css'
 import { usePreviewTextMask } from '../lib/labels'
 
 const PERIOD_LABELS = {
@@ -231,6 +234,8 @@ export default function TeamsPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [timePeriod, setTimePeriod] = useState('all')
   const [leagueFilter, setLeagueFilter] = useState(LEAGUE_ALL_KEY)
+  const [teamPage, setTeamPage] = useState(1)
+  const teamGridRef = useRef(null)
   const [teamHistoryPage, setTeamHistoryPage] = useState(1)
   const [expandedHistoryGroupIds, setExpandedHistoryGroupIds] = useState([])
   const [roiHoverIndex, setRoiHoverIndex] = useState(null)
@@ -260,6 +265,22 @@ export default function TeamsPage() {
     return searchedTeams.filter((team) => getTeamLeague(team.name) === leagueFilter)
   }, [searchedTeams, leagueFilter])
   const teamHistoryRowsMap = useMemo(() => buildTeamHistoryRowsMap(timePeriod), [timePeriod])
+  const teamPagination = useMemo(() => paginateItems(teams, teamPage), [teams, teamPage])
+  const updateFilter = (setter, value) => {
+    setter(value)
+    setTeamPage(1)
+    setTeamHistoryPage(1)
+    setExpandedHistoryGroupIds([])
+  }
+  const changeTeamPage = (page) => {
+    if (page === teamPagination.page) return
+    const next = paginateItems(teams, page)
+    setTeamPage(next.page)
+    setSelectedTeamName(next.items[0]?.name || '__none__')
+    setTeamHistoryPage(1)
+    setExpandedHistoryGroupIds([])
+    teamGridRef.current?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'instant' : 'smooth' })
+  }
 
   useEffect(() => {
     if (!leagueOptions[leagueFilter]) setLeagueFilter(LEAGUE_ALL_KEY)
@@ -271,8 +292,8 @@ export default function TeamsPage() {
   }, [selectedTeamName])
 
   const selectedTeam = useMemo(
-    () => (selectedTeamName === '__none__' ? null : teams.find((team) => team.name === selectedTeamName) || teams[0] || null),
-    [selectedTeamName, teams],
+    () => (selectedTeamName === '__none__' ? null : teamPagination.items.find((team) => team.name === selectedTeamName) || teamPagination.items[0] || null),
+    [selectedTeamName, teamPagination.items],
   )
   const selectedTeamDetail = useMemo(() => {
     if (!selectedTeam) return null
@@ -339,20 +360,20 @@ export default function TeamsPage() {
               type="text"
               placeholder="搜索球队名称或缩写..."
               value={searchQuery}
-              onChange={(event) => setSearchQuery(event.target.value)}
+              onChange={(event) => updateFilter(setSearchQuery, event.target.value)}
               className="input-glow w-full pl-10 pr-4 py-2.5 rounded-xl border border-stone-200 text-sm focus:outline-none focus:border-amber-400"
             />
           </div>
           <TimeRangePicker
             value={timePeriod}
-            onChange={setTimePeriod}
+            onChange={(value) => updateFilter(setTimePeriod, value)}
             options={PERIOD_LABELS}
             variant="aqua"
             buttonClassName="whitespace-nowrap"
           />
           <TimeRangePicker
             value={leagueFilter}
-            onChange={setLeagueFilter}
+            onChange={(value) => updateFilter(setLeagueFilter, value)}
             options={leagueOptions}
             variant="aqua"
             buttonClassName="whitespace-nowrap"
@@ -361,8 +382,8 @@ export default function TeamsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-4 mb-6">
-        {teams.map((team) => {
+      <div ref={teamGridRef} className="team-archive-grid grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        {teamPagination.items.map((team) => {
           const isSelected = selectedTeam?.name === team.name
           return (
           <div
@@ -409,6 +430,9 @@ export default function TeamsPage() {
           )
         })}
       </div>
+
+      {teams.length === 0 && <p className="text-center text-sm text-stone-500 py-12">没有匹配的球队，试试其他名称或筛选条件。</p>}
+      {teams.length > TEAM_PAGE_SIZE && <TeamPagination {...teamPagination} total={teams.length} onChange={changeTeamPage} />}
 
       {selectedTeam && selectedTeamDetail && (
         <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 animate-fade-in">

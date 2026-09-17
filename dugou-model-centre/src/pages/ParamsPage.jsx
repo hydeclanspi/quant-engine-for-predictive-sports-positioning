@@ -67,6 +67,8 @@ import { LAYOUT_MODES as LAYOUT_MODE_OPTIONS, getPreferredLayoutMode } from '../
 import { isPreviewMode } from '../lib/displayMode'
 import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
+import InspirationIcon from '../components/InspirationIcon'
+import InspirationIconGallery from '../components/InspirationIconGallery'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -4871,16 +4873,15 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             }`}
           >
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-8 h-8 rounded-md bg-white border border-sky-200 flex flex-col overflow-hidden">
-                <div className="h-[5px] bg-gradient-to-r from-sky-500 to-indigo-500 w-full" />
-                <div className="flex-1 bg-sky-50/60" />
+              <div className="w-8 h-8 rounded-md bg-white border border-sky-200 text-sky-700 flex items-center justify-center">
+                <InspirationIcon size={24} />
               </div>
               <span className="text-sm font-medium text-stone-700">{INSPIRATION_2609_NAME}</span>
               {currentLayoutMode === 'inpiration' && (
                 <span className="text-[10px] px-2 py-0.5 bg-sky-600 text-white rounded-full ml-auto">Active</span>
               )}
             </div>
-            <p className="text-xs text-stone-400">Folio · Glacier · Prism。Seasons 与 Console 保留原色。</p>
+            <p className="text-xs text-stone-400">Geometric composition, luminous glass, editorial rhythm. A fresh perspective.</p>
           </button>
           {/* Sidebar */}
           <button
@@ -4905,6 +4906,11 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
         <p className="text-[11px] text-stone-400 mt-3 text-center">Layout changes take effect immediately.</p>
+        <div className="flex justify-center mt-3">
+          <button type="button" className="inspiration-icon-gallery-trigger" onClick={() => openModal({ title: 'Inspiration · 图标提案', content: <InspirationIconGallery /> })}>
+            <InspirationIcon size={15} /> 图标提案 <span>4</span><ChevronRight size={13} />
+          </button>
+        </div>
       </div>
 
       <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">

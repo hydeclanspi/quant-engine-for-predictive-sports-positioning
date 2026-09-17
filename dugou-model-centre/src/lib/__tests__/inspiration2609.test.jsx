@@ -26,7 +26,7 @@ const renderShell = (pathname, layoutMode = 'inpiration') =>
 
 describe('inspiration 2609 selected page composition', () => {
   it('assigns every existing page to the exact requested material', () => {
-    expect(INSPIRATION_2609_NAME).toBe('inspiration 2609')
+    expect(INSPIRATION_2609_NAME).toBe('Inspiration')
     expect(INSPIRATION_2609_MATERIALS).toEqual({
       '/': 'folio',
       '/new': 'folio',

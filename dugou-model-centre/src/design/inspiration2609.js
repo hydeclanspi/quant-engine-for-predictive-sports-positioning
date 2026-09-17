@@ -1,4 +1,4 @@
-export const INSPIRATION_2609_NAME = 'inspiration 2609'
+export const INSPIRATION_2609_NAME = 'Inspiration'
 export const INSPIRATION_2609_EDITION = '2609'
 export const INSPIRATION_2609_PREVIEW = '/design/inpiration/new?edition=2609'
 
