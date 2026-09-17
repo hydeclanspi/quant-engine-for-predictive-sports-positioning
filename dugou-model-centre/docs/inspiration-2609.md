@@ -9,7 +9,7 @@
 | Dashboard Overview / Metrics / Analysis | Prism，小圆角 |
 | History Records | Prism，小圆角，原 Modern 页面宽度 |
 | History Teams | 原 Modern 卡片与布局，淡橙几何底色 |
-| Seasons | Prism，顶部大幻彩海报保留原样 |
+| Seasons | Prism，页面宽度与留白沿用 Modern，顶部大幻彩海报保留原样 |
 | Console | 原 Modern 原色版本，完全不挂载 Lab 样式 |
 
 顶栏直接使用原 ModernTopBar。顶栏不在 Lab 样式容器之内，保留贴顶、宽度、导航、品牌标识与原有主题切换动效；仅 Folio / Glacier / Prism 页面轻调顶栏底色。没有方案切换条压在顶栏上方。

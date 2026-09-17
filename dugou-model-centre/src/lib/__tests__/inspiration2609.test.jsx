@@ -127,6 +127,28 @@ describe('inspiration 2609 selected page composition', () => {
       }
     })
   })
+
+  it('restores Seasons to the same Modern page widths and gutters as Settle and Records', () => {
+    const sheet = postcss.parse(readFileSync(
+      new URL('../../design/inspiration2609.css', import.meta.url), 'utf8',
+    ))
+    const geometry = []
+    sheet.walkRules((rule) => {
+      if (!rule.selector.includes("[data-lab-page='dashboard_report']") || !rule.selector.endsWith('.page-shell')) return
+      expect(rule.selector).toContain("[data-lab-page='settle']")
+      expect(rule.selector).toContain("[data-lab-page='history']")
+      geometry.push({
+        breakpoint: rule.parent.type === 'atrule' ? rule.parent.params : 'base',
+        width: rule.nodes.find((node) => node.prop === 'width')?.value,
+        padding: rule.nodes.find((node) => node.prop === 'padding')?.value,
+      })
+    })
+    expect(geometry).toEqual([
+      { breakpoint: 'base', width: 'min(100%, 1320px)', padding: 'clamp(24px, 3vw, 48px) clamp(20px, 4vw, 56px)' },
+      { breakpoint: '(min-width: 1440px)', width: undefined, padding: '48px 64px' },
+      { breakpoint: '(min-width: 1680px)', width: 'min(100%, 1440px)', padding: '56px 80px' },
+    ])
+  })
 })
 
 describe('Portfolio presentation-only composition', () => {
