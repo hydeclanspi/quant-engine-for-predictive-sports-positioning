@@ -3,7 +3,6 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { paginateItems, paginationSteps, TEAM_PAGE_SIZE } from '../pagination'
 import TeamPagination from '../../components/TeamPagination'
 import InspirationIcon from '../../components/InspirationIcon'
-import InspirationIconGallery from '../../components/InspirationIconGallery'
 
 describe('team archive pagination', () => {
   const teams = Array.from({ length: 53 }, (_, i) => ({ name: `team-${i}` }))
@@ -34,13 +33,15 @@ describe('team archive pagination', () => {
   })
 })
 
-describe('Inspiration icon proposals', () => {
-  it('offers four distinct vector geometries at small sizes', () => {
-    const markup = ['refraction', 'overlap', 'orbit', 'construct'].map(variant => renderToStaticMarkup(<InspirationIcon variant={variant} size={13} />))
-    expect(new Set(markup).size).toBe(4)
-    markup.forEach(svg => { expect(svg).toContain('width="13"'); expect(svg).toContain('viewBox="0 0 24 24"') })
-    const gallery = renderToStaticMarkup(<InspirationIconGallery />)
-    expect(gallery.match(/aria-pressed=/g)).toHaveLength(4)
-    expect(gallery).toContain('实际应用')
+describe('Inspiration selected identity', () => {
+  it('uses the chosen overlap geometry at both navigation and Console sizes', () => {
+    for (const size of [13, 24]) {
+      const svg = renderToStaticMarkup(<InspirationIcon size={size} />)
+      expect(svg).toContain(`width="${size}"`)
+      expect(svg).toContain('viewBox="0 0 24 24"')
+      expect(svg).toContain('d="m8 3 8 8-8 8-6-8Z"')
+      expect(svg).toContain('d="m16 5 6 8-6 8-8-8Z"')
+      expect(svg.match(/<path /g)).toHaveLength(2)
+    }
   })
 })

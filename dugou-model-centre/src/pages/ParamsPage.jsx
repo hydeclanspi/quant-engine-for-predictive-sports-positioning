@@ -68,7 +68,6 @@ import { isPreviewMode } from '../lib/displayMode'
 import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import InspirationIcon from '../components/InspirationIcon'
-import InspirationIconGallery from '../components/InspirationIconGallery'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -4906,11 +4905,6 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
         <p className="text-[11px] text-stone-400 mt-3 text-center">Layout changes take effect immediately.</p>
-        <div className="flex justify-center mt-3">
-          <button type="button" className="inspiration-icon-gallery-trigger" onClick={() => openModal({ title: 'Inspiration · 图标提案', content: <InspirationIconGallery /> })}>
-            <InspirationIcon size={15} /> 图标提案 <span>4</span><ChevronRight size={13} />
-          </button>
-        </div>
       </div>
 
       <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">
