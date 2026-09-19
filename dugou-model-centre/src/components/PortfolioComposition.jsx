@@ -7,8 +7,9 @@ export default function PortfolioComposition({
   secondary,
   algorithm,
   details,
+  fragility,
 }) {
-  if (!inspiration) return <>{main}{details}{secondary}{algorithm}</>
+  if (!inspiration) return <>{main}{details}{fragility}{secondary}{algorithm}</>
 
   const [candidates, smartPackage] = Children.toArray(main.props.children).filter(isValidElement)
   const [ranking, layers] = Children.toArray(secondary.props.children).filter(isValidElement)
@@ -22,6 +23,7 @@ export default function PortfolioComposition({
         {cloneElement(smartPackage, { key: 'package' })}
         {cloneElement(layers, { key: 'layers' })}
       </div>
+      {fragility}
       <div className="portfolio-research-grid">
         {cloneElement(ranking, { key: 'ranking' })}
         {cloneElement(algorithm, { key: 'algorithm' })}

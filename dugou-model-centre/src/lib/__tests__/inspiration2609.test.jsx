@@ -181,16 +181,18 @@ describe('Portfolio presentation-only composition', () => {
     secondary: <div className="combo-secondary-grid"><article>ranking</article><article>layers</article></div>,
     algorithm: <article>algorithm</article>,
     details: <section>details</section>,
+    fragility: <section>fragility</section>,
   }
 
   it('keeps Modern markup and ordering unchanged', () => {
     expect(renderToStaticMarkup(<PortfolioComposition {...cards} />)).toBe(
-      renderToStaticMarkup(<>{cards.main}{cards.details}{cards.secondary}{cards.algorithm}</>),
+      renderToStaticMarkup(<>{cards.main}{cards.details}{cards.fragility}{cards.secondary}{cards.algorithm}</>),
     )
   })
 
-  it('moves existing cards into 3 + 2 rows without duplicating controls', () => {
-    const [primary, research] = PortfolioComposition({ ...cards, inspiration: true }).props.children
+  it('moves existing cards into 3 + 2 rows plus the fragility band without duplicating controls', () => {
+    const [primary, fragility, research] = PortfolioComposition({ ...cards, inspiration: true }).props.children
+    expect(fragility).toBe(cards.fragility)
     for (const row of [primary, research]) {
       const keys = row.props.children.map((card) => card.key)
       expect(new Set(keys).size).toBe(keys.length)
@@ -199,8 +201,8 @@ describe('Portfolio presentation-only composition', () => {
     expect(markup).toContain('data-left-collapsed="true"')
     expect(markup).toContain('combo-main-grid combo-left-collapsed')
     expect(markup).toContain('<article>candidates</article><article>package</article><article>layers</article></div>')
-    expect(markup).toContain('class="portfolio-research-grid"><article>ranking</article><article>algorithm</article></div>')
-    for (const label of ['candidates', 'package', 'ranking', 'layers', 'algorithm', 'details']) {
+    expect(markup).toContain('<section>fragility</section><div class="portfolio-research-grid"><article>ranking</article><article>algorithm</article></div>')
+    for (const label of ['candidates', 'package', 'ranking', 'layers', 'algorithm', 'details', 'fragility']) {
       expect(markup.match(new RegExp(`>${label}<`, 'g'))).toHaveLength(1)
     }
   })

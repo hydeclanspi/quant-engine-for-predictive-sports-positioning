@@ -6932,7 +6932,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         </div>
       )}
 
-      {/* ═══ 依赖风险矩阵（脆弱性热力图）═══ */}
+      </>} fragility={
       <div className="mb-6 relative">
         <FragilityHeatmapCard
           matches={rankingRows.length > 0 ? selectedMatches.map((m) => ({
@@ -6950,7 +6950,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         )}
       </div>
 
-      </>} secondary={
+      } secondary={
       <div className="combo-secondary-grid mb-6">
         <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6">
           <div className="flex items-center justify-between mb-4">
