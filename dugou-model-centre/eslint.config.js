@@ -75,6 +75,15 @@ export default [
     },
   },
   {
+    // CLI scripts run under plain Node (report generators, audit repros).
+    files: ['scripts/**/*.{js,mjs}', 'docs/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+      },
+    },
+  },
+  {
     // Test files run under Vitest globals.
     files: ['**/*.test.{js,jsx}', '**/__tests__/**'],
     languageOptions: {

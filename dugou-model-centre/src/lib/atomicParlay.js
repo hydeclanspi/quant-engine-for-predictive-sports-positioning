@@ -1,4 +1,4 @@
-import { normalizeEntryRecord } from './entryParsing'
+import { normalizeEntryRecord } from './entryParsing.js'
 
 const EPS = 1e-9
 
@@ -133,19 +133,56 @@ const parseResultOutcomeSet = (entry) => {
   return parseOutcomeSetFromText(entry?.name)
 }
 
-const normalizeAtomicEntries = (entriesInput, fallbackOdds = Number.NaN) => {
+const normalizeAtomicEntries = (entriesInput) => {
   const rawEntries = Array.isArray(entriesInput) ? entriesInput : []
   return rawEntries
-    .map((entry, idx) =>
+    .map((entry) =>
       normalizeEntryRecord(
         {
           ...entry,
-          name: entry?.name || entry?.entry || `entry-${idx + 1}`,
+          name: entry?.name || entry?.entry || '',
+          // A supplied entry must supply its own valid decimal odds. In
+          // particular, never turn a malformed/empty quote into fallbackOdds.
+          odds: Number(entry?.odds),
         },
-        fallbackOdds,
+        Number.NaN,
       ),
     )
-    .filter((entry) => entry.name && Number.isFinite(entry.odds) && entry.odds > 1)
+}
+
+const invalidProfile = (issues, entries = []) => ({
+  valid: false, modelStatus: 'invalid', issues, warnings: [], entries, states: [],
+  expectedGross: Number.NaN, expectedReturn: Number.NaN, variance: Number.NaN,
+  sigma: Number.NaN, hitProbability: Number.NaN, missProbability: Number.NaN,
+  profitWinProbability: Number.NaN, conditionalOdds: Number.NaN, equivalentOdds: Number.NaN,
+})
+
+const getEntryIssues = (entries) => entries.flatMap((entry, entryIndex) => {
+  const issues = []
+  if (!entry.name) issues.push({ code: 'missing_entry', entryIndex, message: `第 ${entryIndex + 1} 项缺少预测结果` })
+  if (!Number.isFinite(entry.odds) || entry.odds <= 1) {
+    issues.push({ code: 'invalid_odds', entryIndex, message: `第 ${entryIndex + 1} 项赔率必须是大于 1 的数字` })
+  }
+  return issues
+})
+
+// Only mutually exclusive selections have an additive union. A full 1X2
+// partition is exhaustive even if a user's subjective union estimate is lower.
+const getOutcomeModel = (entries) => {
+  const resultSets = entries.map(parseResultOutcomeSet)
+  const resultModel = resultSets.every((set) => set?.size > 0)
+  const sameMarket = entries.every((entry) => entry.market_type === entries[0]?.market_type)
+  const categoricalMarket = sameMarket && ['score', 'half_full'].includes(entries[0]?.market_type)
+  const sameHandicap = sameMarket && entries[0]?.market_type === 'handicap' &&
+    entries.every((entry) => entry.parse_detail?.line === entries[0]?.parse_detail?.line)
+  const knownCategorical = categoricalMarket || sameHandicap
+  const keys = entries.map((entry) => entry.semantic_key)
+  const sets = resultModel ? resultSets : knownCategorical ? keys.map((key) => new Set([key])) : null
+  const union = sets ? new Set(sets.flatMap((set) => [...set])) : new Set()
+  const disjoint = Boolean(sets && sets.reduce((n, set) => n + set.size, 0) === union.size)
+  const complete = resultModel && union.size === 3
+  const approximate = entries.length > 1 && (!sets || !disjoint)
+  return { resultModel, sets, disjoint, complete, approximate }
 }
 
 const normalizeSplitWeights = (count, weightsInput) => {
@@ -159,10 +196,9 @@ const normalizeSplitWeights = (count, weightsInput) => {
 }
 
 const buildEntryDescriptors = (entries) => {
-  const outcomeSets = entries.map((entry) => parseResultOutcomeSet(entry))
-  const useResultOutcomeModel = outcomeSets.every((set) => set && set.size > 0)
+  const model = getOutcomeModel(entries)
   return entries.map((entry, idx) => {
-    const atoms = useResultOutcomeModel ? outcomeSets[idx] : new Set([`entry_${idx}`])
+    const atoms = model.sets ? model.sets[idx] : new Set([`entry_${idx}`])
     return {
       id: `entry-${idx + 1}`,
       index: idx,
@@ -204,6 +240,10 @@ export const estimateEntryUnionProbability = (entriesInput, fallbackOdds = 2.5) 
   const fallback = clamp(1 / Math.max(1.01, toNumber(fallbackOdds, 2.5)), 0.02, 0.95)
   const entries = normalizeAtomicEntries(entriesInput, fallbackOdds)
   if (entries.length === 0) return fallback
+  if (getEntryIssues(entries).length > 0) return Number.NaN
+  const model = getOutcomeModel(entries)
+  if (model.complete) return 1
+  if (model.disjoint) return clamp(entries.reduce((sum, entry) => sum + 1 / entry.odds, 0), 0, 1)
   const missProbability = entries.reduce((miss, entry) => {
     const implied = clamp(1 / entry.odds, 0.001, 0.97)
     return miss * (1 - implied)
@@ -223,6 +263,11 @@ export const buildAtomicMatchProfile = ({
   splitWeights,
 } = {}) => {
   const normalizedEntries = normalizeAtomicEntries(entriesInput, fallbackOdds)
+  const issues = getEntryIssues(normalizedEntries)
+  if (normalizedEntries.length === 0 && !(Number.isFinite(Number(fallbackOdds)) && Number(fallbackOdds) > 1)) {
+    issues.push({ code: 'invalid_odds', message: '缺少有效赔率，无法计算收益分布' })
+  }
+  if (issues.length > 0) return invalidProfile(issues, normalizedEntries)
   const safeEntries =
     normalizedEntries.length > 0
       ? normalizedEntries
@@ -237,9 +282,10 @@ export const buildAtomicMatchProfile = ({
         ]
 
   const descriptors = buildEntryDescriptors(safeEntries)
+  const model = getOutcomeModel(safeEntries)
   const weights = normalizeSplitWeights(descriptors.length, splitWeights)
-  const baseUnionProbability = Number.isFinite(toNumber(unionProbability, Number.NaN))
-    ? clamp(toNumber(unionProbability, Number.NaN), 0.001, 0.999)
+  const baseUnionProbability = model.complete ? 1 : Number.isFinite(toNumber(unionProbability, Number.NaN))
+    ? clamp(toNumber(unionProbability, Number.NaN), 0, 1)
     : estimateEntryUnionProbability(safeEntries, fallbackOdds)
   const atomWeights = buildAtomWeights(descriptors)
 
@@ -312,6 +358,13 @@ export const buildAtomicMatchProfile = ({
   )
 
   return {
+    valid: true,
+    modelVersion: 'atomic-v2',
+    modelStatus: model.approximate ? 'approximate' : 'exact',
+    issues: [],
+    warnings: model.approximate
+      ? ['同场混合市场或重叠选项的联合概率尚未建模；当前仅为近似，不用于自动仓位或风险模拟。']
+      : [],
     entries: descriptors.map((descriptor, idx) => ({
       id: descriptor.id,
       name: descriptor.name,
@@ -336,6 +389,8 @@ export const buildAtomicMatchProfile = ({
 
 export const combineAtomicMatchProfiles = (profilesInput) => {
   const profiles = Array.isArray(profilesInput) ? profilesInput.filter(Boolean) : []
+  const invalid = profiles.find((profile) => profile.valid === false)
+  if (invalid) return invalidProfile(invalid.issues || [{ code: 'invalid_profile', message: '存在无效场次分布' }])
   if (profiles.length === 0) {
     return {
       states: [{ probability: 1, gross: 0, net: -1 }],
@@ -397,6 +452,11 @@ export const combineAtomicMatchProfiles = (profilesInput) => {
     : 0
 
   return {
+    valid: true,
+    modelVersion: 'atomic-v2',
+    modelStatus: profiles.some((profile) => profile.modelStatus === 'approximate') ? 'approximate' : 'exact',
+    issues: [],
+    warnings: [...new Set(profiles.flatMap((profile) => profile.warnings || []))],
     states,
     expectedGross,
     expectedReturn,
@@ -468,5 +528,5 @@ export const calcAtomicEquivalentOdds = (entriesInput, fallbackOdds = 2.5) => {
     unionProbability,
     fallbackOdds,
   })
-  return Math.max(1.01, toNumber(profile.conditionalOdds, fallbackOdds))
+  return profile.valid === false ? Number.NaN : toNumber(profile.conditionalOdds, Number.NaN)
 }

@@ -11,7 +11,8 @@
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "read-quality": "node scripts/read-quality-report.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",

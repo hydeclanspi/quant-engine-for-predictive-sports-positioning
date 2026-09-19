@@ -2,7 +2,7 @@
  * 依赖风险分析系统 - 单元测试
  * Tests for Dependency Risk Premium Analysis System
  *
- * 验证所有6重统计控制的正确实现
+ * 锁定诊断计算行为；不代表对统计假设或实盘收益的验证。
  */
 
 import {
@@ -61,14 +61,14 @@ describe('Dependency Risk Premium Analysis', () => {
     })
 
     it('应该处理边界值', () => {
-      expect(getConfidenceWeight(0)).toBe(0.05) // 夹逼到下限
+      expect(getConfidenceWeight(0)).toBe(0)
       expect(getConfidenceWeight(5)).toBeCloseTo(0.522, 2)
       expect(getConfidenceWeight(10)).toBeCloseTo(0.698, 2)
     })
 
     it('应该处理非数字输入', () => {
-      expect(getConfidenceWeight('abc')).toBe(0.05)
-      expect(getConfidenceWeight(null)).toBe(0.05)
+      expect(getConfidenceWeight('abc')).toBe(0)
+      expect(getConfidenceWeight(null)).toBe(0)
     })
   })
 
@@ -204,9 +204,11 @@ describe('Dependency Risk Premium Analysis', () => {
 
       const result = calculateDependencyPremium(raceA, raceB, [])
 
-      expect(Number.isFinite(result.premium)).toBe(true)
+      expect(Number.isNaN(result.premium)).toBe(true)
       expect(result.sampleSize).toBe(0)
-      expect(result.pFailBothObserved).toBe(0)
+      expect(Number.isNaN(result.pFailBothObserved)).toBe(true)
+      expect(Number.isNaN(result.pValue)).toBe(true)
+      expect(result.confidence).toBe(0)
     })
 
     it('应该包含所有必要的输出字段', () => {
@@ -288,14 +290,15 @@ describe('Dependency Risk Premium Analysis', () => {
   // ==========================================================================
 
   describe('assessFragilityScore', () => {
-    it('应该返回0-100之间的脆弱性分数', () => {
+    it('无历史时不伪造风险分数', () => {
       const raceA = { odds: 3.0 }
       const raceB = { odds: 2.0 }
 
       const result = assessFragilityScore(raceA, raceB, [])
 
-      expect(result.fragilityScore).toBeGreaterThanOrEqual(0)
-      expect(result.fragilityScore).toBeLessThanOrEqual(100)
+      expect(Number.isNaN(result.fragilityScore)).toBe(true)
+      expect(result.riskLevel).toBe('insufficient_data')
+      expect(result.confidence).toBe(0)
     })
 
     it('应该包含风险等级', () => {
@@ -309,13 +312,13 @@ describe('Dependency Risk Premium Analysis', () => {
       )
     })
 
-    it('应该返回百分比格式的脆弱性', () => {
+    it('无历史时不显示概率式百分比', () => {
       const raceA = { odds: 3.0 }
       const raceB = { odds: 2.0 }
 
       const result = assessFragilityScore(raceA, raceB, [])
 
-      expect(result.fragilityPercentage).toMatch(/%$/)
+      expect(result.fragilityPercentage).toBe('—')
     })
 
     it('应该处理无效输入', () => {
@@ -345,8 +348,8 @@ describe('Dependency Risk Premium Analysis', () => {
       const result = assessComboFragility(combo, [])
 
       expect(result.comboSize).toBe(4)
-      expect(result.overallFragility).toBeGreaterThanOrEqual(0)
-      expect(result.overallFragility).toBeLessThanOrEqual(100)
+      expect(Number.isNaN(result.overallFragility)).toBe(true)
+      expect(result.criticalPairs).toEqual([])
       expect(Array.isArray(result.pairAnalysis)).toBe(true)
       expect(Array.isArray(result.criticalPairs)).toBe(true)
       expect(Array.isArray(result.recommendations)).toBe(true)
@@ -445,7 +448,7 @@ describe('Dependency Risk Premium Analysis', () => {
       }
     })
 
-    it('应该输出脆弱性分数格式 "XX.XX%"', () => {
+    it('空历史组合不输出伪精确数字', () => {
       const result = assessComboFragility(
         [
           { odds: 1.5 },
@@ -456,9 +459,7 @@ describe('Dependency Risk Premium Analysis', () => {
         [],
       )
 
-      // 检查两个小数点的格式
-      const scoreStr = result.overallFragility.toString()
-      expect(scoreStr).toMatch(/^\d+(\.\d{1,2})?$/)
+      expect(Number.isNaN(result.overallFragility)).toBe(true)
     })
   })
 })

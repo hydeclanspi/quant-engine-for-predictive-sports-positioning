@@ -21,6 +21,8 @@ import { formatStructuredQuickInput } from '../lib/quickInputPresentation'
 import { useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
+import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from '../lib/investmentForecast'
+import { getMatchSourceIdentity } from '../lib/investmentIdentity'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
 const DEFAULT_FSE_PERCENT = 10
@@ -479,7 +481,7 @@ export default function NewInvestmentPage() {
   // 周期性结算后会自动以新周期的本金口径计算。
   const poolCapital = useMemo(() => getReservoirState().poolBalance, [systemConfig, dataVersion])
   const riskCap = useMemo(
-    () => Math.round(poolCapital * systemConfig.riskCapRatio),
+    () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
   )
   const [calibrationContext, setCalibrationContext] = useState(() =>
@@ -697,7 +699,7 @@ export default function NewInvestmentPage() {
   const getValidEntries = (entries) =>
     entries
       .map((entry) => normalizeEntryRecord({ name: entry.name, odds: parseOdds(entry.odds) }, parseOdds(entry.odds)))
-      .filter((entry) => entry.name && Number.isFinite(entry.odds) && entry.odds > 0)
+      .filter((entry) => entry.name && isValidDecimalOdds(entry.odds))
 
   const calcMatchOdds = (entries) => {
     const validEntries = getValidEntries(entries)
@@ -816,7 +818,7 @@ export default function NewInvestmentPage() {
 
   const expectedRating = useMemo(() => {
     if (atomicMatchProfiles.length === 0) return Number.NaN
-    const average = atomicMatchProfiles.reduce((sum, row) => sum + row.unionProbability, 0) / atomicMatchProfiles.length
+    const average = atomicMatchProfiles.reduce((sum, row) => sum + row.hitProbability, 0) / atomicMatchProfiles.length
     return Number.isFinite(average) ? average : 0
   }, [atomicMatchProfiles])
 
@@ -829,6 +831,7 @@ export default function NewInvestmentPage() {
   }, [matches, modeKellyMap, systemConfig.kellyDivisor])
 
   const recommendedInvest = useMemo(() => {
+    if (combinedAtomicProfile.valid === false || combinedAtomicProfile.modelStatus === 'approximate' || atomicMatchProfiles.length !== matches.length) return 0
     const states = combinedAtomicProfile.states || []
     if (states.length === 0) return 0
     const kelly = solveKellyFractionByAtomicDistribution(states, 0.95)
@@ -842,8 +845,8 @@ export default function NewInvestmentPage() {
     const finalKellyDivisor = Math.max(1, wfKellyDivisor)
     const raw = poolCapital * (kelly / finalKellyDivisor)
     // FIX: Removed confidenceLift heuristic (0.88 + expected * 0.24). Pure fractional Kelly.
-    return Math.min(riskCap, Math.max(0, Math.round(raw)))
-  }, [calibrationContext, combinedAtomicProfile, effectiveKellyDivisor, riskCap, poolCapital])
+    return capRecommendedStake(raw, poolCapital, systemConfig.riskCapRatio)
+  }, [calibrationContext, combinedAtomicProfile, effectiveKellyDivisor, riskCap, poolCapital, systemConfig.riskCapRatio, atomicMatchProfiles.length, matches.length])
 
   const getTeamSuggestions = (query) => searchTeamProfiles(query, teamProfiles, 6)
 
@@ -1000,9 +1003,15 @@ export default function NewInvestmentPage() {
         return `${prefix}第 ${idx + 1} 场主队和客队不能相同。`
       }
       const validEntries = getValidEntries(match.entries)
+      const incompleteEntry = match.entries.some((entry) =>
+        (String(entry.name || '').trim() || String(entry.odds || '').trim()) &&
+        (!String(entry.name || '').trim() || !isValidDecimalOdds(entry.odds)))
+      if (incompleteEntry) return `${prefix}第 ${idx + 1} 场每条 Entry 都需填写名称及大于 1 的十进制赔率。`
       if (validEntries.length === 0) {
-        return `${prefix}第 ${idx + 1} 场至少要有 1 条有效 Entry（名称 + 正数赔率）。`
+        return `${prefix}第 ${idx + 1} 场至少要有 1 条有效 Entry（名称 + 大于 1 的赔率）。`
       }
+      const profile = buildAtomicMatchProfile({ entries: validEntries, unionProbability: calcAdjustedConf(match), fallbackOdds: systemConfig.defaultOdds })
+      if (profile.valid === false) return `${prefix}第 ${idx + 1} 场赔率结构无法建模，请检查 Entry。`
     }
     return ''
   }
@@ -1035,13 +1044,14 @@ export default function NewInvestmentPage() {
       ? conditionalOdds
       : fallbackOdds
     const draftExpectedRating = profiles.length > 0
-      ? profiles.reduce((sum, profile) => sum + profile.unionProbability, 0) / profiles.length
+      ? profiles.reduce((sum, profile) => sum + profile.hitProbability, 0) / profiles.length
       : 0
     const divisors = draftMatches.map((match) => getKellyDivisorForMode(match.mode))
     const draftKellyDivisor = divisors.length > 0
       ? divisors.reduce((sum, divisor) => sum + divisor, 0) / divisors.length
       : systemConfig.kellyDivisor
-    const kelly = solveKellyFractionByAtomicDistribution(combinedProfile.states || [], 0.95)
+    const kelly = combinedProfile.valid === false || combinedProfile.modelStatus === 'approximate'
+      ? 0 : solveKellyFractionByAtomicDistribution(combinedProfile.states || [], 0.95)
     const wfFeedback = calibrationContext?.walkForwardFeedback
     const wfKellyDivisor = wfFeedback?.ready && Number.isFinite(wfFeedback.adjustments?.kellyDivisor)
       ? wfFeedback.adjustments.kellyDivisor
@@ -1051,9 +1061,11 @@ export default function NewInvestmentPage() {
       : 0
 
     return {
+      profiles,
+      combinedProfile,
       combinedOdds: Number.isFinite(draftCombinedOdds) ? draftCombinedOdds : 0,
       expectedRating: Number.isFinite(draftExpectedRating) ? draftExpectedRating : 0,
-      recommendedInvest: Math.min(riskCap, Math.max(0, Math.round(rawSuggestion))),
+      recommendedInvest: capRecommendedStake(rawSuggestion, poolCapital, systemConfig.riskCapRatio),
     }
   }
 
@@ -1062,6 +1074,8 @@ export default function NewInvestmentPage() {
     if (validationMessage) return { validationMessage, payload: null }
     const draftMatches = draft.matches
     const draftMetrics = calculateDraftMetrics(draftMatches)
+    const investmentId = buildId('inv')
+    const generatedAt = new Date().toISOString()
     const normalizedMatches = draftMatches.map((match) => {
       const validEntries = getValidEntries(match.entries)
       const entryMarket = getPrimaryEntryMarket(validEntries, validEntries.map((entry) => entry.name).join(', '))
@@ -1093,15 +1107,30 @@ export default function NewInvestmentPage() {
         match_rep: null,
       }
     })
+    normalizedMatches.forEach((match, index) => {
+      Object.assign(match, getMatchSourceIdentity(match, investmentId))
+      match.calibrated_probability = draftMetrics.profiles[index].hitProbability
+    })
+    const forecastSnapshot = buildForecastSnapshot({
+      combinedProfile: draftMetrics.combinedProfile,
+      generatedAt,
+      legs: normalizedMatches.map((match, index) => ({ match, profile: draftMetrics.profiles[index], investmentId })),
+    })
+    if (!forecastSnapshot) return { validationMessage: `${label ? `${label}：` : ''}预测分布无效，请检查输入后重试。`, payload: null }
 
     const newInvestment = {
-      id: buildId('inv'),
-      created_at: new Date().toISOString(),
+      id: investmentId,
+      created_at: generatedAt,
       parlay_size: draftMatches.length,
       combo_name: String(draft.comboName || '').trim(),
       inputs: Number.parseFloat(String(draft.actualInput).trim()),
       suggested_amount: draftMetrics.recommendedInvest,
       expected_rating: Number(draftMetrics.expectedRating.toFixed(2)),
+      expected_rating_semantics: MEAN_LEG_RATING_SEMANTICS,
+      forecast_snapshot: forecastSnapshot,
+      ticket_hit_probability: forecastSnapshot.ticket_hit_probability,
+      ticket_profit_probability: forecastSnapshot.ticket_profit_probability,
+      expected_return: forecastSnapshot.expected_return,
       combined_odds: Number(draftMetrics.combinedOdds.toFixed(2)),
       status: 'pending',
       revenues: null,
@@ -1300,6 +1329,7 @@ export default function NewInvestmentPage() {
       console.error('[DuGou] 投资落库失败，已保留草稿待恢复：', err)
       return null
     }
+    if (!saved) return null
     bumpTeamSamples(normalizedMatches.flatMap((item) => [item.home_team, item.away_team]))
     setProfilesVersion((prev) => prev + 1)
     setComboName('')
@@ -2125,6 +2155,9 @@ export default function NewInvestmentPage() {
         </div>
 
         <div className="px-6 py-6 bg-gradient-to-r from-stone-50 to-orange-50/30 border-t border-stone-100 lab-new-footer">
+          {combinedAtomicProfile.modelStatus === 'approximate' && (
+            <p role="status" className="mb-3 text-xs text-amber-700">同场混合或重叠选项尚不支持精确联合建模，已停用自动仓位建议；仍可按实际投入手动入档。</p>
+          )}
           <div className="flex items-center justify-between gap-4 max-[960px]:flex-wrap">
             <div className="flex items-center gap-6 min-w-0 flex-nowrap">
               <div className="flex flex-col items-start">

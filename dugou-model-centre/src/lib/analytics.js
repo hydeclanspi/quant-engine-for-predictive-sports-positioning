@@ -73,6 +73,8 @@ import { findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, save
 import { getPrimaryEntryMarket } from './entryParsing'
 import { lookupTeam } from './teamDatabase'
 import { isPreviewMode } from './displayMode'
+import { solveKellyFractionByAtomicDistribution } from './atomicParlay'
+import { buildSettledSelectionResolver, getSelectionIdentityKey } from './investmentIdentity'
 
 const MODE_KEYS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
 const MODE_ALIAS = {
@@ -212,7 +214,15 @@ const splitInvestmentToMatches = (investment) => {
   if (matches.length === 0) return []
 
   const inputs = Math.max(0, toNumber(investment.inputs))
-  const revenues = Math.max(0, toNumber(investment.revenues))
+  // Legacy records may carry a realized profit without a revenue field;
+  // deriving the payout keeps missing revenue from reading as a total loss.
+  const declaredRevenue = toNumber(investment.revenues, Number.NaN)
+  const profit = toNumber(investment.profit, Number.NaN)
+  const revenues = Number.isFinite(declaredRevenue)
+    ? Math.max(0, declaredRevenue)
+    : Number.isFinite(profit)
+      ? Math.max(0, inputs + profit)
+      : 0
   const perInput = inputs / matches.length
   const odds = matches.map((match) => Math.max(0, toNumber(match.odds)))
   const oddsSum = odds.reduce((sum, value) => sum + value, 0)
@@ -561,34 +571,50 @@ const getDominantModeFromInvestment = (investment) => {
 }
 
 const estimateInvestmentExpected = (investment) => {
-  const expected = toNumber(investment?.expected_rating, NaN)
-  if (Number.isFinite(expected)) return clamp(expected, 0.05, 0.95)
+  // Legacy New stored a mean leg score here, whereas Portfolio stored a ticket
+  // probability. Only a single selection is unambiguous without a snapshot.
   const matches = Array.isArray(investment?.matches) ? investment.matches : []
-  const confValues = matches.map((match) => toNumber(match.conf, NaN)).filter(Number.isFinite)
-  if (confValues.length === 0) return 0.5
-  const avg = confValues.reduce((sum, value) => sum + value, 0) / confValues.length
-  return clamp(avg, 0.05, 0.95)
+  if (matches.length !== 1 || !Array.isArray(matches[0].entries) || matches[0].entries.length !== 1) return NaN
+  const expected = toNumber(investment?.expected_rating, NaN)
+  return Number.isFinite(expected) && expected >= 0 && expected <= 1 ? expected : NaN
 }
 
-const estimateInvestmentOdds = (investment, fallbackOdds = 2.5) => {
+const estimateInvestmentOdds = (investment) => {
   const combined = toNumber(investment?.combined_odds, NaN)
   if (Number.isFinite(combined) && combined > 1) return combined
   const matches = Array.isArray(investment?.matches) ? investment.matches : []
   const odds = matches.map((match) => toNumber(match.odds, NaN)).filter((value) => Number.isFinite(value) && value > 1)
-  if (odds.length === 0) return fallbackOdds
+  if (odds.length === 0 || odds.length !== matches.length) return NaN
   const product = odds.reduce((result, value) => result * value, 1)
   return Number(product.toFixed(2))
 }
 
-const toKellySimulationRowsFromInvestments = (investments, config) =>
+const getForecastStates = (investment) => {
+  const snapshot = investment?.forecast_snapshot
+  if (snapshot?.schema_version !== 1 || snapshot?.model_status === 'approximate') return null
+  const states = snapshot.states
+  if (!Array.isArray(states) || states.length === 0) return null
+  if (states.some((s) => !s || typeof s !== 'object' || !Number.isFinite(s.probability) || s.probability < 0 || s.probability > 1
+    || !Number.isFinite(s.gross) || s.gross < 0 || !Number.isFinite(s.net)
+    || Math.abs(s.net - (s.gross - 1)) > 1e-7)) return null
+  if (Math.abs(states.reduce((sum, s) => sum + s.probability, 0) - 1) > 1e-6) return null
+  return states
+}
+
+const toKellySimulationRowsFromInvestments = (investments) =>
   investments
     .map((item) => {
       const inputs = Math.max(0, toNumber(item.inputs, 0))
       if (inputs <= 0) return null
-      const profit = toNumber(item.profit, 0)
+      const profit = toNumber(item.profit, NaN)
       if (!Number.isFinite(profit)) return null
-      const expected = estimateInvestmentExpected(item)
-      const odds = estimateInvestmentOdds(item, toNumber(config.defaultOdds, 2.5))
+      const states = getForecastStates(item)
+      // A malformed new snapshot must not silently fall back to legacy scoring.
+      if (item.forecast_snapshot && !states) return null
+      const expected = states
+        ? states.reduce((sum, s) => sum + (s.gross > 0 ? s.probability : 0), 0)
+        : estimateInvestmentExpected(item)
+      const odds = states ? Math.max(...states.map((s) => s.gross)) : estimateInvestmentOdds(item)
       if (!Number.isFinite(expected) || !Number.isFinite(odds) || odds <= 1) return null
       return {
         createdAt: item.created_at,
@@ -596,6 +622,7 @@ const toKellySimulationRowsFromInvestments = (investments, config) =>
         odds,
         inputs,
         profit,
+        states,
       }
     })
     .filter(Boolean)
@@ -608,6 +635,14 @@ const calcKellyStake = (expected, odds, divisor, config) => {
   const base = toNumber(config.initialCapital, 0) * (kelly / Math.max(1, divisor))
   const riskCap = toNumber(config.initialCapital, 0) * toNumber(config.riskCapRatio, 0)
   return Math.max(0, Math.min(riskCap, base))
+}
+
+const calcKellyRowStake = (row, divisor, config) => {
+  if (!row.states) return calcKellyStake(row.expected, row.odds, divisor, config)
+  const fraction = solveKellyFractionByAtomicDistribution(row.states)
+  const capital = Math.max(0, toNumber(config.initialCapital, 0))
+  return Math.max(0, Math.min(capital * Math.max(0, toNumber(config.riskCapRatio, 0)),
+    capital * fraction / Math.max(1, divisor)))
 }
 
 const resolveMonteCarloRuns = (sampleCount, targetRuns = MONTE_CARLO_TARGET_RUNS) => {
@@ -747,11 +782,12 @@ const simulateKellyDivisorFromRows = (rows, divisor, config) => {
     const inputs = Math.max(0, toNumber(row.inputs, 0))
     const profit = toNumber(row.profit, 0)
     if (inputs <= 0) return
-    const expected = clamp(toNumber(row.expected, 0.5), 0.05, 0.95)
-    const odds = Math.max(1.01, toNumber(row.odds, toNumber(config.defaultOdds, 2.5)))
-    const stake = Math.round(calcKellyStake(expected, odds, divisor, config))
+    const expected = toNumber(row.expected, NaN)
+    const odds = toNumber(row.odds, NaN)
+    if (!Number.isFinite(expected) || !Number.isFinite(odds) || odds <= 1) return
+    const stake = Math.round(calcKellyRowStake(row, divisor, config))
     if (stake <= 0) return
-    const profitRatio = clamp(profit / inputs, -1, Math.max(odds - 1, -1))
+    const profitRatio = Math.max(-1, profit / inputs)
     simRows.push({
       expected,
       odds,
@@ -779,8 +815,9 @@ const simulateKellyDivisorFromRows = (rows, divisor, config) => {
 }
 
 const getRowTemporalTs = (row) => {
-  const raw = row?.createdAt || row?.created_at || row?.date
-  const ts = new Date(raw || 0).getTime()
+  const raw = row?.createdAt ?? row?.created_at ?? row?.date
+  if (raw === null || raw === undefined || (typeof raw === 'string' && !raw.trim())) return Number.NaN
+  const ts = new Date(raw).getTime()
   return Number.isFinite(ts) ? ts : Number.NaN
 }
 
@@ -796,13 +833,11 @@ const buildPrequentialWalkForwardWindows = (
 ) => {
   if (!Array.isArray(rows) || rows.length < Math.max(minRows, minTrain + minTest)) return []
 
-  const ordered = [...rows].sort((a, b) => {
-    const ta = getRowTemporalTs(a)
-    const tb = getRowTemporalTs(b)
-    return (Number.isFinite(ta) ? ta : 0) - (Number.isFinite(tb) ? tb : 0)
-  })
-  const datedSamples = ordered.filter((row) => Number.isFinite(getRowTemporalTs(row))).length
-  if (datedSamples < Math.max(minTrain + minTest, Math.floor(ordered.length * 0.6))) return []
+  // Unknown timestamps are not observations from 1970. Never let them enter a
+  // temporal training/test split; retain the existing minimum coverage guard.
+  const ordered = rows.filter((row) => Number.isFinite(getRowTemporalTs(row)))
+    .sort((a, b) => getRowTemporalTs(a) - getRowTemporalTs(b))
+  if (ordered.length < Math.max(minRows, minTrain + minTest, Math.floor(rows.length * 0.6))) return []
 
   const stride = Math.max(1, Number.parseInt(step, 10) || PREQUENTIAL_STEP_MATCHES)
   const testSize = Math.max(minTest, stride)
@@ -862,12 +897,13 @@ const simulateKellyDivisorDeterministic = (rows, divisor, config) => {
     const inputs = Math.max(0, toNumber(row.inputs, 0))
     const profit = toNumber(row.profit, 0)
     if (inputs <= 0) return
-    const expected = clamp(toNumber(row.expected, 0.5), 0.05, 0.95)
-    const odds = Math.max(1.01, toNumber(row.odds, toNumber(config.defaultOdds, 2.5)))
-    const stake = Math.round(calcKellyStake(expected, odds, divisor, config))
+    const expected = toNumber(row.expected, NaN)
+    const odds = toNumber(row.odds, NaN)
+    if (!Number.isFinite(expected) || !Number.isFinite(odds) || odds <= 1) return
+    const stake = Math.round(calcKellyRowStake(row, divisor, config))
     if (stake <= 0) return
 
-    const unitReturn = clamp(profit / inputs, -1, Math.max(odds - 1, -1))
+    const unitReturn = Math.max(-1, profit / inputs)
     const simProfit = stake * unitReturn
     totalInvest += stake
     totalProfit += simProfit
@@ -1061,6 +1097,9 @@ export const getKellyDivisorBacktest = (divisors = KELLY_DIVISOR_CANDIDATES) => 
 
   const snapshot = {
     divisors,
+    inputSamples: investments.length,
+    eligibleSamples: globalRowsSource.length,
+    excludedSamples: investments.length - globalRowsSource.length,
     globalRows,
     globalBest,
     modeRecommendations,
@@ -1534,7 +1573,7 @@ const calcMedian = (values, fallback = 0) => {
 export const getTeamsSnapshot = (query = '', periodKey = 'all') => {
   const profiles = getTeamProfiles()
   const range = getPeriodRange(periodKey)
-  const investments = getActiveInvestments().filter((item) => inRange(item.created_at, range))
+  const investments = getSettledInvestments(getActiveInvestments()).filter((item) => inRange(item.created_at, range))
   const aliasMap = buildAliasMap(profiles)
   const teamMap = new Map()
 
@@ -1721,12 +1760,11 @@ export const getKellyDivisorMatrix = () => {
       row.inputs += match.allocated_input
       row.profit += match.allocated_profit
       if (match.is_correct === true) row.hits += 1
-      row.rows.push({
-        expected: clamp(conf, 0.05, 0.95),
-        odds: Math.max(1.01, odds),
-        inputs: Math.max(0, toNumber(match.allocated_input, 0)),
-        profit: toNumber(match.allocated_profit, 0),
-      })
+      // Equal allocation of ticket P&L is a descriptive attribution, not an
+      // observed leg return. Do not train leg-level Kelly on synthetic returns.
+      if (investment.matches?.length === 1) {
+        row.rows.push(...toKellySimulationRowsFromInvestments([investment]))
+      }
     })
   })
 
@@ -1744,6 +1782,7 @@ export const getKellyDivisorMatrix = () => {
         confBucket: row.confBucket,
         oddsBucket: row.oddsBucket,
         samples: row.samples,
+        kellyEligibleSamples: row.rows.length,
         inputs: row.inputs,
         profit: row.profit,
         roi,
@@ -3842,18 +3881,21 @@ const computeInvestmentScore = (investment, weights) => {
   // TYS 和 FID 特征
   const tysFeature = (() => {
     const tysMap = { S: 1.0, M: 0.7, L: 0.4, H: 0.2 }
-    const tysValues = matches.map((m) => tysMap[m.tys_base_home] || 0.5)
+    const tysValues = matches.map((m) => {
+      const home = m.tys_home ?? m.tys_base_home ?? m.tys_base
+      const away = m.tys_away ?? m.tys_base_away ?? home
+      return ((tysMap[home] ?? 0.5) + (tysMap[away] ?? 0.5)) / 2
+    })
     return tysValues.reduce((sum, v) => sum + v, 0) / tysValues.length
   })()
 
   const fidFeature = (() => {
-    const fidValues = matches.map((m) => toNumber(m.fid_base_home, 0.5))
+    const fidValues = matches.map((m) => toNumber(m.fid, toNumber(m.fid_base_home, 0.5)))
     return fidValues.reduce((sum, v) => sum + v, 0) / fidValues.length
   })()
 
   // Mode 特征
   const modeFeature = (() => {
-    const mode = normalizeMode(investment.mode || '常规')
     const modeScores = {
       '常规': 0.5,
       '常规-稳': 0.7,
@@ -3862,7 +3904,10 @@ const computeInvestmentScore = (investment, weights) => {
       '保险产品': 0.8,
       '赌一把': 0.1,
     }
-    return modeScores[mode] || 0.5
+    return matches.reduce((sum, m) => {
+      const mode = normalizeMode(m.mode || investment.mode || '常规')
+      return sum + (modeScores[mode] ?? 0.5)
+    }, 0) / matches.length
   })()
 
   const components = {
@@ -3917,12 +3962,12 @@ const computePortfolioScore = (investments, weights) => {
 
     // 加权因子 = 各维度特征 × 对应权重的加权和
     const weightFactor =
-      (components.conf || 0.5) * (weights.weightConf || 0.45) +
-      (components.mode || 0.5) * (weights.weightMode || 0.16) +
-      (components.tys || 0.5) * (weights.weightTys || 0.12) +
-      (components.fid || 0.5) * (weights.weightFid || 0.14) +
-      (components.odds || 0.5) * (weights.weightOdds || 0.06) +
-      (components.fse || 0.5) * (weights.weightFse || 0.07)
+      (components.conf ?? 0.5) * (weights.weightConf ?? 0.45) +
+      (components.mode ?? 0.5) * (weights.weightMode ?? 0.16) +
+      (components.tys ?? 0.5) * (weights.weightTys ?? 0.12) +
+      (components.fid ?? 0.5) * (weights.weightFid ?? 0.14) +
+      (components.odds ?? 0.5) * (weights.weightOdds ?? 0.06) +
+      (components.fse ?? 0.5) * (weights.weightFse ?? 0.07)
 
     totalWeightedProfit += profit * weightFactor
     totalInputs += inputs
@@ -3989,19 +4034,22 @@ export const computeAdaptiveWeightSuggestions = () => {
   const { gradients, baseScore } = estimateWeightGradients(investments, currentWeights)
 
   const suggestionsList = WEIGHT_KEYS.map((key) => {
-    const gradient = gradients[key] || 0
+    // Conf is the production probability foundation, not a weighted factor.
+    // Keep its manual setting compatible, but do not claim an effective auto-tune.
+    const inactive = key === 'weightConf'
+    const gradient = inactive ? 0 : gradients[key] || 0
     const current = currentWeights[key]
     const prior = priors[key]
     const [minBound, maxBound] = bounds[key] || DEFAULT_WEIGHT_BOUNDS[key]
 
     // 梯度下降更新 + 向先验回归
-    let rawChange = learningRate * gradient - priorStrength * (current - prior)
+    let rawChange = inactive ? 0 : learningRate * gradient - priorStrength * (current - prior)
 
     // 限制单次变化幅度
     rawChange = clamp(rawChange, -maxSingleChange, maxSingleChange)
 
     // 计算建议值并约束在边界内
-    const suggested = clamp(current + rawChange, minBound, maxBound)
+    const suggested = inactive ? current : clamp(current + rawChange, minBound, maxBound)
     const actualChange = suggested - current
 
     // 置信度计算：基于梯度一致性和样本量
@@ -4019,7 +4067,7 @@ export const computeAdaptiveWeightSuggestions = () => {
       gradient: Number(gradient.toFixed(6)),
       confidence: Number(confidence.toFixed(2)),
       change: Number(actualChange.toFixed(4)),
-      reason: actualChange > 0 ? '建议上调' : actualChange < 0 ? '建议下调' : '维持不变',
+      reason: inactive ? '当前生产管线未使用该权重，不自动调整' : actualChange > 0 ? '建议上调' : actualChange < 0 ? '建议下调' : '维持不变',
     }
   })
 
@@ -4221,12 +4269,18 @@ export const buildIsotonicRegression = (binaryRows = null) => {
   const sorted = [...rows].sort((a, b) => a.conf - b.conf)
 
   // PAV algorithm: merge adjacent violators
-  const blocks = sorted.map((r) => ({
-    sumY: r.actual,
-    sumW: 1,
-    low: r.conf,
-    high: r.conf,
-  }))
+  // Equal X values describe one probability bucket. Pool ties first so the
+  // fitted function cannot depend on insertion order within that bucket.
+  const blocks = []
+  sorted.forEach((r) => {
+    const previous = blocks[blocks.length - 1]
+    if (previous && previous.high === r.conf) {
+      previous.sumY += r.actual
+      previous.sumW += 1
+    } else {
+      blocks.push({ sumY: r.actual, sumW: 1, low: r.conf, high: r.conf })
+    }
+  })
 
   let i = 0
   while (i < blocks.length - 1) {
@@ -4428,18 +4482,29 @@ export const buildEntryCorrelationMatrix = () => {
   combos.forEach((legs) => {
     for (let i = 0; i < legs.length; i++) {
       for (let j = i + 1; j < legs.length; j++) {
-        const a = legs[i]
-        const b = legs[j]
-        const pairKey = [a.entryType, b.entryType].sort().join('|')
+        const [a, b] = [legs[i], legs[j]].sort((left, right) =>
+          left.entryType < right.entryType ? -1 : left.entryType > right.entryType ? 1 : 0)
+        const pairKey = [a.entryType, b.entryType].join('|')
         if (!pairStats.has(pairKey)) {
           pairStats.set(pairKey, { key: pairKey, n: 0, bothWin: 0, aWin: 0, bWin: 0, sumAConf: 0, sumBConf: 0 })
         }
         const pair = pairStats.get(pairKey)
         pair.n += 1
-        pair.sumAConf += a.conf
-        pair.sumBConf += b.conf
-        if (a.isCorrect) pair.aWin += 1
-        if (b.isCorrect) pair.bWin += 1
+        if (a.entryType === b.entryType) {
+          // Same-type pairs are exchangeable: do not invent A/B roles from
+          // the order the user happened to enter the legs.
+          const marginalWins = (Number(a.isCorrect) + Number(b.isCorrect)) / 2
+          const marginalConf = (a.conf + b.conf) / 2
+          pair.aWin += marginalWins
+          pair.bWin += marginalWins
+          pair.sumAConf += marginalConf
+          pair.sumBConf += marginalConf
+        } else {
+          pair.sumAConf += a.conf
+          pair.sumBConf += b.conf
+          if (a.isCorrect) pair.aWin += 1
+          if (b.isCorrect) pair.bWin += 1
+        }
         if (a.isCorrect && b.isCorrect) pair.bothWin += 1
       }
     }
@@ -4455,7 +4520,10 @@ export const buildEntryCorrelationMatrix = () => {
     const independent = pA * pB
     // Phi coefficient (Pearson for binary)
     const denom = Math.sqrt(pA * (1 - pA) * pB * (1 - pB))
-    const rho = denom > 0.001 ? (pAB - independent) / denom : 0
+    // A constant marginal contains no information about correlation. Do not
+    // report a zero estimate with growing reliability for an undefined Phi.
+    if (denom <= 0.001) return
+    const rho = (pAB - independent) / denom
     const shrinkage = pair.n / (pair.n + 10)
     const shrunkRho = shrinkage * rho // shrink toward 0
 
@@ -4522,20 +4590,14 @@ export const buildComboRetrospective = (planHistory) => {
 
   if (!Array.isArray(planHistory) || planHistory.length === 0) return fallback
 
-  // Build settled match lookup: "home vs away" → is_correct
+  // Source identity + selection are mandatory. Team names alone cannot identify
+  // a fixture or a bet: return unknown for legacy plans without provenance.
   const settled = getSettledInvestments(getActiveInvestments())
-  const settledMatchMap = new Map() // key → { isCorrect, odds }
-  settled.forEach((inv) => {
-    const matches = Array.isArray(inv.matches) ? inv.matches : []
-    matches.forEach((m) => {
-      if (typeof m.is_correct !== 'boolean') return
-      const key = `${(m.home_team || '-').trim()} vs ${(m.away_team || '-').trim()}`
-      // Store the most recent result for this match
-      settledMatchMap.set(key, { isCorrect: m.is_correct, odds: toNumber(m.odds, 2.0) })
-    })
-  })
-
-  if (settledMatchMap.size < 3) return fallback
+  const resolveSelection = buildSettledSelectionResolver(settled)
+  const resolveLeg = (leg) => {
+    const result = resolveSelection(leg)
+    return typeof result?.isCorrect === 'boolean' ? result : null
+  }
 
   // Analyze each historical plan epoch
   const layerStats = { core: { hit: 0, total: 0 }, satellite: { hit: 0, total: 0 }, covering: { hit: 0, total: 0 }, moonshot: { hit: 0, total: 0 } }
@@ -4545,6 +4607,9 @@ export const buildComboRetrospective = (planHistory) => {
   let surplusMissHits = 0 // high-surplus legs NOT in any recommended combo that actually hit
   let surplusMissTotal = 0
   let epochsWithData = 0
+  const seenCombos = new Set()
+  const seenAnchors = new Set()
+  const seenSurplus = new Set()
 
   const FT_LAYER_ALIAS = { '主推': 'core', '次推': 'satellite', '博冷': 'moonshot' }
 
@@ -4554,17 +4619,14 @@ export const buildComboRetrospective = (planHistory) => {
 
     // Check if ANY match in this epoch has settled
     let hasSettledMatch = false
-    const allMatchKeys = new Set()
     recs.forEach((rec) => {
       const subset = Array.isArray(rec.subset) ? rec.subset : []
       subset.forEach((leg) => {
-        const mk = `${(leg.homeTeam || '-').trim()} vs ${(leg.awayTeam || '-').trim()}`
-        allMatchKeys.add(mk)
-        if (settledMatchMap.has(mk)) hasSettledMatch = true
+        if (resolveLeg(leg)) hasSettledMatch = true
       })
     })
     if (!hasSettledMatch) return
-    epochsWithData += 1
+    let newEvidence = false
 
     // --- Layer hit rates ---
     recs.forEach((rec) => {
@@ -4574,12 +4636,13 @@ export const buildComboRetrospective = (planHistory) => {
       const layerKey = ftTag && layerStats[ftTag] ? ftTag : null
 
       // Check if all legs of this combo have settled
-      const legResults = subset.map((leg) => {
-        const mk = `${(leg.homeTeam || '-').trim()} vs ${(leg.awayTeam || '-').trim()}`
-        return settledMatchMap.get(mk)
-      })
-      const allSettled = legResults.every((r) => r != null)
+      const legResults = subset.map(resolveLeg)
+      const allSettled = legResults.length > 0 && legResults.every((r) => r != null)
       if (!allSettled) return
+      const signature = JSON.stringify(subset.map((leg) => getSelectionIdentityKey(leg)).sort())
+      if (seenCombos.has(signature)) return
+      seenCombos.add(signature)
+      newEvidence = true
 
       const comboHit = legResults.every((r) => r.isCorrect)
 
@@ -4597,9 +4660,10 @@ export const buildComboRetrospective = (planHistory) => {
       // Anchor success: highest-conf leg in combo
       if (subset.length > 0) {
         const anchor = [...subset].sort((a, b) => (b.conf || 0) - (a.conf || 0))[0]
-        const anchorMk = `${(anchor.homeTeam || '-').trim()} vs ${(anchor.awayTeam || '-').trim()}`
-        const anchorResult = settledMatchMap.get(anchorMk)
-        if (anchorResult) {
+        const anchorResult = resolveLeg(anchor)
+        const anchorKey = getSelectionIdentityKey(anchor)
+        if (anchorResult && !seenAnchors.has(anchorKey)) {
+          seenAnchors.add(anchorKey)
           anchorTotal += 1
           if (anchorResult.isCorrect) anchorHits += 1
         }
@@ -4612,8 +4676,8 @@ export const buildComboRetrospective = (planHistory) => {
     recs.forEach((rec) => {
       const subset = Array.isArray(rec.subset) ? rec.subset : []
       subset.forEach((leg) => {
-        const mk = `${(leg.homeTeam || '-').trim()} vs ${(leg.awayTeam || '-').trim()}`
-        recommendedMatchKeys.add(mk)
+        const key = getSelectionIdentityKey(leg)
+        if (key) recommendedMatchKeys.add(key)
       })
     })
 
@@ -4622,14 +4686,16 @@ export const buildComboRetrospective = (planHistory) => {
     const candidateKeys = epoch.candidateMatchKeys || []
     candidateKeys.forEach((candidateKey) => {
       if (typeof candidateKey !== 'object') return
-      const mk = candidateKey.matchKey
+      const mk = getSelectionIdentityKey(candidateKey)
       const surplus = toNumber(candidateKey.surplus, 0)
-      if (surplus < 0.08 || recommendedMatchKeys.has(mk)) return // only care about high-surplus misses
-      const result = settledMatchMap.get(mk)
+      if (!mk || surplus < 0.08 || recommendedMatchKeys.has(mk) || seenSurplus.has(mk)) return
+      const result = resolveLeg(candidateKey)
       if (!result) return
+      seenSurplus.add(mk)
       surplusMissTotal += 1
       if (result.isCorrect) surplusMissHits += 1
     })
+    if (newEvidence) epochsWithData += 1
   })
 
   if (epochsWithData < 1) return fallback
@@ -4773,8 +4839,8 @@ export const getPerMatchEjrSnapshot = () => {
 // ═══════════════════════════════════════════════════════════════
 
 const evaluateComboTemporalHoldoutQuality = (rows, surplusThresholds, vigOverround) => {
-  if (!Array.isArray(rows) || rows.length < 8) {
-    return { quality: 1, strongHitRate: null, negativeHitRate: null, samples: 0 }
+  if (!Array.isArray(rows) || rows.length < PREQUENTIAL_MIN_TEST_MATCHES) {
+    return { quality: null, strongHitRate: null, negativeHitRate: null, samples: 0 }
   }
 
   const groups = {
@@ -4785,7 +4851,8 @@ const evaluateComboTemporalHoldoutQuality = (rows, surplusThresholds, vigOverrou
   }
 
   rows.forEach((row) => {
-    if (!Number.isFinite(row?.odds) || row.odds <= 1) return
+    if (!Number.isFinite(row?.odds) || row.odds <= 1 || !Number.isFinite(row.conf) ||
+        (row.actual !== 0 && row.actual !== 1)) return
     const implied = clamp((1 / row.odds) * (1 - vigOverround), 0.02, 0.98)
     const surplus = row.conf - implied
     let bucket = 'negative'
@@ -4807,6 +4874,9 @@ const evaluateComboTemporalHoldoutQuality = (rows, surplusThresholds, vigOverrou
   const neutralHitRate = hitRate('neutral')
   const overallHits = Object.values(groups).reduce((sum, g) => sum + g.hits, 0)
   const overallTotal = Object.values(groups).reduce((sum, g) => sum + g.total, 0)
+  if (overallTotal < PREQUENTIAL_MIN_TEST_MATCHES) {
+    return { quality: null, strongHitRate: null, negativeHitRate: null, samples: 0 }
+  }
   const overallHitRate = overallTotal > 0 ? overallHits / overallTotal : 0.5
 
   const strongDelta = strongHitRate != null ? strongHitRate - overallHitRate : 0
@@ -4872,7 +4942,7 @@ const evaluateComboPrequentialQuality = (rows) => {
     return {
       enabled: false,
       windowCount: 0,
-      quality: 1,
+      quality: null,
       strongHitRate: null,
       negativeHitRate: null,
       samples: 0,
@@ -4885,6 +4955,7 @@ const evaluateComboPrequentialQuality = (rows) => {
   let qualityWeight = 0
   let strongWeight = 0
   let negativeWeight = 0
+  let evaluatedWindows = 0
 
   windows.forEach((window) => {
     const localReliability = clamp((window.trainRows.length - 25) / 95, 0, 1)
@@ -4898,7 +4969,9 @@ const evaluateComboPrequentialQuality = (rows) => {
       },
       localProfile.vigOverround,
     )
-    const weight = Math.max(1, evalRow.samples || window.testRows.length)
+    if (evalRow.samples <= 0 || !Number.isFinite(evalRow.quality)) return
+    evaluatedWindows += 1
+    const weight = evalRow.samples
     weightedQuality += evalRow.quality * weight
     qualityWeight += weight
     if (Number.isFinite(evalRow.strongHitRate)) {
@@ -4913,8 +4986,8 @@ const evaluateComboPrequentialQuality = (rows) => {
 
   return {
     enabled: qualityWeight > 0,
-    windowCount: windows.length,
-    quality: qualityWeight > 0 ? Number((weightedQuality / qualityWeight).toFixed(4)) : 1,
+    windowCount: evaluatedWindows,
+    quality: qualityWeight > 0 ? Number((weightedQuality / qualityWeight).toFixed(4)) : null,
     strongHitRate: strongWeight > 0 ? Number((weightedStrongHitRate / strongWeight).toFixed(4)) : null,
     negativeHitRate: negativeWeight > 0 ? Number((weightedNegativeHitRate / negativeWeight).toFixed(4)) : null,
     samples: qualityWeight,
@@ -5173,7 +5246,12 @@ export const backtestComboHyperparams = () => {
   const familyBonusScale = clamp(0.04 + (0.22 - overallBrier) * 0.03, 0.02, 0.08)
 
   // ═══ Blend all with reliability ═══
-  const reliability = clamp(baseReliability * prequentialQuality.quality, 0, 1)
+  // Missing validation is not a perfect score; keep it explicitly unavailable
+  // while retaining the existing sample-size prior as the neutral fallback.
+  const qualityFactor = prequentialQuality.enabled && Number.isFinite(prequentialQuality.quality)
+    ? prequentialQuality.quality
+    : 1
+  const reliability = clamp(baseReliability * qualityFactor, 0, 1)
 
   const blend = (calibrated, defaultVal) =>
     Number((calibrated * reliability + defaultVal * (1 - reliability)).toFixed(4))
@@ -5204,7 +5282,7 @@ export const backtestComboHyperparams = () => {
           holdoutStrongHitRate: prequentialQuality.strongHitRate,
           holdoutNegativeHitRate: prequentialQuality.negativeHitRate,
         }
-      : { enabled: false, mode: 'insufficient', trainSamples: n, holdoutSamples: 0, holdoutQuality: 1, windowCount: 0, stepMatches: PREQUENTIAL_STEP_MATCHES },
+      : { enabled: false, mode: 'insufficient', trainSamples: n, holdoutSamples: 0, holdoutQuality: null, windowCount: 0, stepMatches: PREQUENTIAL_STEP_MATCHES },
     portfolioWeights: blendObj(portfolioWeights, fallback.portfolioWeights),
     stratifiedQuotas: blendObj(stratifiedQuotas, fallback.stratifiedQuotas),
     surplusThresholds: {
@@ -5246,11 +5324,73 @@ export const backtestComboHyperparams = () => {
 // This closes the feedback loop: weights are no longer static.
 // ═══════════════════════════════════════════════════════════════
 
+const getAdaptiveTrainingRevision = (investments) => {
+  const compareCanonicalRows = (a, b) => {
+    const left = JSON.stringify(a)
+    const right = JSON.stringify(b)
+    return left < right ? -1 : left > right ? 1 : 0
+  }
+  const rows = investments.map((inv) => ({
+    id: inv.id,
+    createdAt: inv.created_at,
+    status: inv.status,
+    inputs: inv.inputs,
+    profit: inv.profit,
+    mode: inv.mode,
+    // Include the resolved scoring features too: malformed modern fields may
+    // fall back to legacy values, which must still invalidate this revision.
+    components: computeInvestmentScore(inv, {}).components,
+    matches: (inv.matches || []).map((m) => ({
+      id: m.id,
+      home: m.home_team,
+      away: m.away_team,
+      conf: m.conf,
+      odds: m.odds,
+      mode: m.mode,
+      tysHome: m.tys_home ?? m.tys_base_home ?? m.tys_base,
+      tysAway: m.tys_away ?? m.tys_base_away ?? m.tys_home ?? m.tys_base_home ?? m.tys_base,
+      fid: m.fid ?? m.fid_base_home,
+      fseHome: m.fse_home,
+      fseAway: m.fse_away,
+      isCorrect: m.is_correct,
+      rating: m.match_rating,
+    })).sort(compareCanonicalRows),
+  })).sort(compareCanonicalRows)
+  const serialized = JSON.stringify(rows)
+  let hash = 2166136261
+  for (let i = 0; i < serialized.length; i += 1) {
+    hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619)
+  }
+  return {
+    signature: `v1:${serialized.length}:${hash >>> 0}`,
+    matchCount: rows.reduce((sum, row) => sum + row.matches.length, 0),
+  }
+}
+
 export const autoApplyAdaptiveWeights = () => {
+  const config = getSystemConfig()
+  const adaptiveConfig = config.adaptiveWeights || {}
+  if (adaptiveConfig.enabled !== true || adaptiveConfig.mode === 'disabled') {
+    return { applied: false, reason: 'disabled' }
+  }
+  if (adaptiveConfig.mode !== 'auto') return { applied: false, reason: 'suggest_only' }
+
+  const revision = getAdaptiveTrainingRevision(getSettledInvestments(getActiveInvestments()))
+  if (adaptiveConfig.lastAppliedDataSignature === revision.signature) {
+    return { applied: false, reason: 'unchanged_data' }
+  }
+  const lastMatchCount = toNumber(adaptiveConfig.lastAppliedMatchCount, Number.NaN)
+  const updateEveryN = Math.max(1, Math.floor(toNumber(adaptiveConfig.updateEveryN, 5)))
+  // New matches respect the cadence. A correction/removal of existing settled
+  // records is a new data revision even when the sample count does not grow.
+  if (Number.isFinite(lastMatchCount) && revision.matchCount > lastMatchCount &&
+      revision.matchCount - lastMatchCount < updateEveryN) {
+    return { applied: false, reason: 'waiting_for_samples' }
+  }
+
   const result = computeAdaptiveWeightSuggestions()
   if (!result.ready) return { applied: false, reason: 'insufficient_samples', ...result }
 
-  const config = getSystemConfig()
   const minConfidence = 0.3 // Only apply suggestions with >= 30% confidence
   const maxTotalChange = 0.08 // Safety: cap total weight shift per cycle
 
@@ -5259,6 +5399,7 @@ export const autoApplyAdaptiveWeights = () => {
   const appliedChanges = []
 
   result.suggestions.forEach((suggestion) => {
+    if (suggestion.key === 'weightConf') return
     if (suggestion.confidence < minConfidence) return
     if (Math.abs(suggestion.change) < 0.001) return
     // Guard: cap individual change magnitude
@@ -5292,6 +5433,8 @@ export const autoApplyAdaptiveWeights = () => {
     adaptiveWeights: {
       ...(config.adaptiveWeights || {}),
       lastUpdateAt: new Date().toISOString(),
+      lastAppliedDataSignature: revision.signature,
+      lastAppliedMatchCount: revision.matchCount,
       updateCount: ((config.adaptiveWeights || {}).updateCount || 0) + 1,
       lastAppliedChanges: appliedChanges,
     },
@@ -5337,7 +5480,7 @@ export const getMarketImpliedFailureRate = (odds) => {
  */
 export const getConfidenceWeight = (sampleSize) => {
   const size = Math.max(0, toNumber(sampleSize, 0))
-  if (size === 0) return 0.05
+  if (size === 0) return 0
   const raw = Math.log(1 + size) / Math.log(1 + 30)
   return clamp(raw, 0.05, 1.0)
 }
@@ -5623,7 +5766,7 @@ export const calculateDependencyPremium = (
   // 步骤2：核回归 — 全量历史加权共同失败率
   const bw = precomputedBandwidths || computeAdaptiveBandwidths(historicalData)
   const observed = getWeightedObservedFailure(historicalData, oddsA, oddsB, bw)
-  const pFailBothObserved = observed.totalWeight > 0 ? observed.failedTogether / observed.totalWeight : 0
+  const pFailBothObserved = observed.totalWeight > 0 ? observed.failedTogether / observed.totalWeight : Number.NaN
 
   // 步骤3：计算独立假设下的共同失败率
   const pFailBothIndependent = pFailA * pFailB
@@ -5655,6 +5798,7 @@ export const calculateDependencyPremium = (
 
         for (let j = 0; j < matches.length; j++) {
           if (j === i) continue
+          if (typeof matches[i]?.result !== 'boolean' || typeof matches[j]?.result !== 'boolean') continue
           const oj = toNumber(matches[j]?.odds, 0)
           if (oj <= 1) continue
           const idxJ = getBandIndex(oj)
@@ -5731,12 +5875,12 @@ export const calculateDependencyPremium = (
   // 步骤5：基于有效样本量的信心权重（ESS替代raw count）
   const confidenceWeight = getConfidenceWeight(observed.effectiveSampleSize)
 
-  // 步骤6：计算p值（使用有效样本量）
-  const pValue = calculateBinomialPValue(
-    observed.failedTogether,
-    observed.totalWeight,
-    pFailBothIndependent,
-  )
+  // An approximate weighted-normal diagnostic, NOT an exact binomial test:
+  // arbitrary scaling of kernel weights must not manufacture observations.
+  const effectiveSampleSize = observed.effectiveSampleSize
+  const pValue = effectiveSampleSize > 0 && Number.isFinite(pFailBothObserved)
+    ? calculateBinomialPValue(pFailBothObserved * effectiveSampleSize, effectiveSampleSize, pFailBothIndependent)
+    : Number.NaN
 
   const isSignificant = pValue < 0.03
 
@@ -5750,6 +5894,7 @@ export const calculateDependencyPremium = (
     effectiveSampleSize: observed.effectiveSampleSize,
     confidence: confidenceWeight,
     pValue,
+    pValueMethod: 'ess_normal_approximation',
     isSignificant,
     observedFailedCount: observed.failedTogether,
     observedPartialMiss: observed.partialMiss,
@@ -6024,9 +6169,11 @@ export const assessFragilityScore = (
 
   if (!Number.isFinite(premium.premium)) {
     return {
-      fragilityScore: 0,
-      fragilityPercentage: '0%',
+      fragilityScore: Number.NaN,
+      fragilityPercentage: '—',
       riskLevel: 'insufficient_data',
+      confidence: 0,
+      isSignificant: false,
       components: {
         premium,
         bias: null,
@@ -6123,6 +6270,10 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
     }
   }
 
+  if (!pairAnalysis.some((pair) => Number.isFinite(pair.assessment.fragilityScore))) {
+    return { comboSize: matchGroup.length, overallFragility: Number.NaN, pairAnalysis, criticalPairs: [], recommendations: [] }
+  }
+
   // ==========================================================================
   // MSI v2: Copula + Time-Varying + Shapley Attribution
   // ==========================================================================
@@ -6189,6 +6340,7 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
   pairAnalysis.forEach((item) => {
     const [i, j] = item.pair
     const premium = item.assessment?.components?.premium || {}
+    if (!(premium.effectiveSampleSize > 0) || !Number.isFinite(premium.pFailBothObserved)) return
     const pA = Number.isFinite(pFailByMatch[i]) ? pFailByMatch[i] : toNumber(premium.pFailA, 0.5)
     const pB = Number.isFinite(pFailByMatch[j]) ? pFailByMatch[j] : toNumber(premium.pFailB, 0.5)
     const qInd = clamp(pA * pB, 1e-8, 0.999999)
@@ -6208,7 +6360,6 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
     const nEff = Math.max(
       0,
       toNumber(premium.effectiveSampleSize, 0),
-      toNumber(premium.weightedCount, 0),
     )
     const priorStrength = 16
     const posteriorMean = clamp(
@@ -6320,12 +6471,12 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
   }
 
   // 计算整体脆弱性（加权平均）
-  const weights = pairAnalysis.map((p) => p.assessment.confidence)
+  const weights = pairAnalysis.map((p) => Number.isFinite(p.assessment.fragilityScore) ? (p.assessment.confidence || 0) : 0)
   const totalWeight = weights.reduce((sum, w) => sum + w, 0)
 
   const overallFragility = totalWeight > 0 ?
-    pairAnalysis.reduce((sum, p, idx) => sum + p.assessment.fragilityScore * weights[idx], 0) / totalWeight :
-    0
+    pairAnalysis.reduce((sum, p, idx) => weights[idx] > 0 ? sum + p.assessment.fragilityScore * weights[idx] : sum, 0) / totalWeight :
+    Number.NaN
 
   // 识别关键脆弱对（脆弱性 > 40%）
   const criticalPairs = pairAnalysis
@@ -6427,6 +6578,14 @@ export const generateFragilityRecommendations = (matchGroup = [], pairAnalysis =
  */
 export const __testables = {
   calcKellyStake,
+  calcKellyRowStake,
+  getForecastStates,
+  toKellySimulationRowsFromInvestments,
+  simulateKellyDivisorDeterministic,
+  getRowTemporalTs,
+  buildPrequentialWalkForwardWindows,
+  evaluateComboTemporalHoldoutQuality,
+  evaluateComboPrequentialQuality,
   resolveMonteCarloRuns,
   createSeededRng,
   buildMonteCarloSeed,

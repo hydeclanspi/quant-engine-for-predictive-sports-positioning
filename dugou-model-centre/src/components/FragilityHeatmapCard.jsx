@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Activity, TrendingUp, X } from 'lucide-react'
 import { assessComboFragility, getOddsBand } from '../lib/analytics'
 import { getInvestments } from '../lib/localData'
@@ -6,6 +6,7 @@ import ExplainHover from './ExplainHover'
 
 const getMedian = (values = []) => {
   const nums = values
+    .filter((value) => value !== null && value !== undefined)
     .map((value) => Number(value))
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => a - b)
@@ -61,7 +62,7 @@ const resolveDeltaSurvival = (premium = null, msi = null) => {
 
 const getRiskLevelByScore = (score) => {
   const s = Number(score)
-  if (!Number.isFinite(s)) return 'low'
+  if (!Number.isFinite(s)) return 'insufficient_data'
   if (s > 60) return 'critical'
   if (s > 40) return 'high'
   if (s > 25) return 'medium'
@@ -75,6 +76,12 @@ const getRiskLevelByScore = (score) => {
  */
 export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSelectPair = null }) {
   const [mappedViewEnabled, setMappedViewEnabled] = useState(true)
+  const [dataRevision, setDataRevision] = useState(0)
+  useEffect(() => {
+    const refresh = () => setDataRevision((revision) => revision + 1)
+    window.addEventListener('dugou:data-changed', refresh)
+    return () => window.removeEventListener('dugou:data-changed', refresh)
+  }, [])
 
   // 历史数据缓存
   const historicalData = useMemo(() => {
@@ -82,7 +89,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
     const settledInvestments = investments
       .filter(inv => {
         const matches = Array.isArray(inv.matches) ? inv.matches : []
-        if (matches.length < 2) return false
+        if (inv.is_archived || matches.length < 2) return false
         const hasMatchResults = matches.some(m => typeof m.is_correct === 'boolean')
         const hasRevenues = inv.revenues !== undefined && inv.revenues !== null
         const isSettled = inv.status === 'win' || inv.status === 'lose' || inv.status === 'settled' || inv.status === 'settled_win' || inv.status === 'settled_loss'
@@ -96,12 +103,12 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
             result: typeof m.is_correct === 'boolean' ? m.is_correct : undefined,
           })),
           succeeded: Number(inv.revenues || 0) > 0 || inv.status === 'settled_win' || inv.status === 'win',
-          createdAt: inv.created_at || inv.createdAt || new Date().toISOString(),
+          createdAt: inv.created_at || inv.createdAt,
         }
       })
       .filter(d => d.matches.length >= 2 && d.matches.some(m => m.result !== undefined))
     return settledInvestments
-  }, [])
+  }, [dataRevision])
 
   // 脆弱性矩阵计算 — 含完整 assessment 数据
   const fragilityMatrix = useMemo(() => {
@@ -118,13 +125,13 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
         const components = pairAssessment.components || null
         const delta = resolveDeltaSurvival(components?.premium, components?.msi)
         const scoreRaw = Number(pairAssessment.fragilityScore)
-        const score = Number.isFinite(scoreRaw) ? scoreRaw : 0
+        const score = Number.isFinite(scoreRaw) ? scoreRaw : Number.NaN
 
         return {
           i,
           j,
           score: Number(score.toFixed(2)),
-          riskLevel: pairAssessment.riskLevel || 'low',
+          riskLevel: pairAssessment.riskLevel || 'insufficient_data',
           isSignificant: pairAssessment.isSignificant || false,
           confidence: pairAssessment.confidence || 0,
           // 完整数据用于详情面板
@@ -206,6 +213,11 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
   // ─── 品牌色系 — 10段细分光谱 ───
   // 翡翠 → 薄荷 → 青绿 → 天蓝 → 钴蓝 → 靛蓝 → 紫罗兰 → 香槟金 → 银灰 → 深岩
   const getHeatStyle = (score) => {
+    if (!Number.isFinite(score)) return {
+      bg: 'bg-stone-50/80', border: 'border-stone-200/60', text: 'text-stone-400',
+      glow: '', dot: 'from-stone-100 to-stone-200 border-stone-200/60',
+      orb: 'radial-gradient(circle at 36% 36%, #fafaf9, #e7e5e4)', orbShadow: 'none',
+    }
     // 0-10: 翡翠 Emerald — 最安全，清新透亮
     if (score < 10) return {
       bg: 'bg-gradient-to-br from-emerald-50/90 to-green-50/70',
@@ -310,7 +322,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
 
   // 风险级别文字映射
   const getLevelLabel = (level) => {
-    const map = { low: 'Low', medium: 'Moderate', high: 'Elevated', critical: 'High' }
+    const map = { low: 'Low', medium: 'Moderate', high: 'Elevated', critical: 'High', insufficient_data: '样本不足' }
     return map[level] || level
   }
 
@@ -321,8 +333,9 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
   }
 
   // 统计
-  const avgScore = displayFragilityMatrix.length > 0
-    ? (displayFragilityMatrix.reduce((s, m) => s + m.displayScore, 0) / displayFragilityMatrix.length).toFixed(1)
+  const availableScores = displayFragilityMatrix.filter((pair) => Number.isFinite(pair.displayScore))
+  const avgScore = availableScores.length > 0
+    ? (availableScores.reduce((s, m) => s + m.displayScore, 0) / availableScores.length).toFixed(1)
     : '\u2014'
   const highRiskCount = displayFragilityMatrix.filter(m => m.displayScore > 40).length
 
@@ -344,7 +357,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
           </div>
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] border border-sky-200/80 bg-[linear-gradient(120deg,rgba(224,242,254,0.86),rgba(255,255,255,0.9)_52%,rgba(224,242,254,0.84))] text-[11px] font-medium text-sky-700 tracking-[0.02em] shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_10px_22px_-18px_rgba(14,165,233,0.5)] backdrop-blur-[1px]">
             <Activity size={12} strokeWidth={1.9} className="text-sky-500" />
-            冰裂共振评分 0-100%
+            相对风险指数 0–100
           </span>
         </div>
         <p className="relative text-sm text-stone-400 leading-relaxed">
@@ -366,7 +379,16 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
     const nameB = formatTeamName(matchB, resolvedExpandedPair.j)
     const oddsA = matchA?.odds?.toFixed(2) || '—'
     const oddsB = matchB?.odds?.toFixed(2) || '—'
-    const detailScore = Number(resolvedExpandedPair.displayScore ?? resolvedExpandedPair.score ?? 0)
+    const detailScore = Number(resolvedExpandedPair.displayScore ?? resolvedExpandedPair.score ?? Number.NaN)
+    if (!Number.isFinite(detailScore)) return (
+      <div className="rounded-2xl border border-stone-200/60 bg-white/80 p-5 text-sm text-stone-500">
+        <div className="flex items-center justify-between gap-4">
+          <span>{nameA} × {nameB}</span>
+          <button type="button" aria-label="关闭详情" onClick={() => onSelectPair?.(null)}><X size={16} /></button>
+        </div>
+        <p className="mt-3">暂无可用的已结算匹配样本，暂不评估依赖风险。</p>
+      </div>
+    )
     const style = getHeatStyle(detailScore)
     const detailRiskLevel = getRiskLevelByScore(detailScore)
 
@@ -493,7 +515,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                     <p className="text-[10px] font-medium text-stone-400 tracking-wider uppercase mb-2 pl-2">Resonance</p>
                     <div className="flex items-baseline gap-1 pl-2">
                       <span className="text-2xl font-bold tabular-nums leading-none" style={{ backgroundImage: rs.gradient, backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextFillColor: 'transparent' }}>{detailScore.toFixed(2)}</span>
-                      <span className="text-xs font-medium" style={{ backgroundImage: rs.gradient, backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextFillColor: 'transparent', opacity: 0.7 }}>%</span>
+                      <span className="text-xs font-medium" style={{ backgroundImage: rs.gradient, backgroundClip: 'text', WebkitBackgroundClip: 'text', color: 'transparent', WebkitTextFillColor: 'transparent', opacity: 0.7 }}>分</span>
                     </div>
                     {/* 寻光轨迹 — 光点 + 拖尾 + 细轨道 */}
                     {(() => {
@@ -760,7 +782,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                   <span>Global fail rate <span className="font-medium text-stone-500 tabular-nums">{(globalFailureRate * 100).toFixed(0)}%</span></span>
                 )}
                 {Number.isFinite(resolvedExpandedPair.confidence) && (
-                  <span>Confidence <span className="font-medium text-stone-500 tabular-nums">{(resolvedExpandedPair.confidence * 100).toFixed(1)}%</span></span>
+                  <span>样本权重 <span className="font-medium text-stone-500 tabular-nums">{(resolvedExpandedPair.confidence * 100).toFixed(1)}%</span></span>
                 )}
                 {hasBias && (
                   <span className="text-indigo-400">
@@ -769,7 +791,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                   </span>
                 )}
                 {!hasBias && sampleSize > 0 && (
-                  <span>No bias detected</span>
+                  <span>未触发稀疏样本提示</span>
                 )}
               </div>
               <span className="text-[10px] text-stone-300">Click another cell to compare</span>
@@ -814,7 +836,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
             </button>
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-[10px] border border-sky-200/80 bg-[linear-gradient(120deg,rgba(224,242,254,0.86),rgba(255,255,255,0.9)_52%,rgba(224,242,254,0.84))] text-[11px] font-medium text-sky-700 tracking-[0.02em] shadow-[inset_0_1px_0_rgba(255,255,255,0.86),0_10px_22px_-18px_rgba(14,165,233,0.5)] backdrop-blur-[1px]">
               <Activity size={12} strokeWidth={1.9} className="text-sky-500" />
-              冰裂共振评分 0-100%
+              相对风险指数 0–100
             </span>
           </div>
         </div>
@@ -955,8 +977,8 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                           {axisHighlighted && !isSelected && (
                             <span className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-br from-amber-100/28 via-yellow-50/16 to-amber-50/10" />
                           )}
-                          <span className="relative z-10 text-base font-semibold leading-none tabular-nums">{Number(pairData.displayScore).toFixed(2)}</span>
-                          <span className="relative z-10 text-[9px] opacity-50 mt-0.5">%</span>
+                          <span className="relative z-10 text-base font-semibold leading-none tabular-nums">{Number.isFinite(pairData.displayScore) ? pairData.displayScore.toFixed(2) : '—'}</span>
+                          <span className="relative z-10 text-[9px] opacity-50 mt-0.5">{Number.isFinite(pairData.displayScore) ? '分' : '样本不足'}</span>
                         </button>
                       </td>
                     )
@@ -984,7 +1006,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
           <div className="flex items-center gap-5 text-[11px]">
             <div className="text-right">
               <span className="text-stone-400">Avg</span>
-              <span className="ml-1.5 font-semibold text-stone-600 tabular-nums">{avgScore}%</span>
+              <span className="ml-1.5 font-semibold text-stone-600 tabular-nums">{avgScore}</span>
             </div>
             <div className="text-right">
               <span className="text-stone-400">Elevated</span>

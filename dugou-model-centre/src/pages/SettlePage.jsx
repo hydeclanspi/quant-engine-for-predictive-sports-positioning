@@ -3,7 +3,7 @@ import { ChevronDown, ChevronUp, ChevronRight, Check, X, Trash2, Sparkles, Loade
 import { deleteInvestment, getInvestments, updateInvestment, updateInvestments } from '../lib/localData'
 import { autoApplyAdaptiveWeights } from '../lib/analytics'
 import { handleNoteShortcut } from '../lib/noteFormatting'
-import { normalizeEntryName } from '../lib/entryParsing'
+import { buildSettledSelectionResolver, getMatchSourceIdentity } from '../lib/investmentIdentity'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
 import { useLabels } from '../lib/labels'
 import { isPreviewMode } from '../lib/displayMode'
@@ -49,6 +49,7 @@ const createPendingCombos = () =>
       totalInputs: Number(item.inputs || 0),
       matches:
         item.matches?.map((match) => ({
+          ...getMatchSourceIdentity(match, item.id),
           homeTeam: match.home_team || '',
           awayTeam: match.away_team || '',
           match: `${match.home_team || '-'} vs ${match.away_team || '-'}`,
@@ -89,40 +90,7 @@ const getComboLabel = (matchCount) => {
 const AJR_MIN = 0
 const AJR_MAX = 0.8
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
-const normalizeKey = (value) =>
-  String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-
 const isEmptyValue = (value) => value === '' || value === null || value === undefined
-
-const buildTeamMatchupKey = (homeTeam, awayTeam) => {
-  const home = normalizeKey(homeTeam)
-  const away = normalizeKey(awayTeam)
-  if (!home || !away) return ''
-  // 主客队严格匹配，避免把同队对阵但主客对调的历史误判为同一场
-  return `${home}::${away}`
-}
-
-const toEntryNames = (entryText = '') =>
-  normalizeEntryName(entryText)
-    .split(',')
-    .map((name) => normalizeEntryName(name).toLowerCase())
-    .filter(Boolean)
-
-const buildEntryKey = (entryText = '') => {
-  const names = [...new Set(toEntryNames(entryText))]
-  if (names.length === 0) return ''
-  return names.sort().join('|')
-}
-
-const buildHistoryLookupKey = ({ homeTeam, awayTeam, entryText }) => {
-  const matchupKey = buildTeamMatchupKey(homeTeam, awayTeam)
-  const entryKey = buildEntryKey(entryText)
-  if (!matchupKey || !entryKey) return ''
-  return `${matchupKey}##${entryKey}`
-}
 
 const toNumberOrNull = (value) => {
   const n = Number.parseFloat(value)
@@ -206,45 +174,7 @@ export default function SettlePage() {
   }, [])
 
   const settledHistoryLookup = useMemo(() => {
-    const lookup = new Map()
-
-    getInvestments()
-      .filter((item) => item.status !== 'pending')
-      .forEach((investment) => {
-        const createdAtTs = Number(new Date(investment.created_at).getTime()) || 0
-        const matches = Array.isArray(investment.matches) ? investment.matches : []
-
-        matches.forEach((match) => {
-          const entryText =
-            match.entry_text ||
-            (Array.isArray(match.entries) ? match.entries.map((entry) => normalizeEntryName(entry?.name || '')).join(', ') : '')
-          const key = buildHistoryLookupKey({
-            homeTeam: match.home_team,
-            awayTeam: match.away_team,
-            entryText,
-          })
-          if (!key) return
-
-          const source = {
-            createdAtTs,
-            results: String(match.results || '').trim(),
-            isCorrect: typeof match.is_correct === 'boolean' ? match.is_correct : null,
-            matchRating: toAjrOrNull(match.match_rating),
-            matchRep: toNumberOrNull(match.match_rep),
-            postNote: String(match.post_note || '').trim(),
-          }
-          const hasFillPayload =
-            source.results || source.isCorrect !== null || source.matchRating !== null || source.matchRep !== null || source.postNote
-          if (!hasFillPayload) return
-
-          const previous = lookup.get(key)
-          if (!previous || source.createdAtTs > previous.createdAtTs) {
-            lookup.set(key, source)
-          }
-        })
-      })
-
-    return lookup
+    return buildSettledSelectionResolver(getInvestments())
   }, [pendingCombos.length])
 
   useEffect(() => {
@@ -301,7 +231,7 @@ export default function SettlePage() {
   }, [pendingCombos])
 
   useEffect(() => {
-    if (pendingCombos.length === 0 || settledHistoryLookup.size === 0) return
+    if (pendingCombos.length === 0) return
     // In preview mode the demo bundle intentionally pairs each pending
     // marquee single with a settled bundle containing the same teams.
     // The history-auto-fill engine would happily pull last week's
@@ -327,15 +257,15 @@ export default function SettlePage() {
         const comboMatch = combo.matches[matchIdx]
         if (!comboMatch) return formMatch
 
-        const key = buildHistoryLookupKey({
-          homeTeam: comboMatch.homeTeam,
-          awayTeam: comboMatch.awayTeam,
-          entryText: comboMatch.entry,
-        })
-        if (!key) return formMatch
-
-        const matched = settledHistoryLookup.get(key)
-        if (!matched) return formMatch
+        const resolved = settledHistoryLookup(comboMatch)
+        if (!resolved) return formMatch
+        const matched = {
+          results: String(resolved.match.results || '').trim(),
+          isCorrect: typeof resolved.match.is_correct === 'boolean' ? resolved.match.is_correct : null,
+          matchRating: toAjrOrNull(resolved.match.match_rating),
+          matchRep: toNumberOrNull(resolved.match.match_rep),
+          postNote: String(resolved.match.post_note || '').trim(),
+        }
 
         let matchChanged = false
         const filledFields = []
@@ -883,8 +813,12 @@ export default function SettlePage() {
     }
     const isWin = form.matches.every((match) => match.isCorrect === true)
     const profit = Number((Number.parseFloat(form.revenues) - combo.totalInputs).toFixed(2))
+    const saved = applySettlement(combo, form)
+    if (!saved) {
+      window.alert('结算未写入，表单已保留，请重试。')
+      return
+    }
     triggerWaxSealStamp(event?.currentTarget, { tone: isWin ? 'win' : 'neutral', profit })
-    applySettlement(combo, form)
 
     // 结算后自动微调自适应权重（安全约束：单次 ±0.02，总量 ≤0.08）
     try { autoApplyAdaptiveWeights() } catch { /* non-critical */ }

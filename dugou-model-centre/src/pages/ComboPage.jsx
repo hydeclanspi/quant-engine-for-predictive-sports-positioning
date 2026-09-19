@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ChevronDown, Plus, RefreshCw, ShieldCheck, ShieldOff, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react'
-import { bumpTeamSamples, getInvestments, getSystemConfig, saveInvestment } from '../lib/localData'
+import { bumpTeamSamples, getInvestments, getSystemConfig, saveInvestments } from '../lib/localData'
+import { buildForecastSnapshot, capRecommendedStake } from '../lib/investmentForecast'
+import { getMatchSourceIdentity } from '../lib/investmentIdentity'
 import { getPredictionCalibrationContext, buildComboRetrospective, getReservoirState } from '../lib/analytics'
 import {
   buildAtomicMatchProfile,
@@ -398,75 +400,100 @@ const backtestDynamicParams = (calibrationContext) => {
 // which underestimated correlation risk (VaR too optimistic).
 const runPortfolioMonteCarlo = (packageItems, iterations = 50000) => {
   if (!packageItems || packageItems.length === 0) return null
-
-  // ── Step 1: Build unique match index (shared sampling) ──
-  // Each unique match (by key) gets ONE probability and ONE random draw per iteration.
+  iterations = Math.max(1, Math.min(100000, Math.floor(Number(iterations) || 50000)))
+  // Actual money only. Reserve rows with amount=0 must not turn into invented
+  // stakes; theoretical weights remain confined to pack-ranking scores.
+  const activeItems = packageItems.filter((item) => Number.isFinite(Number(item.amount)) && Number(item.amount) > 0)
   const matchKeyToIdx = new Map()
-  const matchProbs = [] // indexed by unique match index
-  packageItems.forEach((item) => {
-    (item.subset || []).forEach((m) => {
-      const mk = m.key || `${m.homeTeam}-${m.awayTeam}-${m.entry}`
-      if (!matchKeyToIdx.has(mk)) {
-        const prob = Math.max(0.01, Math.min(0.99, Number(m.calibratedP ?? m.conf ?? 0.5)))
-        matchKeyToIdx.set(mk, matchProbs.length)
-        matchProbs.push(prob)
-      }
-    })
-  })
-
-  // ── Step 2: Build per-combo structure referencing shared match indices ──
-  const combos = packageItems.map((item) => {
+  const matchStates = []
+  const profileSignatures = new Map()
+  const familyKeys = new Map()
+  const issues = new Set()
+  const combos = activeItems.map((item) => {
+    if (!item.subset?.length) issues.add('存在缺少场次的方案，无法模拟。')
     const legMatchIndices = (item.subset || []).map((m) => {
       const mk = m.key || `${m.homeTeam}-${m.awayTeam}-${m.entry}`
-      return matchKeyToIdx.get(mk) ?? -1
-    }).filter((idx) => idx >= 0)
-    const odds = Math.max(1.01, Number(item.combinedOdds || item.odds || 2.0))
-    const stake = getEffectiveStakeForScoring(item)
-    return { legMatchIndices, odds, stake }
+      const profile = m.atomicProfile?.modelVersion === 'atomic-v2' ? m.atomicProfile : buildAtomicMatchProfile({
+        entries: m.entries?.length ? m.entries : [{ name: m.entry || 'legacy', odds: m.odds }],
+        unionProbability: m.calibratedP ?? m.adjustedProb ?? m.conf,
+        fallbackOdds: m.odds,
+      })
+      if (profile.valid === false || profile.modelStatus === 'approximate') {
+        issues.add(profile.issues?.[0]?.message || profile.warnings?.[0] || '场次分布不支持精确模拟。')
+        return -1
+      }
+      const states = profile.states || []
+      const totalProbability = states.reduce((sum, state) => sum + (state?.probability ?? NaN), 0)
+      if (!states.length || !Number.isFinite(totalProbability) || Math.abs(totalProbability - 1) > 1e-6 ||
+          states.some((state) => !state || !Number.isFinite(state.probability) || state.probability < 0 || !Number.isFinite(state.gross) || state.gross < 0)) {
+        issues.add('场次概率分布无效，无法模拟。')
+        return -1
+      }
+      const signature = JSON.stringify(states.map(({ id, probability, gross }) => [id, probability, gross]))
+      if (profileSignatures.has(mk) && profileSignatures.get(mk) !== signature) {
+        issues.add('同一场次存在不一致的收益分布，无法合并模拟。')
+      }
+      profileSignatures.set(mk, signature)
+      const family = buildMatchFamilyKey(m)
+      if (family && familyKeys.has(family) && familyKeys.get(family) !== mk) {
+        issues.add('同场不同录入或不同预测的共同结果尚未建模，暂不显示精确风险模拟。')
+      }
+      if (family) familyKeys.set(family, mk)
+      if (!matchKeyToIdx.has(mk)) {
+        matchKeyToIdx.set(mk, matchStates.length)
+        matchStates.push(states)
+      }
+      return matchKeyToIdx.get(mk)
+    })
+    return { legMatchIndices, stake: Number(item.amount) }
   })
-
-  const uniqueMatchCount = matchProbs.length
+  if (issues.size) return { valid: false, iterations: 0, issues: [...issues], histogram: [] }
+  const uniqueMatchCount = matchStates.length
 
   // Seeded PRNG (xorshift32) for reproducibility — improved seed mixing
   let seed = 2654435761
   seed ^= (combos.length * 2654435761) >>> 0
   for (let i = 0; i < uniqueMatchCount; i++) {
-    seed ^= Math.round(matchProbs[i] * 1e6 + i * 7919)
+    matchStates[i].forEach((state) => { seed ^= Math.round(state.probability * 1e6 + state.gross * 997 + i * 7919) })
     seed = (seed ^ (seed << 13)) >>> 0
   }
-  combos.forEach((c) => { seed ^= Math.round(c.stake * 31 + c.odds * 997) })
-  const rand = () => { seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296 }
+  combos.forEach((c) => { seed ^= Math.round(c.stake * 31) })
+  if (seed === 0) seed = 2654435761
+  const rand = () => { seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5; return (seed >>> 0) / 4294967296 }
 
   const pnls = new Float64Array(iterations)
   let profitCount = 0
   let allLoseCount = 0
   // Pre-allocate shared match outcome array (reused each iteration)
-  const matchOutcomes = new Uint8Array(uniqueMatchCount)
+  const matchGross = new Float64Array(uniqueMatchCount)
 
   for (let i = 0; i < iterations; i++) {
     // ── Draw shared match outcomes: one roll per unique match ──
     for (let m = 0; m < uniqueMatchCount; m++) {
-      matchOutcomes[m] = rand() < matchProbs[m] ? 1 : 0
+      const roll = rand()
+      const states = matchStates[m]
+      let cumulative = 0
+      matchGross[m] = states[states.length - 1].gross
+      for (const state of states) {
+        cumulative += state.probability
+        if (roll < cumulative) { matchGross[m] = state.gross; break }
+      }
     }
 
     let totalPnl = 0
-    let anyWin = false
+    let anyReturn = false
     for (let c = 0; c < combos.length; c++) {
       const combo = combos[c]
-      let allHit = true
+      let gross = 1
       for (let l = 0; l < combo.legMatchIndices.length; l++) {
-        if (!matchOutcomes[combo.legMatchIndices[l]]) { allHit = false; break }
+        gross *= matchGross[combo.legMatchIndices[l]]
       }
-      if (allHit) {
-        totalPnl += combo.stake * (combo.odds - 1)
-        anyWin = true
-      } else {
-        totalPnl -= combo.stake
-      }
+      totalPnl += combo.stake * (gross - 1)
+      if (gross > 0) anyReturn = true
     }
     pnls[i] = totalPnl
     if (totalPnl > 0) profitCount++
-    if (!anyWin) allLoseCount++
+    if (combos.length > 0 && !anyReturn) allLoseCount++
   }
 
   // Sort for percentile calculations
@@ -492,6 +519,11 @@ const runPortfolioMonteCarlo = (packageItems, iterations = 50000) => {
   const maxBucketCount = Math.max(1, ...histogram.map((b) => b.count))
 
   return {
+    valid: true,
+    modelVersion: 'atomic-v2',
+    stakeMode: 'actual',
+    totalStake: combos.reduce((sum, combo) => sum + combo.stake, 0),
+    assumptions: ['不同物理场次独立；相同场次共享原子结果。'],
     iterations,
     profitProb: profitCount / iterations,
     allLoseProb: allLoseCount / iterations,
@@ -531,12 +563,21 @@ const getTheoreticalWeightPctForScoring = (item) => {
   return 0
 }
 
-const getEffectiveStakeForScoring = (item) => {
+const getEffectiveStakeForScoring = (item, { theoretical = false } = {}) => {
   const amount = Number(item?.amount)
   if (Number.isFinite(amount) && amount > 0) return amount
+  if (!theoretical) return 0
   const theoreticalWeightPct = getTheoreticalWeightPctForScoring(item)
   if (theoreticalWeightPct > 0) return Math.max(1, theoreticalWeightPct)
   return 10
+}
+
+// These are hypothetical ranking weights, not RMB stakes used by Monte Carlo.
+const getRankingUtility = (item) => {
+  for (const value of [item?.boostedUtility, item?.softUtility, item?.utility]) {
+    if (typeof value === 'number' && Number.isFinite(value)) return value
+  }
+  return 0
 }
 
 const getPortfolioKeyFromCombos = (combos) => {
@@ -624,7 +665,7 @@ const optimizePortfolioAllocations = (
   // Score each portfolio
   const scored = portfolios.map((indices) => {
     const selected = indices.map((i) => items[i])
-    const effectiveStakes = selected.map((item) => getEffectiveStakeForScoring(item))
+    const effectiveStakes = selected.map((item) => getEffectiveStakeForScoring(item, { theoretical: true }))
     const totalStake = effectiveStakes.reduce((s, value) => s + value, 0)
     const totalInvest = selected.reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0)
     const totalTheoreticalWeightPct = selected.reduce(
@@ -777,7 +818,7 @@ const buildPortfolioAllocationRowFromCombos = (
     })
   }
 
-  const effectiveStakes = selected.map((item) => getEffectiveStakeForScoring(item))
+  const effectiveStakes = selected.map((item) => getEffectiveStakeForScoring(item, { theoretical: true }))
   const totalStake = effectiveStakes.reduce((sum, value) => sum + value, 0)
   const totalInvest = selected.reduce((sum, item) => sum + Math.max(0, Number(item?.amount) || 0), 0)
   const totalTheoreticalWeightPct = selected.reduce((sum, item) => sum + getTheoreticalWeightPctForScoring(item), 0)
@@ -1055,7 +1096,7 @@ const mmrRerank = (candidates, lambda = 0.6, maxPick = 10, coverageTargetKeys = 
   const concentrationWeight = concBase + safeEta * concEtaScale
 
   // Normalize utilities to [0, 1] for fair blending
-  const utilValues = candidates.map((c) => c.utility)
+  const utilValues = candidates.map(getRankingUtility)
   const uMin = Math.min(...utilValues)
   const uMax = Math.max(...utilValues)
   const uRange = uMax - uMin || 1
@@ -1071,7 +1112,7 @@ const mmrRerank = (candidates, lambda = 0.6, maxPick = 10, coverageTargetKeys = 
 
     remaining.forEach((idx) => {
       const cand = candidates[idx]
-      const normUtil = (cand.utility - uMin) / uRange
+      const normUtil = (getRankingUtility(cand) - uMin) / uRange
 
       // Max similarity to any already selected
       let maxSim = 0
@@ -1164,7 +1205,7 @@ const stratifiedSelect = (scoredCombos, totalSlots = 10, minLegs = 2, hyperparam
 
   // Sort each group internally by utility
   byLegs.forEach((group) => {
-    group.sort((a, b) => b.utility - a.utility || b.sharpe - a.sharpe)
+    group.sort((a, b) => getRankingUtility(b) - getRankingUtility(a) || b.sharpe - a.sharpe)
   })
 
   // Default quota preferences: favor 3-4 legs, fewer for 2 and 5, minimal for 1
@@ -1223,7 +1264,7 @@ const stratifiedSelect = (scoredCombos, totalSlots = 10, minLegs = 2, hyperparam
     const selectedSigs = new Set(result.map((r) => buildSubsetSignature(r.subset)))
     const remaining = scoredCombos
       .filter((c) => c.subset.length >= minLegs && !selectedSigs.has(buildSubsetSignature(c.subset)))
-      .sort((a, b) => b.utility - a.utility)
+      .sort((a, b) => getRankingUtility(b) - getRankingUtility(a))
     for (const r of remaining) {
       if (result.length >= totalSlots) break
       result.push(r)
@@ -1270,7 +1311,7 @@ const applyCoverageDynamicBoost = (scoredCombos, selectedMatches, baseDecay = 0.
     return {
       ...combo,
       coverageBoost,
-      boostedUtility: combo.utility + coverageBoost,
+      boostedUtility: getRankingUtility(combo) + coverageBoost,
     }
   })
 }
@@ -1594,6 +1635,7 @@ const collectHistoryCandidates = (historyRow) => {
       .join(', ')
 
     map.set(key, {
+      ...getMatchSourceIdentity(rawMatch, rawMatch.investmentId || rawMatch.investment_id),
       key,
       investmentId,
       matchIndex,
@@ -1698,7 +1740,7 @@ const normalizeHistoryRecommendation = (row, index = 0) => {
     return clamp(hitProbability, 0, 1)
   })()
 
-  const combinedOdds = Math.max(1.01, toFiniteNumber(row?.combinedOdds ?? row?.odds, derivedFromAtomic?.equivalentOdds ?? 1.01))
+  const combinedOdds = toFiniteNumber(row?.combinedOdds ?? row?.odds, derivedFromAtomic?.equivalentOdds ?? 0)
   const expectedRating = clamp(toFiniteNumber(row?.expectedRating, hitProbability), 0, 1)
   const layer = row?.layer || getLayerByRank(fallbackRank)
   const tier = row?.tier || `T${fallbackRank}`
@@ -1757,6 +1799,8 @@ const normalizeHistoryRecommendation = (row, index = 0) => {
 
 const calcRecommendedAmount = (probability, odds, systemConfig, riskCap, calibrationContext = null, poolCapital = null) => {
   if (!Number.isFinite(probability) || !Number.isFinite(odds) || odds <= 1) return 0
+  const safeRiskCap = Math.max(0, Number(riskCap) || 0)
+  if (safeRiskCap <= 0) return 0
   const p = clamp(probability, 0.05, 0.95)
   // Pure Kelly criterion: f* = (p × b - q) / b where b = odds - 1, q = 1 - p
   const b = odds - 1
@@ -1776,7 +1820,7 @@ const calcRecommendedAmount = (probability, odds, systemConfig, riskCap, calibra
   const raw = Math.max(0, sizingBase * fraction)
   if (raw <= 0) return 0
   const rounded = Math.round(raw / 10) * 10
-  return Math.max(20, Math.min(riskCap, rounded))
+  return Math.min(safeRiskCap, Math.max(20, rounded))
 }
 
 const calcCombinationCount = (n, k) => {
@@ -1812,16 +1856,15 @@ const allocateAmountsWithinRiskCap = (weights, riskCap, unit = 10, minActive = 0
   const safeWeights = weights.map((value) => Math.max(0, Number(value) || 0))
   const weightSum = safeWeights.reduce((sum, value) => sum + value, 0)
   if (weightSum <= 1e-9) {
-    const next = Array(weights.length).fill(0)
-    next[0] = step
-    return next
+    return Array(weights.length).fill(0)
   }
 
   const capUnits = Math.floor(cap / step)
   const rankedByWeight = safeWeights
     .map((value, index) => ({ index, value }))
+    .filter((row) => row.value > 0)
     .sort((a, b) => b.value - a.value || a.index - b.index)
-  const maxActivatable = Math.min(weights.length, capUnits)
+  const maxActivatable = Math.min(rankedByWeight.length, capUnits)
   const targetActive = Math.min(
     maxActivatable,
     Math.max(0, Number.parseInt(minActive, 10) || 0),
@@ -1878,6 +1921,7 @@ const getTodayMatches = () => {
         const odds = Math.max(1.01, Number(match.odds || investment.combined_odds || 2.5))
         const roughEv = conf * odds - 1
         return {
+          ...getMatchSourceIdentity(match, investment.id),
           key: `${investment.id}-${matchIdx}`,
           investmentId: investment.id,
           matchIndex: matchIdx,
@@ -2039,10 +2083,27 @@ const calcAdjustedProbability = (match, systemConfig, calibrationContext) => {
 
 const buildAtomicLegProfile = (match, unionProbability, fallbackOdds = 2.5) =>
   buildAtomicMatchProfile({
-    entries: Array.isArray(match.entries) ? match.entries : [],
+    entries: match.entries?.length ? match.entries : [{ name: match.entry || 'legacy', odds: match.odds ?? fallbackOdds }],
     unionProbability,
     fallbackOdds,
   })
+
+const getPortfolioInputIssue = (matches, qualityFilter = {}) => {
+  for (const match of matches) {
+    const profile = buildAtomicLegProfile(match, match.calibratedP ?? match.conf, match.odds)
+    if (profile.valid === false || profile.modelStatus === 'approximate') {
+      return `${match.homeTeam || '场次'} vs ${match.awayTeam || ''}：${profile.issues?.[0]?.message || profile.warnings?.[0]}`
+    }
+  }
+  const count = new Set(matches.map(buildMatchRefKey)).size
+  const families = new Set(matches.map((match) => buildMatchFamilyKey(match) || buildMatchRefKey(match))).size
+  const maxLegs = Math.min(5, families)
+  const requiredRatio = clamp(Number(qualityFilter.minCoveragePercent ?? DEFAULT_QUALITY_FILTER.minCoveragePercent) / 100, 0, 1)
+  if (count > 0 && qualityFilter.minCoverageEnabled !== false && maxLegs / count < requiredRatio) {
+    return `已选 ${count} 场，每单最多 ${maxLegs} 场，最高覆盖率 ${(maxLegs / count * 100).toFixed(1)}%，低于当前 ${(requiredRatio * 100).toFixed(0)}% 硬约束。请减少场次，或手动调整/关闭最小覆盖率。`
+  }
+  return null
+}
 
 const translateEntry = (entry) => {
   if (!entry) return ''
@@ -3268,6 +3329,7 @@ const generateRecommendations = (
   generationOptions = null,
 ) => {
   if (selectedMatches.length === 0) return null
+  if (getPortfolioInputIssue(selectedMatches, qualityFilter)) return null
   const resolvedGenerationOptions =
     generationOptions && typeof generationOptions === 'object' ? generationOptions : {}
   const recommendationCount = clamp(
@@ -3383,14 +3445,14 @@ const generateRecommendations = (
     })
     const adjustedCombo = combineAtomicMatchProfiles(adjustedProfiles)
     const rawCombo = combineAtomicMatchProfiles(rawProfiles)
-    let p = clamp(Number(adjustedCombo.hitProbability || 0), 0, 1)
-    let profitWinProbability = clamp(Number(adjustedCombo.profitWinProbability || 0), 0, 1)
+    const p = clamp(Number(adjustedCombo.hitProbability || 0), 0, 1)
+    const profitWinProbability = clamp(Number(adjustedCombo.profitWinProbability || 0), 0, 1)
     const rawP = clamp(Number(rawCombo.hitProbability || 0), 0, 1)
 
-    // ── FIX #4: Entry correlation adjustment (multiplicative, not additive) ──
-    // Correct the independence assumption using pairwise correlation data.
-    // Use multiplicative correction: p *= (1 + avgCorr) so same phi coefficient
-    // produces proportional impact regardless of base probability level.
+    // Historical pair correlations are diagnostic only: changing just p would
+    // contradict the atomic EV, variance and MC distribution. A coherent
+    // multi-event joint model is required before these can alter forecasts.
+    let entryCorrelationDiagnostic = null
     const corrMatrix = calibrationContext?.entryCorrelation
     if (corrMatrix?.ready && legs >= 2) {
       let corrShift = 0
@@ -3410,16 +3472,12 @@ const generateRecommendations = (
         }
       }
       if (pairCount > 0) {
-        const avgCorrAdj = corrShift / pairCount
-        // Multiplicative correction: proportional impact at all probability levels
-        const multiplier = 1 + clamp(avgCorrAdj / Math.max(p, 0.01), -0.25, 0.25)
-        p = clamp(p * multiplier, 0.02, 0.98)
-        profitWinProbability = clamp(profitWinProbability * multiplier, 0.02, 0.98)
+        entryCorrelationDiagnostic = { averageSignal: corrShift / pairCount, pairs: pairCount, applied: false }
       }
     }
 
     const fallbackOdds = annotatedSubset.reduce((prod, item) => prod * Math.max(1.01, Number(item.odds) || 1.01), 1)
-    const odds = Math.max(1.01, Number(adjustedCombo.equivalentOdds || fallbackOdds))
+    const odds = Number.isFinite(adjustedCombo.equivalentOdds) ? adjustedCombo.equivalentOdds : fallbackOdds
     const ev = Number(adjustedCombo.expectedReturn || 0)
     const variance = Math.max(0, Number(adjustedCombo.variance || 0))
     const sigma = Math.sqrt(Math.max(variance, 0.0001))
@@ -3523,6 +3581,7 @@ const generateRecommendations = (
       confSurplusBonus,
       avgSurplus,
       maxSurplus,
+      entryCorrelationDiagnostic,
     }
   })
 
@@ -3568,6 +3627,7 @@ const generateRecommendations = (
     preparedRanked = applyCoverageDynamicBoost(preparedRanked, selectedMatches, hp?.coverageDecayBase ?? 0.6, hp)
     preparedRanked.sort((a, b) => b.boostedUtility - a.boostedUtility || b.utility - a.utility)
   }
+  preparedRanked = preparedRanked.map((item) => ({ ...item, rawUtility: item.utility, utility: getRankingUtility(item) }))
 
   // ── 思路3: Stratified selection by legs count ──
   // FIX #9: Apply retrospective legs-distribution learning to stratified quotas
@@ -3659,6 +3719,8 @@ const generateRecommendations = (
   const utilityBlend = baseSpread <= 0.012 ? 0.055 : 0.018
   const evBlend = baseSpread <= 0.012 ? 0.028 : 0.010
   const allocationSeed = fallbackRanked.map((item, idx) => {
+    // Cash is a valid alternative: never force funding into non-positive EV.
+    if (!(item.ev > 0)) return 0
     const base = baseWeights[idx]
     const injectedBoost = item.coverageInjected && comboStrategy !== 'thresholdStrict' ? 0.05 : 0
     const utilNorm = utilRange > 1e-9 ? (utilityValues[idx] - utilMin) / utilRange : 0.5
@@ -3668,7 +3730,7 @@ const generateRecommendations = (
   const weightSum = allocationSeed.reduce((sum, value) => sum + value, 0)
   const normalizedWeights = weightSum > 0
     ? allocationSeed.map((value) => value / weightSum)
-    : allocationSeed.map((_, idx) => (fallbackRanked.length - idx) / (fallbackRanked.length * (fallbackRanked.length + 1) / 2))
+    : allocationSeed.map(() => 0)
   const minActiveCombos = normalizedAllocationMode === 'precision'
     ? 0
     : Math.min(
@@ -3760,6 +3822,7 @@ const generateRecommendations = (
         confSurplusBonus: Number((item.confSurplusBonus || 0).toFixed(3)),
         avgSurplus: Number((item.avgSurplus || 0).toFixed(4)),
         maxSurplus: Number((item.maxSurplus || 0).toFixed(4)),
+        entryCorrelationDiagnostic: item.entryCorrelationDiagnostic,
       },
     }
   })
@@ -3821,6 +3884,13 @@ const generateRecommendations = (
     ftTiers: ftTierCounts,
     comboRetrospective: retro,
   }
+}
+
+// Pure algorithm entry points for regression tests; no UI or persistence calls.
+export const __portfolioTestables = {
+  runPortfolioMonteCarlo, getEffectiveStakeForScoring, stratifiedSelect,
+  applyCoverageDynamicBoost, generateRecommendations, getPortfolioInputIssue,
+  allocateAmountsWithinRiskCap, calcRecommendedAmount,
 }
 
 export default function ComboPage({ openModal, inspirationLayout = false }) {
@@ -3938,9 +4008,9 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
   // 实时蓄水池余额（cycle-aware）：新建/组合页的资金仓管与下注建议都以它为基数，
   // 周期性结算后会自动切换到新周期的本金口径。
-  const poolCapital = useMemo(() => getReservoirState().poolBalance, [systemConfig])
+  const poolCapital = useMemo(() => getReservoirState().poolBalance, [systemConfig, dataVersion])
   const riskCap = useMemo(
-    () => Math.round(poolCapital * systemConfig.riskCapRatio),
+    () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
   )
   const maxWorstDrawdownAlertPct = useMemo(() => {
@@ -3965,7 +4035,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         const fallbackOdds = Math.max(1.01, Number(item.odds) || 2.5)
         const atomicProfile = buildAtomicLegProfile(item, adjustedProb, fallbackOdds)
         const rawAtomicProfile = buildAtomicLegProfile(item, clamp(Number(item.conf) || 0.5, 0.05, 0.95), fallbackOdds)
-        const effectiveOdds = Math.max(1.01, Number(atomicProfile.equivalentOdds || fallbackOdds))
+        const effectiveOdds = Number(atomicProfile.equivalentOdds)
         const adjustedEvPercent = Number(atomicProfile.expectedReturn || 0) * 100
         const suggestedAmount = calcRecommendedAmount(adjustedProb, effectiveOdds, systemConfig, riskCap, calibrationContext, poolCapital)
         const autoRole = inferMatchRoleByMetrics(adjustedProb, effectiveOdds, item.conf)
@@ -3977,6 +4047,9 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           effectiveOdds,
           atomicProfile,
           rawAtomicProfile,
+          inputIssue: atomicProfile.valid === false || atomicProfile.modelStatus === 'approximate'
+            ? atomicProfile.issues?.[0]?.message || atomicProfile.warnings?.[0]
+            : null,
           autoRole,
         }
       }),
@@ -4002,7 +4075,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   const selectedMatches = useMemo(
     () =>
       displayedCandidates
-        .filter((_, idx) => checkedMatches[idx])
+        .filter((row, idx) => checkedMatches[idx] && !row.inputIssue)
         .map((row) => ({
           ...row,
           roleTag: normalizeRoleTag(matchRoleOverrides[row.key] || row.autoRole),
@@ -4066,7 +4139,8 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   }, [selectedRecommendations])
 
   const adoptPreview = useMemo(() => {
-    const target = selectedRecommendations.length > 0 ? selectedRecommendations : recommendations.slice(0, 1)
+    const target = (selectedRecommendations.length > 0 ? selectedRecommendations : recommendations.slice(0, 1))
+      .filter((row) => row.amount > 0)
     if (target.length === 0) {
       return {
         ready: false,
@@ -4082,8 +4156,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
     target.forEach((combo) => {
       combo.subset.forEach((match) => {
         const key = `${match.homeTeam} vs ${match.awayTeam}`
-        const perMatch = combo.subset.length > 0 ? combo.amount / combo.subset.length : 0
-        exposureMap.set(key, (exposureMap.get(key) || 0) + perMatch)
+        exposureMap.set(key, (exposureMap.get(key) || 0) + combo.amount)
       })
     })
 
@@ -4167,7 +4240,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
       row.subset.forEach((match) => {
         const key = `${match.homeTeam} vs ${match.awayTeam}`
         const prev = map.get(key) || { match: key, count: 0, amount: 0 }
-        const unitAmount = row.subset.length > 0 ? row.amount / row.subset.length : 0
+        const unitAmount = Math.max(0, row.amount)
         prev.count += 1
         prev.amount += unitAmount
         map.set(key, prev)
@@ -4227,6 +4300,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   }, [candidateRows])
 
   const toggleCheck = (idx) => {
+    if (displayedCandidates[idx]?.inputIssue) return
     setCheckedMatches((prev) => prev.map((value, i) => (i === idx ? !value : value)))
   }
 
@@ -4421,7 +4495,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         )
     setPortfolioAllocations(normalizePortfolioAllocations(restoredAllocations))
     const restoredMc =
-      historyRow.mcSimResult && typeof historyRow.mcSimResult === 'object'
+      historyRow.mcSimResult?.modelVersion === 'atomic-v2'
         ? historyRow.mcSimResult
         : runPortfolioMonteCarlo(safeRecommendations.slice(0, RECOMMENDATION_OUTPUT_COUNT))
     setMcSimResult(restoredMc)
@@ -4609,6 +4683,9 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
       return
     }
 
+    const inputIssue = getPortfolioInputIssue(selectedMatches, qualityFilter)
+    if (inputIssue) { window.alert(inputIssue); return }
+
     const generated = generateRecommendations(
       selectedMatches,
       riskPref,
@@ -4710,6 +4787,8 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   // Core re-generate with optional overrides
   const regenerateWithOverrides = (overrides = {}) => {
     if (selectedMatches.length === 0) return false
+    const inputIssue = getPortfolioInputIssue(selectedMatches, qualityFilter)
+    if (inputIssue) { window.alert(inputIssue); return false }
     const jRisk = overrides.riskPref ?? riskPref
     const jStructure = overrides.comboStructure ?? comboStructure
     const jAllocationMode = normalizeAllocationMode(overrides.allocationMode ?? allocationMode)
@@ -5134,9 +5213,10 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   }, [selectedMatches])
 
   const handleAdopt = () => {
-    const toAdopt = selectedRecommendations.length > 0 ? selectedRecommendations : recommendations.slice(0, 1)
+    const toAdopt = (selectedRecommendations.length > 0 ? selectedRecommendations : recommendations.slice(0, 1))
+      .filter((row) => Number.isFinite(row.amount) && row.amount > 0)
     if (toAdopt.length === 0) {
-      window.alert('请先点击“生成最优组合”。')
+      window.alert('暂无正金额方案可采纳；零金额方案不会入档。')
       return
     }
 
@@ -5152,8 +5232,9 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
     const baseTime = Date.now()
     const touchedTeams = []
 
-    toAdopt.forEach((combo, index) => {
+    const payloads = toAdopt.map((combo) => {
       const matches = combo.subset.map((item, matchIndex) => ({
+        ...getMatchSourceIdentity(item, item.investmentId),
         id: buildId('match'),
         home_team: item.homeTeam,
         away_team: item.awayTeam,
@@ -5176,14 +5257,28 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         _combo_match_idx: matchIndex,
       }))
 
-      const investment = {
+      const profiles = combo.subset.map((item) => item.atomicProfile?.modelVersion === 'atomic-v2'
+        ? item.atomicProfile : buildAtomicLegProfile(item, item.calibratedP, item.odds))
+      if (profiles.some((profile) => profile.valid === false || profile.modelStatus !== 'exact')) return null
+      const combinedProfile = combineAtomicMatchProfiles(profiles)
+      const generatedAt = new Date(baseTime).toISOString()
+      const snapshot = buildForecastSnapshot({ combinedProfile, generatedAt, modelVersion: 'atomic-v2',
+        legs: matches.map((match, i) => ({ match, profile: profiles[i] })) })
+      if (!snapshot) return null
+      matches.forEach((match, i) => { match.calibrated_probability = profiles[i].hitProbability })
+      return {
         id: buildId('inv'),
-        created_at: new Date(baseTime + index * 1000).toISOString(),
+        created_at: generatedAt,
         parlay_size: matches.length,
         combo_name: matches.length > 1 ? `智能组合 ${combo.tier} · ${combo.combo}` : '',
         inputs: combo.amount,
         suggested_amount: combo.amount,
         expected_rating: combo.expectedRating,
+        expected_rating_semantics: 'ticket_hit_probability',
+        forecast_snapshot: { ...snapshot, expected_rating_semantics: 'ticket_hit_probability' },
+        ticket_hit_probability: snapshot.ticket_hit_probability,
+        ticket_profit_probability: snapshot.ticket_profit_probability,
+        expected_return: snapshot.expected_return,
         combined_odds: combo.combinedOdds,
         status: 'pending',
         revenues: null,
@@ -5194,13 +5289,19 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
         matches,
       }
 
-    saveInvestment(investment)
-      matches.forEach((match) => {
-        touchedTeams.push(match.home_team)
-        touchedTeams.push(match.away_team)
-      })
     })
-
+    if (payloads.some((payload) => !payload)) {
+      window.alert('方案分布无效或不支持精确建模，请重新生成后采纳。未写入任何方案。')
+      return
+    }
+    try {
+      const saved = saveInvestments(payloads)
+      if (saved.length !== payloads.length) throw new Error('incomplete_write')
+    } catch {
+      window.alert('采纳未写入，方案已保留，请重试。')
+      return
+    }
+    payloads.forEach((investment) => investment.matches.forEach((match) => touchedTeams.push(match.home_team, match.away_team)))
     bumpTeamSamples(touchedTeams)
     refreshTodayMatches()
     setDismissedCount(readDismissedCandidateKeys().size)
@@ -5250,7 +5351,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           <p className="font-semibold text-indigo-600 text-xs tracking-wide mt-2">— 智能组合包 —</p>
           <p><strong>27. Portfolio Allocation 优化器</strong>：枚举 2–5 方案子集，按复合效用打分（EV 35% · 覆盖率 30% · 独立性 20% · 层级多样 10% · 信心梯度多样 5%）。每个候选子集运行 10k Mini Monte Carlo 评估盈利概率 / 中位收益 / VaR₉₅，去重后输出 Top-10 投资组合。</p>
-          <p><strong>28. 50k Monte Carlo 引擎</strong>：Seeded xorshift32 PRNG，逐组合 Bernoulli 采样（使用校准后概率 calibratedP），生成 5 桶 P&L 直方图。输出：盈利概率 / 中位收益 / 95% VaR / 均值 / 最大收益 / 全亏概率。</p>
+          <p><strong>28. 50k Monte Carlo 引擎</strong>：固定种子抽取原子收益状态，同场共享一次抽样，不同场次暂按独立假设处理。按实际金额计算盈利概率、中位收益、95% VaR 和全亏概率；不支持的联合市场明确显示不可模拟。</p>
           <p><strong>29. Soft / Deep Refresh</strong>：Soft Refresh 对 riskPref / mmrLambda / parlayBeta 注入微量 jitter（±4 / ±0.06 / ±0.03），输出同源异构方案。Deep Refresh 收集用户球队偏好，以 ±0.12 效用修正注入生成管线。</p>
           <p><strong>30. 分层选优 + MMR 去重</strong>：按关数分层（2/3/4/5 关）每层 Top-K，Maximal Marginal Relevance 兼顾效用与差异度，叠加覆盖动态加分与 Entry Family 多样化。</p>
 
@@ -5401,6 +5502,13 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
               </button>
             )}
           </div>
+
+          {displayedCandidates.some((item) => item.inputIssue) && (
+            <p role="status" className="mb-3 text-xs leading-relaxed text-amber-700">
+              {displayedCandidates.filter((item) => item.inputIssue).map((item) => `${item.match}：${item.inputIssue}`).join('；')}
+              {' '}以上场次暂不参与自动组合，请在原始记录补正或拆分选项。
+            </p>
+          )}
 
           <div className={leftPanelCollapsed ? 'space-y-1' : 'space-y-2'}>
             {displayedCandidates.map((item, i) => {
@@ -6386,7 +6494,10 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
                               <p className="font-bold text-stone-700 text-[15px] mt-0.5">{alloc.utility.toFixed(3)}</p>
                             </div>
                           </div>
-                          {alloc.mc && (
+                          {alloc.mc?.valid === false && (
+                            <p className="text-xs text-amber-700">{alloc.mc.issues?.join('；')}</p>
+                          )}
+                          {alloc.mc && alloc.mc.valid !== false && (
                             <div className="flex items-center gap-3 text-xs px-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="text-stone-400">盈利</span>
@@ -6697,7 +6808,10 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           )}
 
           {/* Monte Carlo Simulation Panel */}
-          {mcSimResult && (
+          {mcSimResult?.valid === false && (
+            <p role="status" className="mt-3 text-xs leading-relaxed text-amber-700">{mcSimResult.issues?.join('；')}</p>
+          )}
+          {mcSimResult && mcSimResult.valid !== false && (
             <div className="mt-4 p-3 rounded-xl bg-gradient-to-br from-stone-50 to-indigo-50/30 border border-stone-100">
               <p className="text-[11px] font-semibold text-stone-500 uppercase tracking-wider mb-2">
                 <ExplainHover term="monteCarlo">
@@ -6792,6 +6906,9 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           )}
 
           {/* Adopt Preview (compact) */}
+          {recommendations.length > 0 && generationSummary.totalInvest === 0 && (
+            <p role="status" className="mt-3 text-xs leading-relaxed text-amber-700">当前无可执行的正期望仓位，建议保留现金。零金额方案仅供研究，不会入档。</p>
+          )}
           {adoptPreview.ready && (
             <div className="mt-3 p-2.5 rounded-xl border border-stone-100 bg-white space-y-1 text-xs">
               <div className="flex justify-between">
@@ -7107,7 +7224,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           {matchExposure.length > 0 && (
             <div className="mt-4 pt-4 border-t border-stone-100">
-              <p className="text-xs text-stone-500 mb-2">已选方案仓位集中度（Top 5）</p>
+              <p className="text-xs text-stone-500 mb-2">单场关联的整票暴露（Top 5，不可跨场相加）</p>
               <div className="space-y-1.5">
                 {matchExposure.map((item) => (
                   <div key={item.match} className="flex items-center justify-between text-xs">

@@ -5438,7 +5438,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             <h3 className="font-medium text-stone-700 flex items-center gap-2">
               <span className="text-amber-500">▣</span> Kelly 分母回测台
             </h3>
-            <p className="text-xs text-stone-400 mt-1">基于历史已结算样本的分母表现对比（ROI / 回撤 / 胜率，Bootstrap Monte Carlo）</p>
+            <p className="text-xs text-stone-400 mt-1">历史调参诊断：时间窗口 / Bootstrap，不代表独立样本外收益。</p>
           </div>
           <button
             onClick={() => applyKellyDivisor(kellyBacktest.globalBest?.divisor)}
@@ -5449,10 +5449,13 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
 
+        {kellyBacktest.excludedSamples > 0 && (
+          <p className="mb-3 text-xs text-amber-700">已排除 {kellyBacktest.excludedSamples} 笔预测口径不明或数据不完整的历史记录；不以平均评分代替整串概率。</p>
+        )}
         {!analyticsProgress.kelly ? (
           <p className="text-sm text-stone-500">Kelly 回测计算中，请稍候...</p>
         ) : !hasKellyBacktest ? (
-          <p className="text-sm text-stone-500">暂无可回测样本，请先完成至少 1 笔结算。</p>
+          <p className="text-sm text-stone-500">暂无可回测的正仓位样本，需有明确预测快照（或旧版单场单选概率）及结算数据。</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">

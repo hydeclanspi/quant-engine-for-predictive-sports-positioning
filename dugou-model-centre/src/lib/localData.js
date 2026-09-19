@@ -20,6 +20,7 @@ import {
 } from './gitSync'
 import { getPrimaryEntryMarket, normalizeEntries } from './entryParsing'
 import { calcAtomicEquivalentOdds } from './atomicParlay'
+import { addSettlementTimestamps, isValidDecimalOdds } from './investmentForecast'
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
@@ -826,6 +827,8 @@ const normalizeMatchRecord = (matchRaw) => {
   const entries = normalizeEntries(match.entries, match.entry_text || match.entry || '', fallbackOdds)
   const normalizedEntryText = String(match.entry_text || '').trim() || entries.map((entry) => entry.name).join(', ')
   const entryMarket = getPrimaryEntryMarket(entries, normalizedEntryText)
+  const invalidOdds = entries.some((entry) => !isValidDecimalOdds(entry.odds)) ||
+    (entries.length === 0 && !isValidDecimalOdds(match.odds))
 
   return {
     ...match,
@@ -837,6 +840,9 @@ const normalizeMatchRecord = (matchRaw) => {
     tys_home: tysHome,
     tys_away: tysAway,
     fid,
+    model_validation: invalidOdds
+      ? { valid: false, reason: 'invalid_decimal_odds' }
+      : { valid: true },
   }
 }
 
@@ -850,9 +856,9 @@ const calcCombinedOdds = (matches, fallback = 0) => {
       }
       return Number.parseFloat(match?.odds)
     })
-    .filter((odd) => Number.isFinite(odd) && odd > 0)
-
-  if (odds.length === 0) {
+  // An invalid leg invalidates the product. Never silently drop that leg and
+  // turn an old three-leg ticket into a two-leg quote during a read.
+  if (odds.length === 0 || odds.some((odd) => !Number.isFinite(odd) || odd <= 0)) {
     const parsedFallback = Number.parseFloat(fallback)
     return Number.isFinite(parsedFallback) ? parsedFallback : 0
   }
@@ -1360,7 +1366,7 @@ export const updateInvestment = (investmentId, updater) => {
     if (item.id !== investmentId) return item
     changed = true
     const updated = typeof updater === 'function' ? updater(item) : { ...item, ...(updater || {}) }
-    return normalizeInvestmentRecord(updated)
+    return normalizeInvestmentRecord(addSettlementTimestamps(item, updated, new Date().toISOString()))
   })
 
   if (!changed) return null
@@ -1378,11 +1384,12 @@ export const updateInvestments = (updates) => {
   if (updateMap.size === 0) return []
 
   const changed = []
+  const writtenAt = new Date().toISOString()
   const next = getInvestments().map((item) => {
     if (!updateMap.has(item.id)) return item
     const updater = updateMap.get(item.id)
     const updated = typeof updater === 'function' ? updater(item) : { ...item, ...(updater || {}) }
-    const normalized = normalizeInvestmentRecord(updated)
+    const normalized = normalizeInvestmentRecord(addSettlementTimestamps(item, updated, writtenAt))
     changed.push(normalized)
     return normalized
   })
