@@ -49,6 +49,12 @@
   border-radius: 10px;
 }
 
+/* Glacier stays the softest deck, but 32px read a touch pillowy beside Prism's
+ * 10px. Trim it just enough to sit closer to the panels inside the cards. */
+.theme-inspiration-2609 .lab-editions[data-lab-edition='glacier'] {
+  --lab-radius: 26px;
+}
+
 /* Folio's Portfolio panels use the same sheet edge as New, while keeping the
  * existing folding controls and calculations. */
 .theme-inspiration-2609

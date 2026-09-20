@@ -103,7 +103,7 @@ describe('inspiration 2609 selected page composition', () => {
     }
   })
 
-  it('only tints the existing header and scopes reduced corners to Prism', () => {
+  it('only tints the existing header and scopes material corner overrides to Prism and Glacier', () => {
     const css = readFileSync(
       new URL('../../design/inspiration2609.css', import.meta.url),
       'utf8',
@@ -120,10 +120,13 @@ describe('inspiration 2609 selected page composition', () => {
           )
       }
       if (rule.nodes.some((node) => node.prop === '--lab-radius')) {
-        expect(rule.selector).toContain("[data-lab-edition='prism']")
-        expect(
-          rule.nodes.find((node) => node.prop === '--lab-radius').value,
-        ).toBe('10px')
+        const radius = rule.nodes.find((node) => node.prop === '--lab-radius').value
+        if (rule.selector.includes("[data-lab-edition='prism']")) {
+          expect(radius).toBe('10px')
+        } else {
+          expect(rule.selector).toContain("[data-lab-edition='glacier']")
+          expect(radius).toBe('26px')
+        }
       }
     })
   })
