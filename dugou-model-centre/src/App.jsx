@@ -11,6 +11,7 @@ import Modal from './components/Modal'
 import DemoBubble from './components/DemoBubble'
 import LabEditionBar from './components/LabEditionBar'
 import Inspiration2609Shell from './components/Inspiration2609Shell'
+import LiquidGlassBackdrop from './components/LiquidGlassBackdrop'
 import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
 
@@ -69,6 +70,10 @@ function App() {
   const mainScrollRef = useRef(null)
   const location = useLocation()
   const displayMode = useDisplayMode()
+  // 液态玻璃背景层：默认开启，systemConfig.liquidGlassEnabled === false 时关闭
+  const liquidGlassEnabled = systemConfigSnapshot?.liquidGlassEnabled !== false
+  const liquidGlassStyle = systemConfigSnapshot?.liquidGlassStyle === 'vivid' ? 'vivid' : 'hongguo'
+  const liquidGlass = liquidGlassEnabled ? <LiquidGlassBackdrop variant={liquidGlassStyle} /> : null
 
   // Listen for layout mode changes from ParamsPage
   useEffect(() => {
@@ -158,6 +163,37 @@ function App() {
     trackRouteAccess(location.pathname)
   }, [designPreview, location.pathname])
 
+  // 液态玻璃开关联动 <html> class：CSS 覆写全部挂在 .liquid-glass-on 下，关闭时零视觉差异
+  useEffect(() => {
+    document.documentElement.classList.toggle('liquid-glass-on', liquidGlassEnabled)
+    return () => document.documentElement.classList.remove('liquid-glass-on')
+  }, [liquidGlassEnabled])
+
+  // 顶栏液态玻璃 morph：滚动容器下滚超过阈值后，<html> 加 .lg-scrolled 触发形态切换
+  useEffect(() => {
+    if (!liquidGlassEnabled) {
+      document.documentElement.classList.remove('lg-scrolled')
+      return undefined
+    }
+    const el = mainScrollRef.current
+    if (!el) return undefined
+    let rafId = 0
+    const apply = () => {
+      rafId = 0
+      document.documentElement.classList.toggle('lg-scrolled', el.scrollTop > 24)
+    }
+    const onScroll = () => {
+      if (!rafId) rafId = window.requestAnimationFrame(apply)
+    }
+    apply()
+    el.addEventListener('scroll', onScroll, { passive: true })
+    return () => {
+      el.removeEventListener('scroll', onScroll)
+      if (rafId) window.cancelAnimationFrame(rafId)
+      document.documentElement.classList.remove('lg-scrolled')
+    }
+  }, [liquidGlassEnabled, inspiration2609Active, layoutMode])
+
   const openModal = (data) => setModalData(data)
   const closeModal = () => setModalData(null)
   const ambientPageKey = PAGE_AMBIENT_ROUTE_MAP[location.pathname] || 'new'
@@ -194,7 +230,9 @@ function App() {
   // The existing top bar is outside the Lab scope, including at mobile sizes.
   if (inspiration2609Active) {
     return (
-      <Inspiration2609Shell
+      <>
+        {liquidGlass}
+        <Inspiration2609Shell
         pathname={location.pathname}
         layoutMode={layoutMode}
         pageKey={ambientPageKey}
@@ -213,6 +251,7 @@ function App() {
       >
         {pageRoutes}
       </Inspiration2609Shell>
+      </>
     )
   }
 
@@ -220,6 +259,7 @@ function App() {
   if (layoutMode === 'modern') {
     return (
       <div className="flex flex-col h-screen theme-modern" style={{ background: '#f7f8fa' }}>
+        {liquidGlass}
         <ModernTopBar layoutMode="modern" />
         <main
           ref={mainScrollRef}
@@ -242,6 +282,7 @@ function App() {
   if (layoutMode === 'inpiration') {
     return (
       <div className={`flex flex-col h-screen theme-modern theme-inpiration${designPreview ? ' lab-editions' : ''}`} data-lab-edition={designPreview ? labEdition : undefined} data-lab-page={designPreview ? ambientPageKey : undefined} style={designPreview ? undefined : { background: '#f7f8fa' }}>
+        {liquidGlass}
         {designPreview && <LabEditionBar edition={labEdition} onChange={changeLabEdition} />}
         {designPreview && <div className="lab-optical-field" aria-hidden="true"><i /><i /><i /></div>}
         <InpirationTopBar designPreview={designPreview} />
@@ -265,6 +306,7 @@ function App() {
   /* ── Sidebar layout (legacy) ── */
   return (
     <div className="flex h-screen bg-stone-100/50">
+      {liquidGlass}
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}

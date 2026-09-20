@@ -12865,3 +12865,81 @@ html .h-screen {
   .wr-section-lead h2 { font-size: 27px; }
   .wr-panel { border-radius: 24px; }
 }
+
+/* ── liquid glass layer ─────────────────────────────────────────────
+ * WebGL 流体背景（LiquidGlassBackdrop portal 到 body，canvas z-index:0）。
+ * 开关挂在 <html class="liquid-glass-on">，由 App.jsx 按 systemConfig.liquidGlassEnabled 切换。
+ * 原理：#root 整体抬到 canvas 之上，链路上的不透明底色中和为透明让流体透出；
+ * 卡片用低强度 backdrop-filter 呈现玻璃质感。关闭时以下规则全部失效，零视觉差异。
+ */
+
+/* body 的 bg-stone-100/50 改为透明 */
+html.liquid-glass-on body {
+  background: transparent;
+}
+
+/* .theme-modern 的 #f7f8fa，以及 modern / inpiration 布局根容器上的内联 background（故需 !important） */
+html.liquid-glass-on .theme-modern {
+  background: transparent !important;
+}
+
+/* legacy sidebar 布局根容器的 bg-stone-100/50 */
+html.liquid-glass-on .bg-stone-100\/50 {
+  background-color: transparent !important;
+}
+
+html.liquid-glass-on .app-main-scroll,
+html.liquid-glass-on .app-main-content {
+  background: transparent !important;
+}
+
+/* 内容抬到 canvas 之上（canvas z-index:0；不用负 z-index，否则会被 body 背景挡住） */
+html.liquid-glass-on #root {
+  position: relative;
+  z-index: 1;
+}
+
+/* designPreview 的 .lab-optical-field 是 #root 内 z-index:-1 的整幅浅灰渐变层，
+ * 会盖在 canvas（z-index:0）之上把流体整个遮住——液态玻璃开启时由流体取代它 */
+html.liquid-glass-on .lab-optical-field {
+  display: none;
+}
+
+/* 玻璃拟态覆写：克制、低强度。
+ * specificity 对齐：需压过 .theme-modern .glow-card (0-2-0) 与
+ * .theme-modern .app-main-content.app-ambient-tone-* .motion-v2-surface (0-4-0)。 */
+html.liquid-glass-on .glow-card,
+html.liquid-glass-on .console-interactive-surface,
+html.liquid-glass-on .theme-modern .app-main-content .motion-v2-surface {
+  background-color: rgba(255, 255, 255, 0.3);
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+  border-color: rgba(255, 255, 255, 0.75);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 10px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* ── 顶栏液态玻璃 morph（参考 deepseek.com/harness：页顶时融入背景，下滚后凝结成玻璃条）── */
+html.liquid-glass-on .mn-bar {
+  background: transparent;
+  border-bottom-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  transition:
+    background 0.38s ease,
+    box-shadow 0.38s ease,
+    border-color 0.38s ease,
+    border-radius 0.38s ease,
+    margin 0.38s ease,
+    backdrop-filter 0.38s ease;
+}
+html.liquid-glass-on.lg-scrolled .mn-bar {
+  margin: 10px 14px 0;
+  border: 1px solid rgba(255, 255, 255, 0.65);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.44);
+  -webkit-backdrop-filter: blur(32px) saturate(200%);
+  backdrop-filter: blur(32px) saturate(200%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 12px 36px rgba(15, 23, 42, 0.12);
+}

@@ -20,7 +20,7 @@ import {
 } from './gitSync'
 import { getPrimaryEntryMarket, normalizeEntries } from './entryParsing'
 import { calcAtomicEquivalentOdds } from './atomicParlay'
-import { addSettlementTimestamps, isValidDecimalOdds } from './investmentForecast'
+import { addSettlementTimestamps, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from './investmentForecast'
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
@@ -125,6 +125,10 @@ const DEFAULT_SYSTEM_CONFIG = {
     },
   },
   pageAmbientThemes: { ...PAGE_AMBIENT_THEME_DEFAULTS },
+  // 液态玻璃背景（Liquid Glass）：UI 偏好，默认开启；时光穿越中同 pageAmbientThemes 一样保留当前值
+  liquidGlassEnabled: true,
+  // 背景主题：'hongguo' 红果（默认，品牌色对青×橙 · 构图化色场） / 'vivid' 流光溢彩
+  liquidGlassStyle: 'hongguo',
 }
 
 const DEFAULT_TEAM_PROFILES = [
@@ -503,6 +507,12 @@ export const getSystemConfig = () => {
     } else {
       merged.pageAmbientThemes = normalizePageAmbientThemes(tmOverride?.pageAmbientThemes)
     }
+    if (typeof currentConfig?.liquidGlassEnabled === 'boolean') {
+      merged.liquidGlassEnabled = currentConfig.liquidGlassEnabled
+    }
+    if (currentConfig?.liquidGlassStyle === 'vivid' || currentConfig?.liquidGlassStyle === 'hongguo') {
+      merged.liquidGlassStyle = currentConfig.liquidGlassStyle
+    }
     return merged
   }
 
@@ -523,8 +533,9 @@ export const saveSystemConfig = (configPatch) => {
     ...(configPatch || {}),
   }
 
-  // 如果只是改变pageAmbientThemes（UI偏好），即使在时光穿越中也允许
-  const isOnlyUIConfig = Object.keys(configPatch).every(key => key === 'pageAmbientThemes')
+  // 如果只是改变UI偏好（pageAmbientThemes / liquidGlassEnabled / liquidGlassStyle），即使在时光穿越中也允许
+  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle']
+  const isOnlyUIConfig = Object.keys(configPatch).every(key => UI_CONFIG_KEYS.includes(key))
   if (!isOnlyUIConfig && !checkReadOnlyMode('Update System Config')) {
     // 返回当前配置但不保存
     return next
@@ -847,6 +858,7 @@ const normalizeMatchRecord = (matchRaw) => {
 }
 
 const calcCombinedOdds = (matches, fallback = 0) => {
+  if (matches.some((match) => match.model_validation?.valid === false)) return 0
   const odds = matches
     .map((match) => {
       if (Array.isArray(match?.entries) && match.entries.length > 0) {
@@ -972,6 +984,7 @@ const buildSplitInvestmentsFromLegacy11 = (legacyItem) => {
         inputs: stake,
         suggested_amount: stake,
         expected_rating: expectedRating,
+        expected_rating_semantics: MEAN_LEG_RATING_SEMANTICS,
         combined_odds: combinedOdds,
         status,
         revenues,

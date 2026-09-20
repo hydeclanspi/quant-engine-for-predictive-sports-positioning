@@ -99,7 +99,6 @@ const MODE_ALIAS = {
 }
 
 const WEIGHT_FIELDS = [
-  { key: 'weightConf', label: 'Conf 权重', hint: 'Weight Conf' },
   { key: 'weightMode', label: 'Mode 权重', hint: 'Weight Mode' },
   { key: 'weightTys', label: 'TYS 权重', hint: 'Weight TYS' },
   { key: 'weightFid', label: 'FID 权重', hint: 'Weight FID' },
@@ -185,6 +184,43 @@ const RecencyGroupLabel = ({ dot, text, hint }) => (
   </div>
 )
 
+// 严格时序 walk-forward / 调参诊断的取数基准：只要有记录没有已记录的结算时间，就会按
+// “创建后 72 小时视为已知”参与排序，时间顺序因此只是近似，证据强度低于全部使用已记录
+// 结算时间的窗口。字段缺失（旧缓存快照 / bootstrap 路径）一律视为未报告，不猜测。
+const APPROXIMATE_TIME_BASIS = 'contains_derived_availability'
+const TIME_BASIS_ROW_KEYS = ['globalRows', 'rows', 'modeRecommendations', 'walkForward', 'suggestions']
+
+// derivedAvailabilityRows 是窗口内计数（跨窗口会重复累加），不适合当“记录条数”展示，
+// 因此只取“是否近似”这一个判断。
+const readApproximateTimeOrder = (sources) => {
+  const queue = (Array.isArray(sources) ? sources : [sources]).filter(Boolean)
+  const seen = new Set()
+  while (queue.length > 0 && seen.size < 400) {
+    const node = queue.shift()
+    if (!node || typeof node !== 'object' || seen.has(node)) continue
+    seen.add(node)
+    if (Array.isArray(node)) {
+      node.forEach((child) => queue.push(child))
+      continue
+    }
+    if (node.timeBasis === APPROXIMATE_TIME_BASIS || Number(node.derivedAvailabilityRows) > 0) return true
+    TIME_BASIS_ROW_KEYS.forEach((key) => queue.push(node[key]))
+  }
+  return false
+}
+
+const APPROXIMATE_TIME_ORDER_NOTE = '时间顺序为近似值：部分记录没有已记录的结算时间，按“创建后 72 小时视为已知”参与排序。'
+// 已有提示在旁时，用它把既有免责说明扩写成包含近似口径的一句。
+const APPROXIMATE_TIME_ORDER_CLAUSE = '其中部分记录没有已记录的结算时间，按“创建后 72 小时视为已知”近似参与排序。'
+
+// 贴在对应 walk-forward / 调参诊断旁的小体量提示；基准为已记录结算时间、或字段缺失时
+// 不渲染任何内容。
+const ApproximateTimeOrderNote = ({ sources, className = 'mt-1.5 text-[11px] leading-relaxed text-amber-700' }) => {
+  const maskText = usePreviewTextMask()
+  if (!readApproximateTimeOrder(sources)) return null
+  return <p className={className}>{maskText(APPROXIMATE_TIME_ORDER_NOTE)}</p>
+}
+
 const PAGE_AMBIENT_ITEMS = [
   { key: 'new', label: 'New', hint: '新建投资' },
   { key: 'combo', label: 'Portfolio', hint: '智能组合建议' },
@@ -220,6 +256,14 @@ const FIT_TRAJECTORY_MODE_OPTIONS = [
 ]
 
 const clampNumber = (value, min, max) => Math.max(min, Math.min(max, value))
+
+// Suffix shown next to a leg-level expectation so the residual's basis is
+// explicit. Rows without `expectedBasis` render no suffix.
+const EXPECTED_BASIS_SUFFIX = {
+  leg_calibrated_probability: ' · 校准概率',
+  leg_conf: ' · 原始 Conf',
+  investment_expected_rating_normalized: ' · 票级归一预期',
+}
 
 // ---------------------------------------------------------------------------
 // Preview / demo curation for the Expected-vs-Actual rating set.
@@ -1970,6 +2014,8 @@ const PaginatedKellyMatrixTable = ({ rows }) => {
         </span>
       </div>
 
+      <ApproximateTimeOrderNote sources={rows} className="text-[11px] leading-relaxed text-amber-700" />
+
       <table className="w-full text-sm">
         <thead>
           <tr className="border-b border-stone-200 text-left text-stone-500">
@@ -2199,10 +2245,12 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
       </div>
 
       <p className="text-xs text-stone-500 mb-4">
-        基于在线梯度下降算法，根据历史表现自动计算权重调整建议。样本量: {suggestions.sampleCount} / {suggestions.minSamples} 最小
+        按时间窗口优化完整预测管道的 Brier 误差，再以后置 Brier／LogLoss 检查自动更新。有效样本: {suggestions.sampleCount} / {suggestions.minSamples} 最小
         {suggestions.lastUpdateAt && <span className="ml-2">· 上次更新: {new Date(suggestions.lastUpdateAt).toLocaleDateString()}</span>}
         {suggestions.updateCount > 0 && <span className="ml-2">· 累计调整: {suggestions.updateCount} 次</span>}
       </p>
+
+      <ApproximateTimeOrderNote sources={[suggestions]} className="mb-4 text-[11px] leading-relaxed text-amber-700" />
 
       <AdaptiveLoopDiagram
         sampleCount={suggestions.sampleCount}
@@ -2211,8 +2259,8 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
 
       {!suggestions.ready ? (
         <div className="p-4 bg-stone-50 rounded-xl text-center">
-          <p className="text-sm text-stone-500">样本量不足 ({suggestions.sampleCount}/{suggestions.minSamples})</p>
-          <p className="text-xs text-stone-400 mt-1">完成更多结算后将自动生成建议</p>
+          <p className="text-sm text-stone-500">暂未满足时间验证条件 ({suggestions.sampleCount}/{suggestions.minSamples})</p>
+          <p className="text-xs text-stone-400 mt-1">需要足够的独立赛事、结果可用时间和前后验证窗口；旧记录若缺少已记录的结算时间，按“创建后 72 小时视为已知”参与排序。</p>
         </div>
       ) : (
         <>
@@ -2225,12 +2273,12 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
                   <th className="py-2 px-2">初始值</th>
                   <th className="py-2 px-2">当前值 <span className="text-[10px] text-emerald-500 font-normal ml-1">可编辑</span></th>
                   <th className="py-2 px-2">建议值</th>
-                  <th className="py-2 px-2">置信度</th>
+                  <th className="py-2 px-2" title="时间调参窗口中，梯度方向一致的比例；不是统计置信概率">方向一致度</th>
                   <th className="py-2 px-2">操作</th>
                 </tr>
               </thead>
               <tbody>
-                {suggestions.suggestions.map((row) => {
+                {suggestions.suggestions.filter((row) => row.key !== 'weightConf').map((row) => {
                   const isEditing = editingWeight === row.key
                   const hasChange = Math.abs(row.change) > 0.001
                   const highConfidence = row.confidence >= 0.5
@@ -2335,7 +2383,7 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
                 重置为默认值
               </button>
             </div>
-            <p className="text-[10px] text-stone-400">置信度 ≥ 50% 的建议可被应用</p>
+            <p className="text-[10px] text-stone-400">自动更新须通过后置 Brier／LogLoss 检查；方向一致度不代表统计置信概率。</p>
           </div>
         </>
       )}
@@ -2952,6 +3000,9 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     [showAllKellyRows, kellyBacktest.globalRows],
   )
   const hasMoreKellyRows = (kellyBacktest.globalRows || []).length > 5
+  // Kelly 回测台与模型收口验证各自的时间顺序口径（包级或行级任一报告即算近似）。
+  const kellyTimeOrder = readApproximateTimeOrder([kellyBacktest])
+  const validationTimeOrder = readApproximateTimeOrder([modelValidation])
   const kellyModeMaxDrawdown = useMemo(
     () =>
       Math.max(
@@ -3172,7 +3223,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     const stabilityMeaningMap = {
       Stable: '波动与跳变都低，拟合质量处于平稳区间。',
       Choppy: '存在一定抖动但仍可控，建议观察而非立刻大改。',
-      Volatile: '误差波动偏大且跳变频繁，校准结果不稳定。',
+      Volatile: '误差波动偏大且跳变频繁，判断拟合结果不稳定。',
       '--': '当前样本不足，暂时无法判断稳定性。',
     }
     const persistenceMeaningMap = {
@@ -3209,10 +3260,10 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
       mae === null
         ? '等待样本刷新。'
         : mae <= 0.12
-          ? '误差处于紧致区间，校准质量较稳。'
+          ? '误差处于紧致区间，判断拟合较稳。'
           : mae <= 0.2
             ? '误差处于可控带，建议继续监控。'
-            : '误差偏大，建议降风险并做再校准。'
+            : '误差偏大，建议降风险并复核预期阈值。'
 
     const biasStatus =
       bias === null
@@ -3220,8 +3271,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         : Math.abs(bias) <= 0.03
           ? '总体偏差接近中性，没有明显系统性偏向。'
           : bias > 0
-            ? '存在正向偏置（模型略偏乐观）。'
-            : '存在负向偏置（模型略偏保守）。'
+            ? '存在正向偏置（模型略偏保守）。'
+            : '存在负向偏置（模型略偏乐观）。'
 
     const r2Status =
       r2 === null
@@ -3235,7 +3286,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     const postureStatusMap = {
       Aligned: '拟合与误差都在健康带内，可保持当前策略。',
       Monitor: '整体可用但需盯盘观察，建议小步迭代调参。',
-      Guarded: '偏差超出舒适区，应优先控风险与再校准。',
+      Guarded: '偏差超出舒适区，应优先控风险并复核预期阈值。',
       Standby: '样本不足，暂不建议据此做强判断。',
     }
 
@@ -3739,7 +3790,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         title: 'Test Brier',
         what: 'Brier score 衡量概率预测误差，值越低越好。',
         describes: '对比校准前后在测试集上的误差变化。',
-        current: `${modelValidation.brier.testRaw.toFixed(4)} → ${modelValidation.brier.testCalibrated.toFixed(4)}（${toSigned(brierGain, 2, '%')}）`,
+        current: `${Number(modelValidation.brier?.testRaw || 0).toFixed(4)} → ${Number(modelValidation.brier?.testCalibrated || 0).toFixed(4)}（${toSigned(brierGain, 2, '%')}）`,
         baseline: 'gain > 0 代表校准改善；gain < 0 代表校准退化。',
         status: describeGain(brierGain),
         others: 'Significant Improve / Mild Improve / Flat / Degrade',
@@ -3748,7 +3799,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         title: 'Test LogLoss',
         what: 'LogLoss 关注概率预测的对数损失，值越低越好。',
         describes: '对极端错误更敏感，用于补充 Brier 的风险视角。',
-        current: `${modelValidation.logLoss.testRaw.toFixed(4)} → ${modelValidation.logLoss.testCalibrated.toFixed(4)}（${toSigned(logLossGain, 2, '%')}）`,
+        current: `${Number(modelValidation.logLoss?.testRaw || 0).toFixed(4)} → ${Number(modelValidation.logLoss?.testCalibrated || 0).toFixed(4)}（${toSigned(logLossGain, 2, '%')}）`,
         baseline: 'gain > 0 为改善；gain < 0 为退化。',
         status: describeGain(logLossGain),
         others: 'Significant Improve / Mild Improve / Flat / Degrade',
@@ -3816,15 +3867,18 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
       title: 'Expected vs Actual Judgmental Rating · 历史记录',
       content: (
         <div>
-          <p className="text-sm text-stone-500 mb-4">系统预期模型拟合度（Expected vs Actual）</p>
+          <p className="text-sm text-stone-500 mb-1">系统预期模型拟合度（Expected vs Actual）</p>
+          <p className="text-xs text-stone-400 mb-4">
+            {maskText('判断残差 = 归一化 AJR − 腿级预期（校准概率或原始 Conf）。它衡量赛前预期与赛后判断评级的差，属于判断残差，不是命中概率的校准误差。')}
+          </p>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-left text-stone-500">
                 <th className="py-2">日期</th>
                 <th className="py-2">比赛</th>
-                <th className="py-2">Expected</th>
-                <th className="py-2">Actual</th>
-                <th className="py-2">偏差</th>
+                <th className="py-2">Expected（腿级预期）</th>
+                <th className="py-2">Actual（归一化 AJR）</th>
+                <th className="py-2">判断残差</th>
               </tr>
             </thead>
             <tbody>
@@ -3832,7 +3886,12 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 <tr key={`${row.investment_id}-${index}`} className="border-b border-stone-100">
                   <td className="py-2">{row.dateLabel}</td>
                   <td className="py-2">{row.match}</td>
-                  <td className="py-2">{row.expected_rating.toFixed(2)}</td>
+                  <td className="py-2">
+                    {row.expected_rating.toFixed(2)}
+                    {EXPECTED_BASIS_SUFFIX[row.expectedBasis] ? (
+                      <span className="text-stone-400">{maskText(EXPECTED_BASIS_SUFFIX[row.expectedBasis])}</span>
+                    ) : null}
+                  </td>
                   <td className="py-2">{row.actual_rating.toFixed(2)}</td>
                   <td className={`py-2 font-medium ${row.diff >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {toSigned(row.diff, 2)}
@@ -3884,6 +3943,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 ))}
               </tbody>
             </table>
+            <ApproximateTimeOrderNote sources={modeKellyRows} className="mt-2 text-[11px] leading-relaxed text-amber-700" />
           </div>
 
           <div>
@@ -4267,6 +4327,20 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     setConfig((prev) => ({ ...prev, layoutMode }))
   }
 
+  // 液态玻璃背景开关（UI 偏好，时光穿越中也可写）；writeJSON 会 dispatch dugou:data-changed，App 自动刷新
+  const liquidGlassEnabled = config.liquidGlassEnabled !== false
+  const toggleLiquidGlass = () => {
+    const next = !liquidGlassEnabled
+    saveSystemConfig({ liquidGlassEnabled: next })
+    setConfig((prev) => ({ ...prev, liquidGlassEnabled: next }))
+  }
+  // 背景主题：vivid（流光溢彩） / hongguo（红果 · 构图化色场）
+  const liquidGlassStyle = config.liquidGlassStyle === 'vivid' ? 'vivid' : 'hongguo'
+  const setLiquidGlassStyle = (style) => {
+    saveSystemConfig({ liquidGlassStyle: style })
+    setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
+  }
+
   return (
     <div className="page-shell page-content-wide console-motion-scope">
       {/* demo/preview 专属：右侧分区滚动导航（fixed 定位，DOM 位置不影响布局） */}
@@ -4448,7 +4522,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             </div>
 
             <div className="shrink-0 rounded-2xl border border-indigo-200/85 bg-[linear-gradient(145deg,rgba(255,255,255,0.9),rgba(239,246,255,0.72)_55%,rgba(238,242,255,0.64))] px-4 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.94),0_18px_30px_-28px_rgba(79,70,229,0.5)]">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">Calibration Score</p>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-stone-400">Judgment Fit Score</p>
               <div className="mt-1 text-4xl font-bold text-amber-600">
                 {ratingFitScore !== null ? ratingFitScore.toFixed(2) : '--'}
               </div>
@@ -4686,6 +4760,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
               </button>
             </div>
             <p className="text-xs text-stone-500">基于各 Mode 历史表现加权计算</p>
+            <ApproximateTimeOrderNote sources={modeKellyRows} className="mt-2 text-[11px] leading-relaxed text-amber-700" />
             <div className="mt-3 flex items-center justify-between">
               <span className="text-xs text-stone-500">微调偏移</span>
               <div className="flex items-center gap-1">
@@ -4905,6 +4980,50 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
         <p className="text-[11px] text-stone-400 mt-3 text-center">Layout changes take effect immediately.</p>
+        <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
+          <div>
+            <span className="text-sm text-stone-700">液态玻璃背景 Liquid Glass</span>
+            <p className="text-xs text-stone-400 mt-0.5">流体渐变背景与玻璃质感卡片 · 默认开启</p>
+          </div>
+          <button
+            type="button"
+            onClick={toggleLiquidGlass}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+              liquidGlassEnabled
+                ? 'bg-sky-100 text-sky-700 border border-sky-200'
+                : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
+            }`}
+          >
+            {liquidGlassEnabled ? '已开启' : '已关闭'}
+          </button>
+        </div>
+        {liquidGlassEnabled && (
+          <div className="mt-3 flex items-center justify-between gap-4">
+            <div>
+              <span className="text-sm text-stone-700">背景主题</span>
+              <p className="text-xs text-stone-400 mt-0.5">红果 = 品牌色对（青 × 橙）构图化色场 · 流光溢彩 = 高饱和流体大理纹</p>
+            </div>
+            <div className="flex gap-1.5 shrink-0">
+              {[
+                { key: 'vivid', label: '流光溢彩' },
+                { key: 'hongguo', label: '红果' },
+              ].map((opt) => (
+                <button
+                  key={opt.key}
+                  type="button"
+                  onClick={() => setLiquidGlassStyle(opt.key)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
+                    liquidGlassStyle === opt.key
+                      ? 'bg-sky-100 text-sky-700 border-sky-200'
+                      : 'bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">
@@ -5438,7 +5557,10 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             <h3 className="font-medium text-stone-700 flex items-center gap-2">
               <span className="text-amber-500">▣</span> Kelly 分母回测台
             </h3>
-            <p className="text-xs text-stone-400 mt-1">历史调参诊断：时间窗口 / Bootstrap，不代表独立样本外收益。</p>
+            <p className="text-xs text-stone-400 mt-1">
+              历史调参诊断：时间窗口 / Bootstrap，不代表独立样本外收益。
+              {kellyTimeOrder ? ` ${maskText(APPROXIMATE_TIME_ORDER_NOTE)}` : ''}
+            </p>
           </div>
           <button
             onClick={() => applyKellyDivisor(kellyBacktest.globalBest?.divisor)}
@@ -5588,6 +5710,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                     </span>
                     。
                   </p>
+                  <ApproximateTimeOrderNote sources={[modelValidation]} />
                 </div>
               </div>
             )}
@@ -5689,10 +5812,12 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
               ) : (
                 <WalkForwardStrip windows={modelValidation.walkForward} />
               )}
+              <ApproximateTimeOrderNote sources={[modelValidation]} className="mt-2 text-[11px] leading-relaxed text-amber-700" />
             </div>
             <ExplainHover card={modelValidationGlossary.bootstrap} align="right">
               <p className="mt-2 cursor-help text-[11px] text-stone-400 decoration-dotted underline decoration-stone-300/80 underline-offset-[2px]">
-                注：策略回测使用 Bootstrap Monte Carlo（目标 100000 次，按样本量自动做计算预算缩放）。
+                概率指标使用当前配置的完整生产管道按时间重拟合；金额指标仅为单选腿 Bootstrap 诊断，不是完整账户／Portfolio 实盘回放。
+                {validationTimeOrder ? ` ${maskText(APPROXIMATE_TIME_ORDER_CLAUSE)}` : ''}
               </p>
             </ExplainHover>
           </>
