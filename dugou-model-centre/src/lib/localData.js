@@ -127,8 +127,8 @@ const DEFAULT_SYSTEM_CONFIG = {
   pageAmbientThemes: { ...PAGE_AMBIENT_THEME_DEFAULTS },
   // 液态玻璃背景（Liquid Glass）：UI 偏好，默认开启；时光穿越中同 pageAmbientThemes 一样保留当前值
   liquidGlassEnabled: true,
-  // 背景主题：'hongguo' 红果（默认，品牌色对青×橙 · 构图化色场） / 'vivid' 流光溢彩
-  liquidGlassStyle: 'hongguo',
+  // 背景主题：'temp' 流光溢彩引擎×红果配色（默认） / 'vivid' 原版流光溢彩 / 'hongguo' 红果构图化色场
+  liquidGlassStyle: 'temp',
 }
 
 const DEFAULT_TEAM_PROFILES = [
@@ -510,7 +510,7 @@ export const getSystemConfig = () => {
     if (typeof currentConfig?.liquidGlassEnabled === 'boolean') {
       merged.liquidGlassEnabled = currentConfig.liquidGlassEnabled
     }
-    if (currentConfig?.liquidGlassStyle === 'vivid' || currentConfig?.liquidGlassStyle === 'hongguo') {
+    if (['vivid', 'hongguo', 'temp'].includes(currentConfig?.liquidGlassStyle)) {
       merged.liquidGlassStyle = currentConfig.liquidGlassStyle
     }
     return merged

@@ -4335,7 +4335,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     setConfig((prev) => ({ ...prev, liquidGlassEnabled: next }))
   }
   // 背景主题：vivid（流光溢彩） / hongguo（红果 · 构图化色场）
-  const liquidGlassStyle = config.liquidGlassStyle === 'vivid' ? 'vivid' : 'hongguo'
+  const liquidGlassStyleRaw = config.liquidGlassStyle
+  const liquidGlassStyle = liquidGlassStyleRaw === 'vivid' || liquidGlassStyleRaw === 'hongguo' ? liquidGlassStyleRaw : 'temp'
   const setLiquidGlassStyle = (style) => {
     saveSystemConfig({ liquidGlassStyle: style })
     setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
@@ -5001,10 +5002,11 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           <div className="mt-3 flex items-center justify-between gap-4">
             <div>
               <span className="text-sm text-stone-700">背景主题</span>
-              <p className="text-xs text-stone-400 mt-0.5">红果 = 品牌色对（青 × 橙）构图化色场 · 流光溢彩 = 高饱和流体大理纹</p>
+              <p className="text-xs text-stone-400 mt-0.5">temp = 流光溢彩引擎 × 品牌青橙配色（默认） · 流光溢彩 = 原版蓝橙 · 红果 = 青橙构图化色场</p>
             </div>
             <div className="flex gap-1.5 shrink-0">
               {[
+                { key: 'temp', label: 'temp' },
                 { key: 'vivid', label: '流光溢彩' },
                 { key: 'hongguo', label: '红果' },
               ].map((opt) => (

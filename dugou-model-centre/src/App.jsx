@@ -72,7 +72,8 @@ function App() {
   const displayMode = useDisplayMode()
   // 液态玻璃背景层：默认开启，systemConfig.liquidGlassEnabled === false 时关闭
   const liquidGlassEnabled = systemConfigSnapshot?.liquidGlassEnabled !== false
-  const liquidGlassStyle = systemConfigSnapshot?.liquidGlassStyle === 'vivid' ? 'vivid' : 'hongguo'
+  const liquidGlassStyleRaw = systemConfigSnapshot?.liquidGlassStyle
+  const liquidGlassStyle = liquidGlassStyleRaw === 'vivid' || liquidGlassStyleRaw === 'hongguo' ? liquidGlassStyleRaw : 'temp'
   const liquidGlass = liquidGlassEnabled ? <LiquidGlassBackdrop variant={liquidGlassStyle} /> : null
 
   // Listen for layout mode changes from ParamsPage
