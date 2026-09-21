@@ -79,7 +79,8 @@ describe('temporal validation availability', () => {
   })
 
   it('removes undated rows from every chronological window', () => {
-    const rows = Array.from({ length: 30 }, (_, i) => ({ createdAt: new Date(Date.UTC(2026, 0, i + 1)).toISOString() }))
+    const rows = Array.from({ length: 30 }, (_, i) => ({ createdAt: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+      outcome_available_at: new Date(Date.UTC(2026, 0, i + 1, 1)).toISOString(), eventKey: `e-${i}` }))
     const windows = t.buildPrequentialWalkForwardWindows([...rows, {}, { createdAt: 'bad' }])
     expect(windows.length).toBeGreaterThan(0)
     for (const window of windows) {
@@ -100,8 +101,9 @@ describe('risk diagnostics invariants', () => {
     const b = calculateDependencyPremium(pair, pair, history, 0, 1, Array(8).fill(2))
     expect(a.effectiveSampleSize).toBeCloseTo(b.effectiveSampleSize, 10)
     expect(a.pFailBothObserved).toBeCloseTo(b.pFailBothObserved, 10)
-    expect(a.pValue).toBeCloseTo(b.pValue, 10)
-    expect(a.pValueMethod).toBe('ess_normal_approximation')
+    expect(Number.isNaN(a.pValue) && Number.isNaN(b.pValue)).toBe(true)
+    expect(a.isSignificant || b.isSignificant).toBe(false)
+    expect(a.pValueMethod).toBe('unavailable_dependent_selected_sample')
   })
 
   it('does not let pending pair results enter recent-outcome calibration', () => {

@@ -28,13 +28,16 @@ const snapshotStates = (states) => {
 
 // This is a prediction-time snapshot, not a backfilled reconstruction. Call only
 // when creating a forecast; never on getInvestments()/normalization.
-export const buildForecastSnapshot = ({ combinedProfile, legs = [], generatedAt, modelVersion = 'atomic-v2' }) => {
+export const buildForecastSnapshot = ({ combinedProfile, legs = [], generatedAt, modelVersion = 'atomic-v2', calibrationMetadata = null }) => {
   const states = snapshotStates(combinedProfile?.states)
   if (!states || combinedProfile?.valid === false || !generatedAt || !Number.isFinite(Date.parse(generatedAt))) return null
   return {
     schema_version: FORECAST_SCHEMA_VERSION,
     model_version: modelVersion,
     generated_at: generatedAt,
+    calibration: calibrationMetadata ? { ...calibrationMetadata,
+      parameters: calibrationMetadata.parameters ? { ...calibrationMetadata.parameters } : undefined,
+    } : { stage: 'unknown' },
     expected_rating_semantics: MEAN_LEG_RATING_SEMANTICS,
     model_status: combinedProfile.modelStatus || 'unspecified',
     states,
@@ -44,6 +47,15 @@ export const buildForecastSnapshot = ({ combinedProfile, legs = [], generatedAt,
     legs: legs.map(({ match, profile, investmentId }) => ({
       ...getMatchSourceIdentity(match, investmentId),
       calibrated_probability: Number(profile?.hitProbability),
+      raw_conf: Number.isFinite(match?.conf) ? match.conf : null,
+      entries: (match?.entries || []).map((entry) => ({ name: entry.name, odds: entry.odds })),
+      input: {
+        conf: match?.conf, mode: match?.mode, odds: match?.odds,
+        home_team: match?.home_team ?? match?.homeTeam, away_team: match?.away_team ?? match?.awayTeam,
+        tys_home: match?.tys_home ?? match?.tysHome, tys_away: match?.tys_away ?? match?.tysAway,
+        fid: match?.fid, fse_home: match?.fse_home ?? match?.fseHome, fse_away: match?.fse_away ?? match?.fseAway,
+        entries: (match?.entries || []).map((entry) => ({ name: entry.name, odds: entry.odds })),
+      },
       model_status: profile?.modelStatus || 'unspecified',
       states: snapshotStates(profile?.states),
     })),
@@ -54,11 +66,20 @@ export const buildForecastSnapshot = ({ combinedProfile, legs = [], generatedAt,
 export const addSettlementTimestamps = (previous, next, writtenAt) => {
   if (!['win', 'lose'].includes(next?.status) || !Number.isFinite(Date.parse(writtenAt))) return next
   const firstSettlement = previous?.status === 'pending'
-  if (!firstSettlement) return next
+  const oldMatches = new Map((previous?.matches || []).map((match) => [match.id, match]))
+  const labelChanged = (match) => {
+    const old = oldMatches.get(match.id)
+    return !old || ['results', 'is_correct', 'match_rating', 'match_rep'].some((key) => old[key] !== match[key])
+  }
+  const corrected = previous && (previous.status !== next.status || previous.profit !== next.profit
+    || previous.revenues !== next.revenues || (next.matches || []).some(labelChanged))
+  if (!firstSettlement && !corrected) return next
   return {
     ...next,
-    settled_at: next.settled_at || writtenAt,
-    outcome_available_at: next.outcome_available_at || writtenAt,
-    matches: (next.matches || []).map((match) => ({ ...match, outcome_available_at: match.outcome_available_at || writtenAt })),
+    settled_at: next.settled_at || (firstSettlement ? writtenAt : undefined),
+    outcome_available_at: writtenAt,
+    matches: (next.matches || []).map((match) => ({ ...match,
+      outcome_available_at: firstSettlement || labelChanged(match) ? writtenAt : match.outcome_available_at,
+    })),
   }
 }

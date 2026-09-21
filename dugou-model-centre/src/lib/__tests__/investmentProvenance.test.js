@@ -33,9 +33,27 @@ describe('settlement provenance', () => {
     expect(addSettlementTimestamps(source, source, date).settled_at).toBeUndefined()
     expect(addSettlementTimestamps(settled, settled, '2026-10-01').settled_at).toBe(date)
   })
+  it('does not backdate corrected outcomes to the original settlement', () => {
+    const original = addSettlementTimestamps({ status: 'pending' }, source, date)
+    const correction = { ...original, matches: [{ ...original.matches[0], match_rating: 0.4, is_correct: false }] }
+    const updated = addSettlementTimestamps(original, correction, '2026-10-01T00:00:00Z')
+    expect(updated.settled_at).toBe(date)
+    expect(updated.outcome_available_at).toBe('2026-10-01T00:00:00Z')
+    expect(updated.matches[0].outcome_available_at).toBe('2026-10-01T00:00:00Z')
+    expect(addSettlementTimestamps(original, { ...original, note: 'text only' }, '2026-10-01').outcome_available_at).toBe(date)
+  })
 })
 
 describe('prediction snapshot contract', () => {
+  it('freezes the stage actually used rather than relabelling lite as full later', () => {
+    const profile = buildAtomicMatchProfile({ entries: match.entries, unionProbability: 0.6 })
+    const metadata = { stage: 'lite', pipeline_version: 'test', data_revision: 2 }
+    const snapshot = buildForecastSnapshot({ combinedProfile: profile, generatedAt: date, calibrationMetadata: metadata, legs: [{ match: { ...match, conf: 0.55 }, profile }] })
+    metadata.stage = 'full'
+    expect(snapshot.calibration.stage).toBe('lite')
+    expect(snapshot.legs[0].raw_conf).toBe(0.55)
+    expect(snapshot.legs[0].entries[0].odds).toBe(2)
+  })
   it('records exhaustive coverage as probability one, not the pre-model subjective input', () => {
     const profile = { ...buildAtomicMatchProfile({ entries: ['win', 'draw', 'lose'].map((name) => ({ name, odds: 3 })), unionProbability: 0.6 }), unionProbability: 0.6 }
     const snapshot = buildForecastSnapshot({ combinedProfile: combineAtomicMatchProfiles([profile]), generatedAt: date, legs: [{ match, profile }] })

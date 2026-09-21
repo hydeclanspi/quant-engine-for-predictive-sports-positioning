@@ -1,3 +1,4 @@
+import { predictMatchProbability } from "../lib/matchPrediction"
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Check, ChevronDown, Plus, RefreshCw, ShieldCheck, ShieldOff, SlidersHorizontal, Sparkles, XCircle } from 'lucide-react'
@@ -20,31 +21,8 @@ import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import { isPreviewMode } from '../lib/displayMode'
 
-const MODE_FACTOR_MAP = {
-  常规: 1.0,
-  '常规-稳': 1.05,
-  '常规-杠杆': 0.95,
-  '常规-激进': 0.95,
-  半彩票半保险: 0.92,
-  保险产品: 1.08,
-  赌一把: 0.88,
-}
 
-const FID_FACTOR_MAP = {
-  0: 0.92,
-  0.25: 0.99,
-  0.4: 1.02,
-  0.5: 1.05,
-  0.6: 1.07,
-  0.75: 1.1,
-}
 
-const TYS_FACTOR_MAP = {
-  S: 0.94,
-  M: 1.0,
-  L: 1.04,
-  H: 1.08,
-}
 
 const LAYER_META = {
   主推: { tone: 'text-amber-700', badge: 'bg-amber-100 text-amber-700', desc: '稳健优先，Sharpe 最高' },
@@ -1464,11 +1442,6 @@ const resolveOverlapTuning = (qualityFilter, hyperparams = null) => {
   }
 }
 
-const getFactorWeight = (value, fallback) => {
-  const n = Number.parseFloat(value)
-  if (!Number.isFinite(n)) return fallback
-  return clamp(n, 0.01, 1.5)
-}
 
 const buildId = (prefix = 'id') => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -1849,11 +1822,11 @@ const countCandidateCombos = (matchCount, maxSubsetSize = 5, minSubsetSize = 1, 
 
 const allocateAmountsWithinRiskCap = (weights, riskCap, unit = 10, minActive = 0) => {
   if (!Array.isArray(weights) || weights.length === 0) return []
-  const step = Math.max(1, Math.round(Number(unit) || 10))
-  const cap = Math.max(0, Math.floor((Number(riskCap) || 0) / step) * step)
+  const step = Number.isFinite(Number(unit)) ? Math.max(1, Math.round(Number(unit) || 10)) : 10
+  const cap = Number.isFinite(Number(riskCap)) ? Math.max(0, Math.floor(Number(riskCap) / step) * step) : 0
   if (cap <= 0) return Array(weights.length).fill(0)
 
-  const safeWeights = weights.map((value) => Math.max(0, Number(value) || 0))
+  const safeWeights = weights.map((value) => Number.isFinite(Number(value)) ? Math.max(0, Number(value)) : 0)
   const weightSum = safeWeights.reduce((sum, value) => sum + value, 0)
   if (weightSum <= 1e-9) {
     return Array(weights.length).fill(0)
@@ -1905,6 +1878,26 @@ const allocateAmountsWithinRiskCap = (weights, riskCap, unit = 10, minActive = 0
   return units.map((value) => value * step)
 }
 
+// A leg is quoted only from its own fields: investment.expected_rating is a ticket
+// probability and combined_odds a ticket price, so neither can stand in for one leg.
+const getLegQuoteConf = (match) => {
+  for (const value of [match?.conf, match?.calibrated_probability]) {
+    const parsed = Number(value)
+    if (Number.isFinite(parsed)) return clamp(parsed, 0.05, 0.95)
+  }
+  return Number.NaN
+}
+
+const getLegQuoteOdds = (match) => {
+  const parsed = Number(match?.odds)
+  return Number.isFinite(parsed) && parsed > 1 ? parsed : Number.NaN
+}
+
+const describeMissingLegQuote = (conf, odds) => {
+  if (!Number.isFinite(conf)) return Number.isFinite(odds) ? '缺少腿级概率' : '缺少腿级概率与赔率'
+  return '缺少腿级赔率'
+}
+
 const getTodayMatches = () => {
   const pending = getInvestments().filter((item) => item.status === 'pending' && !item.is_archived)
   if (pending.length === 0) return []
@@ -1914,12 +1907,13 @@ const getTodayMatches = () => {
   const todayPending = pending.filter((item) => formatDateKey(item.created_at) === todayKey)
   const source = todayPending.length > 0 ? todayPending : pending
 
-  return source
+  const rows = source
     .flatMap((investment) =>
       (investment.matches || []).map((match, matchIdx) => {
-        const conf = clamp(Number(match.conf || investment.expected_rating || 0.5), 0.05, 0.95)
-        const odds = Math.max(1.01, Number(match.odds || investment.combined_odds || 2.5))
-        const roughEv = conf * odds - 1
+        const conf = getLegQuoteConf(match)
+        const odds = getLegQuoteOdds(match)
+        const hasLegQuote = Number.isFinite(conf) && Number.isFinite(odds)
+        const roughEv = hasLegQuote ? conf * odds - 1 : Number.NaN
         return {
           ...getMatchSourceIdentity(match, investment.id),
           key: `${investment.id}-${matchIdx}`,
@@ -1931,9 +1925,13 @@ const getTodayMatches = () => {
           entry: match.entry_text || (Array.isArray(match.entries) ? match.entries.map((entry) => entry.name).join(', ') : '-'),
           entries: Array.isArray(match.entries) ? match.entries.map((entry) => ({ ...entry })) : [],
           entryMarketType: match.entry_market_type || 'other',
-          odds: Number(odds.toFixed(2)),
-          conf: Number(conf.toFixed(2)),
-          roughEvPercent: roughEv * 100,
+          odds: Number.isFinite(odds) ? Number(odds.toFixed(2)) : Number.NaN,
+          conf: Number.isFinite(conf) ? Number(conf.toFixed(2)) : Number.NaN,
+          roughEvPercent: Number.isFinite(roughEv) ? roughEv * 100 : Number.NaN,
+          // Unquotable legs stay in the bundle so the left panel can name them,
+          // but they never reach the candidate pool.
+          missingLegQuote: !hasLegQuote,
+          missingLegQuoteReason: hasLegQuote ? null : describeMissingLegQuote(conf, odds),
           mode: match.mode || '常规',
           tysHome: match.tys_home || 'M',
           tysAway: match.tys_away || 'M',
@@ -1949,7 +1947,11 @@ const getTodayMatches = () => {
     // source bundle (so the Settle page keeps showing the full parlay).
     .filter((match) => !match.excludeFromPortfolio)
     .filter((match) => !dismissedKeys.has(match.key))
-    .slice(0, 12)
+
+  return [
+    ...rows.filter((row) => !row.missingLegQuote).slice(0, 12),
+    ...rows.filter((row) => row.missingLegQuote),
+  ]
 }
 
 const buildSubsets = (items, maxSubsetSize) => {
@@ -2018,75 +2020,26 @@ const calcConfSurplus = (match, calibratedP = null, hyperparams = null) => {
   }
 }
 
-const calcAdjustedProbability = (match, systemConfig, calibrationContext) => {
-  const confMultiplier = clamp(Number(calibrationContext?.multipliers?.conf || 1), 0.75, 1.25)
-  const fseMultiplier = clamp(Number(calibrationContext?.multipliers?.fse || 1), 0.75, 1.25)
-  const rawConf = clamp(match.conf, 0.05, 0.95)
-  const conf =
-    typeof calibrationContext?.calibrate === 'function'
-      ? clamp(calibrationContext.calibrate(rawConf), 0.05, 0.95)
-      : clamp(rawConf * confMultiplier, 0.05, 0.95)
+const calcAdjustedProbability = predictMatchProbability
 
-  // ── Use LEARNED factors from calibrationContext if available, fallback to hardcoded priors ──
-  const lf = calibrationContext?.learnedFactors
-  const hasLearnedFactors = lf && lf.reliability > 0.15
-
-  // MODE factor: learned from historical hit-rate by mode
-  const modeFactor = hasLearnedFactors && lf.mode?.[match.mode] != null
-    ? lf.mode[match.mode]
-    : (MODE_FACTOR_MAP[match.mode] || 1)
-
-  // TYS factor: learned per TYS level, averaged for home/away
-  const tysHome = hasLearnedFactors && lf.tys?.[match.tysHome] != null
-    ? lf.tys[match.tysHome]
-    : (TYS_FACTOR_MAP[match.tysHome] || 1)
-  const tysAway = hasLearnedFactors && lf.tys?.[match.tysAway] != null
-    ? lf.tys[match.tysAway]
-    : (TYS_FACTOR_MAP[match.tysAway] || 1)
-  const tysFactor = (tysHome + tysAway) / 2
-
-  // FID factor: learned per FID bucket
-  const fidKey = String(match.fid)
-  const fidFactor = hasLearnedFactors && lf.fid?.[fidKey] != null
-    ? lf.fid[fidKey]
-    : (FID_FACTOR_MAP[match.fid] || 1)
-
-  // FSE factor: learned via continuous interpolation from historical FSE buckets
-  const fseMatch = Math.sqrt(clamp(match.fseHome, 0.05, 1) * clamp(match.fseAway, 0.05, 1))
-  const fseFactor = hasLearnedFactors && typeof lf.fse?.interpolate === 'function'
-    ? clamp(lf.fse.interpolate(fseMatch) * fseMultiplier, 0.72, 1.35)
-    : clamp((0.88 + fseMatch * 0.24) * fseMultiplier, 0.72, 1.35)
-
-  // Context-factor lift (mode, TYS, FID, FSE — everything EXCEPT conf itself)
-  const contextLift =
-    modeFactor ** getFactorWeight(systemConfig.weightMode, 0.16) *
-    tysFactor ** getFactorWeight(systemConfig.weightTys, 0.12) *
-    fidFactor ** getFactorWeight(systemConfig.weightFid, 0.14) *
-    fseFactor ** getFactorWeight(systemConfig.weightFse, 0.07)
-
-  // baseProbability = calibrated conf × context lift (conf is the foundation, not 0.5)
-  const baseProbability = clamp(conf * contextLift, 0.05, 0.95)
-  const anchorOdds = estimateEntryAnchorOdds(match.entries, Number(match.odds) || Number(systemConfig.defaultOdds || 2.5))
-  if (typeof calibrationContext?.calibrateProbabilityForMatch !== 'function') return baseProbability
-  return clamp(
-    calibrationContext.calibrateProbabilityForMatch({
-      baseProbability,
-      conf: rawConf,
-      odds: anchorOdds,
-      homeTeam: match.homeTeam,
-      awayTeam: match.awayTeam,
-    }),
-    0.05,
-    0.95,
-  )
-}
-
-const buildAtomicLegProfile = (match, unionProbability, fallbackOdds = 2.5) =>
-  buildAtomicMatchProfile({
-    entries: match.entries?.length ? match.entries : [{ name: match.entry || 'legacy', odds: match.odds ?? fallbackOdds }],
+const buildAtomicLegProfile = (match, unionProbability, fallbackOdds = 2.5) => {
+  const legOdds = Number(match.odds)
+  if (!match.entries?.length && !(Number.isFinite(legOdds) && legOdds > 1)) {
+    // No selection and no leg-level price: there is nothing to price the leg with,
+    // so the profile stays non-exact instead of borrowing fallbackOdds for a made-up entry.
+    return {
+      ...buildAtomicMatchProfile({ entries: [], unionProbability, fallbackOdds: Number.NaN }),
+      modelVersion: 'atomic-v2',
+      modelStatus: 'approximate',
+      warnings: ['该场次缺少预测选项与可用赔率，无法构建收益分布；仅作近似占位，不用于自动仓位或风险模拟。'],
+    }
+  }
+  return buildAtomicMatchProfile({
+    entries: match.entries?.length ? match.entries : [{ name: match.entry || 'legacy', odds: legOdds }],
     unionProbability,
     fallbackOdds,
   })
+}
 
 const getPortfolioInputIssue = (matches, qualityFilter = {}) => {
   for (const match of matches) {
@@ -3627,7 +3580,7 @@ const generateRecommendations = (
     preparedRanked = applyCoverageDynamicBoost(preparedRanked, selectedMatches, hp?.coverageDecayBase ?? 0.6, hp)
     preparedRanked.sort((a, b) => b.boostedUtility - a.boostedUtility || b.utility - a.utility)
   }
-  preparedRanked = preparedRanked.map((item) => ({ ...item, rawUtility: item.utility, utility: getRankingUtility(item) }))
+  preparedRanked = preparedRanked.map((item) => ({ ...item, utility: getRankingUtility(item) }))
 
   // ── 思路3: Stratified selection by legs count ──
   // FIX #9: Apply retrospective legs-distribution learning to stratified quotas
@@ -3775,6 +3728,8 @@ const generateRecommendations = (
 
     return {
       id: `combo-${rank}`,
+      predictedAt: new Date().toISOString(),
+      calibrationMetadata: calibrationContext?.metadata ? { ...calibrationContext.metadata } : { stage: 'unknown' },
       rank,
       tier: tierLabel,
       layer,
@@ -4030,30 +3985,38 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
   const candidateRows = useMemo(
     () =>
-      todayMatches.map((item) => {
-        const adjustedProb = calcAdjustedProbability(item, systemConfig, calibrationContext)
-        const fallbackOdds = Math.max(1.01, Number(item.odds) || 2.5)
-        const atomicProfile = buildAtomicLegProfile(item, adjustedProb, fallbackOdds)
-        const rawAtomicProfile = buildAtomicLegProfile(item, clamp(Number(item.conf) || 0.5, 0.05, 0.95), fallbackOdds)
-        const effectiveOdds = Number(atomicProfile.equivalentOdds)
-        const adjustedEvPercent = Number(atomicProfile.expectedReturn || 0) * 100
-        const suggestedAmount = calcRecommendedAmount(adjustedProb, effectiveOdds, systemConfig, riskCap, calibrationContext, poolCapital)
-        const autoRole = inferMatchRoleByMetrics(adjustedProb, effectiveOdds, item.conf)
-        return {
-          ...item,
-          adjustedProb,
-          adjustedEvPercent,
-          suggestedAmount,
-          effectiveOdds,
-          atomicProfile,
-          rawAtomicProfile,
-          inputIssue: atomicProfile.valid === false || atomicProfile.modelStatus === 'approximate'
-            ? atomicProfile.issues?.[0]?.message || atomicProfile.warnings?.[0]
-            : null,
-          autoRole,
-        }
-      }),
+      todayMatches
+        // 缺少腿级概率/赔率的场次无法报价，不进入候选池（由左侧提示说明原因）。
+        .filter((item) => !item.missingLegQuote)
+        .map((item) => {
+          const adjustedProb = calcAdjustedProbability(item, systemConfig, calibrationContext)
+          const fallbackOdds = Math.max(1.01, Number(item.odds) || 2.5)
+          const atomicProfile = buildAtomicLegProfile(item, adjustedProb, fallbackOdds)
+          const rawAtomicProfile = buildAtomicLegProfile(item, clamp(Number(item.conf) || 0.5, 0.05, 0.95), fallbackOdds)
+          const effectiveOdds = Number(atomicProfile.equivalentOdds)
+          const adjustedEvPercent = Number(atomicProfile.expectedReturn || 0) * 100
+          const suggestedAmount = calcRecommendedAmount(adjustedProb, effectiveOdds, systemConfig, riskCap, calibrationContext, poolCapital)
+          const autoRole = inferMatchRoleByMetrics(adjustedProb, effectiveOdds, item.conf)
+          return {
+            ...item,
+            adjustedProb,
+            adjustedEvPercent,
+            suggestedAmount,
+            effectiveOdds,
+            atomicProfile,
+            rawAtomicProfile,
+            inputIssue: atomicProfile.valid === false || atomicProfile.modelStatus === 'approximate'
+              ? atomicProfile.issues?.[0]?.message || atomicProfile.warnings?.[0]
+              : null,
+            autoRole,
+          }
+        }),
     [calibrationContext, riskCap, poolCapital, systemConfig, todayMatches],
+  )
+
+  const unquotableLegRows = useMemo(
+    () => todayMatches.filter((item) => item.missingLegQuote),
+    [todayMatches],
   )
 
   const displayedCandidates = useMemo(() => {
@@ -4356,6 +4319,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
     }, {})
     // FIX #9: Snapshot candidate match keys + surplus for retrospective learning
     const candidateMatchKeys = selectedRows.map((row) => ({
+      ...getMatchSourceIdentity(row, row.investmentId),
       matchKey: `${(row.homeTeam || '-').trim()} vs ${(row.awayTeam || '-').trim()}`,
       surplus: row.confSurplus?.surplus || 0,
       conf: row.conf || 0,
@@ -5262,7 +5226,8 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
       if (profiles.some((profile) => profile.valid === false || profile.modelStatus !== 'exact')) return null
       const combinedProfile = combineAtomicMatchProfiles(profiles)
       const generatedAt = new Date(baseTime).toISOString()
-      const snapshot = buildForecastSnapshot({ combinedProfile, generatedAt, modelVersion: 'atomic-v2',
+      const snapshot = buildForecastSnapshot({ combinedProfile, generatedAt: combo.predictedAt || generatedAt, modelVersion: 'atomic-v2',
+        calibrationMetadata: combo.calibrationMetadata,
         legs: matches.map((match, i) => ({ match, profile: profiles[i] })) })
       if (!snapshot) return null
       matches.forEach((match, i) => { match.calibrated_probability = profiles[i].hitProbability })
@@ -5340,8 +5305,8 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           <p className="font-semibold text-indigo-600 text-xs tracking-wide mt-2">— 高阶校准与相关性建模 —</p>
           <p><strong>20. 保序回归校准</strong>：Pool-Adjacent-Violators 算法实现非参数、保单调性概率校准，与线性回归按可靠度加权混合（保序权重上限 60%）。输出 Brier Score 改善度指标。</p>
-          <p><strong>21. Entry 相关性矩阵</strong>：从历史结算多腿组合中构建 Entry 类型两两 φ 系数矩阵（收缩估计 K=10）。正相关 → 联合概率乘性上修（{'>'} 独立乘积），负相关 → 乘性下修，修正幅度与概率水平等比例。</p>
-          <p><strong>22. Per-Match EJR 监控</strong>：逐场追踪 EJR（模型置信度）vs AJR（赛后评级）的 δ / MAE / RMSE，按 Mode 维度拆分，持续监控预测偏差分布。</p>
+          <p><strong>21. Entry 相关性矩阵</strong>：从历史结算多腿组合中构建 Entry 类型两两 φ 系数矩阵（收缩估计 K=10），当前只作为诊断输出——信度 {'>'} 0.2 的配对参与统计，结果显式标注 applied: false（未参与计算）。历史相关性刻意不介入概率：只改联合概率而不改 EV / 方差，期望与收益分布就会描述两个不同的随机对象；在缺少一致的多事件联合模型之前，该信号只展示、不生效。</p>
+          <p><strong>22. 逐场判断评级对照</strong>：对照原始 Conf 与归一化 AJR（AJR / 0.8）的差值、MAE 和 RMSE；这是判断评级差异，不是命中概率校准误差。</p>
 
           <p className="font-semibold text-indigo-600 text-xs tracking-wide mt-2">— Conf-Surplus 与组合分散化 —</p>
           <p><strong>23. Conf-Surplus 反共识信号</strong>：<code>surplus = conf - (1/odds × 0.95)</code>，量化模型置信度相对去水市场隐含概率的超额。分四级 edge：strong（+12pp）→ moderate（+4pp）→ neutral → negative。Surplus 正向加分融入效用函数（均值 × 0.15 + 峰值 ≥ 12pp 额外 +3%），激励反共识高信心投注。</p>
@@ -5397,10 +5362,10 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ 在线学习闭环</p>
           <p><strong>44. 权重实时微调</strong>：每次结算完成后自动触发自适应权重评估与应用，实现模型参数在每批新数据进入时的增量更新。安全约束：单权重 ±0.02，单周期总量 ≤ 0.08。</p>
-          <p><strong>45. EJR 诊断管线</strong>：Per-Match EJR 快照（逐场置信度偏差、分 Mode 精度）实时接入校准上下文，为下游校准与 UI 监控提供结构化诊断数据。</p>
+          <p><strong>45. 评级诊断管线</strong>：逐场 Conf／AJR 对照按 Mode 汇总；命中概率的验证另用真实中／未中标签计算 Brier 和 LogLoss。</p>
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ 数值精度与模拟保真度</p>
-          <p><strong>46. 相关性乘性修正</strong>：Entry 相关性对联合概率的修正从加性（p + adj）改为乘性（p × (1 + adj/p)），使 φ 系数对各概率水平产生等比例影响——加性修正在低概率场景（p ≈ 0.05）会产生 60% 的非线性扭曲，乘性修正消除了这一偏差。</p>
+          <p><strong>46. 相关性乘性修正（已停用）</strong>：Entry 相关性对联合概率的乘性修正已不再施加——概率、EV 与方差统一来自原子收益分布的联乘结果，相关性只保留为诊断值。只改联合概率而不改 EV / 方差，就会让期望与收益分布描述两个不同的随机对象（详见第 21 条）。</p>
           <p><strong>47. 相关性 Monte Carlo</strong>：MC 模拟中，同一场比赛在多个组合中共享唯一采样结果（per match key → single draw），取代此前各组合独立采样的假设。这使 VaR 与全亏概率准确反映组合间的结构性相关风险。</p>
           <p><strong>48. 余弦退火优化</strong>：Portfolio 权重优化器的投影梯度上升引入余弦退火学习率调度（<code>lr × (0.1 + 0.9 × cos_schedule)</code>），前期快速探索、后期精细收敛，最终解质量提升约 5–15%。</p>
           <p><strong>49. 数值边界防护</strong>：MC 直方图在 P&L 全同值时自动启用退化区间处理（range {'>'} 1e-9 守卫），消除零区间导致的 NaN 索引风险。</p>
@@ -5416,27 +5381,27 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           <p><strong>52. 自适应密度因子</strong>：各赔率 band 的样本密度差异通过密度调节因子补偿——以全 band 几何均值为锚点，<code>factor = (geometricMean / localDensity)^0.3</code>，clamp [0.5, 2.0]。高密度区域适度降权、低密度区域温和增权，alpha=0.3 保证修正温和不过激。</p>
           <p><strong>53. 2D 乘积核 + 密度校正</strong>：双维核权重取两个赔率维度的一维核权重乘积，再乘以两维密度因子的算术均值，构成最终的 pair-level 核权重。每个历史组合中选取核权重最高的配对作为该组合的代表样本。</p>
           <p><strong>54. 四级时间近因衰减</strong>：历史组合按索引排序（最近优先），分四档加权——近 30 场 ×1.45、31–75 场 ×1.28、76–150 场 ×1.15、其余 ×1.0。索引排序替代日期排序，消除时间戳缺失或格式不一致的脆弱性。</p>
-          <p><strong>55. Kish 有效样本量</strong>：加权估计的置信度不以原始计数衡量，而采用 Kish ESS = (ΣW)² / ΣW²，真实反映加权后的等效独立样本数。ESS 驱动后续置信度映射与校准层的准入门槛。</p>
+          <p><strong>55. Kish 有效样本量</strong>：加权估计的置信度不以原始计数衡量，而采用 Kish ESS = (ΣW)² / ΣW²，真实反映加权后的等效独立样本数。ESS 驱动后续的置信度映射（<code>clamp(ln(1+ESS)/ln(31), 0.05, 1)</code>）与 copula 边的准入（ESS {'>'} 0）；近因校准层的准入门槛则由近期匹配条数决定（≥3 场）。</p>
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ 近因校准层</p>
           <p><strong>56. 局部-全局双率比较</strong>：提取最近 25 场 d≤1 匹配的局部共同失败率，与核回归平滑估计对比。差异经 tanh 非线性响应压缩——小差异近似线性放大、大差异自然饱和，避免极端样本制造虚假信号。</p>
           <p><strong>57. 方向一致性加权</strong>：当局部趋势与全局趋势同向时乘以 1.3× 增益（信号互证），反向时乘以 0.55× 衰减（信号矛盾需保守），中性时 0.85×。叠加数据一致性因子（局部方差越低越可信，范围 0.7–1.3×）。</p>
-          <p><strong>58. 弹性校准幅度</strong>：校准总影响力由 ESS 驱动的置信度控制在 6%–20% 区间内——低 ESS 时校准层仅施加微调（6%），高 ESS 时允许更大幅度修正（20%），但永远不超过 20%。</p>
+          <p><strong>58. 弹性校准幅度</strong>：校准总影响力的基础区间为 6%–20%，由近期匹配条数线性驱动（3 场 → 0、25 场 → 1：样本少时只做微调，样本充足才允许更大幅度修正）；再乘方向一致性（0.55× / 0.85× / 1.3×）与数据一致性（0.7–1.3×）系数，实际幅度随信号质量在该区间上下浮动。ESS 不进入该幅度的计算。</p>
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ Copula 尾部依赖建模</p>
           <p><strong>59. FGM Copula 联合失败率</strong>：在固定边际失败率 (pA, pB) 下，以 FGM copula 构造联合分布。copula 参数 θ 由贝叶斯后验均值（时变观测 × 有效样本 + 独立先验 × 先验强度 16）经 Fréchet 边界约束求解，刻画超越独立假设的尾部联动。</p>
-          <p><strong>60. 时变贝叶斯收缩</strong>：联合失败率估计融合三层信号——全局核回归率、近 60 场滚动窗口率、独立先验率。近期窗口可信度 = ESS / (ESS + 10)，自适应控制近期信号的采信程度。后验均值再以先验强度 16 收缩，小样本不偏离独立假设，大样本充分反映观测依赖。</p>
+          <p><strong>60. 时变贝叶斯收缩</strong>：联合失败率估计融合三层信号——全局核回归率、近 60 场滚动窗口率、独立先验率。近因层先取窗口内的近因加权局部失败率，再以近期窗口的 Kish ESS 作为可信度权重 <code>w = ESS / (ESS + 10)</code> 与全局核估计按 w 混合（w 有界于 [0, 1)，近期样本稀缺时几乎完全回落核估计）。后验均值再以先验强度 16 收缩，小样本不偏离独立假设，大样本充分反映观测依赖。</p>
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ Shapley 公平归因</p>
-          <p><strong>61. MSI Shapley 边际归因（乘法博弈）</strong>：Marginal Survival Impact 采用 Shapley 值对全组合的「依赖性额外翻车风险」做公平归因。价值函数定义为乘法博弈 V(S) = [1 − Π(1 − qCopula_k)] − [1 − Π(1 − qInd_k)]，即激活边集下 copula 联合翻车概率与独立基线的差。乘法结构引入交互效应——边越多，单条边的边际贡献因风险饱和而递减，Shapley 分摊反映真实的组合级边际杀伤力。通过 7500 次确定性置换采样逼近各边的 Shapley 值。</p>
+          <p><strong>61. MSI Shapley 边际归因（乘法博弈）</strong>：Marginal Survival Impact 采用 Shapley 值对全组合的「依赖性额外翻车风险」做分摊。价值函数定义为乘法博弈 V(S) = [1 − Π(1 − qCopula_k)] − [1 − Π(1 − qInd_k)]，即激活边集下 copula 联合翻车概率与独立基线的差。乘法结构引入交互效应——边越多，单条边的边际贡献因风险饱和而递减。该值建在代理乘积博弈上（attributionBasis: edge_product_proxy_game_not_causal_tail_probability），是按边集乘积分摊的指数，不是因果意义上的尾部贡献，也不是真实概率，故卡片标注为「MSI · 代理指数分摊」。通过 7500 次确定性置换采样逼近各边的 Shapley 值。</p>
           <p><strong>62. 确定性 Quasi-Monte Carlo</strong>：置换序列由组合赔率的哈希种子驱动（Fisher-Yates 洗牌 + 线性同余 LCG，模数 2³¹−1），同一组合多次计算结果严格幂等。精确 Shapley 需枚举 n! 种排列（21 条边 → 21! ≈ 5.1×10¹⁹），Quasi-MC 以 7500 次确定性置换将复杂度降至 O(n²·S)。每次迭代的种子偏移量取质数 7919，最大化低差异性（low-discrepancy）覆盖排列空间。</p>
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ 脆弱性评分与可视化</p>
-          <p><strong>63. 复合脆弱性评分</strong>：依赖风险溢价（premium）、统计显著性（p-value）、ESS 置信度三维信号经加权融合为 0–100 脆弱性评分。premium 权重随 |premium| 单调递增（高溢价区信号更强），p-value 以 1 − p 折算为可信度乘子施加于溢价分量，ESS 经 <code>min(1, ESS/κ)</code> 映射为全局衰减因子（κ 为置信度饱和阈值）。最终评分驱动四级风险标签（Low / Moderate / Elevated / High）与 10 段连续色谱。</p>
+          <p><strong>63. 复合脆弱性评分</strong>：评分是一条纯溢价映射——先按偏差强度折半修正幸存者偏差后的溢价，再做符号相关的保守调整（正溢价 × 0.8、负溢价 × 1.2，展示用启发式，不是拟合的基准率修正），最后线性映射到 0–100：<code>clamp((adjustedPremium + 0.5) / 1.0 × 100, 0, 100)</code>。显著性不进入评分：核函数挑出的重叠配对不是独立同分布试验，p-value 恒为不可用（NaN）、isSignificant 恒为 false，评分中没有 p 值项；ESS 只在组合整体脆弱度做加权平均时充当权重，不影响单对评分。该指数是探索性相对量（exploratory_relative_index_not_probability），不是概率。最终评分驱动四级风险标签（Low / Moderate / Elevated / High）与 10 段连续色谱。</p>
           <p><strong>64. Sigmoid 映射增强</strong>：原始脆弱性评分经 Sigmoid 函数 <code>score = 89 / (1 + e^(-k(x - anchor)))</code> 重映射至 [0, 89] 区间。锚点取当前矩阵中位数，斜率 k = 2/IQR 自适应——IQR 越大曲线越平缓，IQR 越小区分度越高。消除线性归一化导致的两极堆积。</p>
           <p><strong>65. 三维结果分解</strong>：每对配对的历史结果拆解为 Full Hit（双腿命中）、Partial Miss（一对一错）、Bust（双腿失败）三个加权计数，共享同一套核权重与时间衰减体系，提供结构化的结果分布视图。</p>
 
-          <p className="text-[11px] text-stone-400 mt-3 pt-2 border-t border-stone-100">DuGou Portfolio Optimization Engine v4.9 · Composite Calibration · PAV Isotonic · Learned Context Factors · Walk-Forward Feedback · Entry Correlation (Multiplicative) · Conf-Surplus · Anchor Diversification · Portfolio Allocation (Cosine Annealing) · Correlated Monte Carlo · Full-Spectrum WF Hyperparameter Calibration · Adaptive Weight Auto-Apply · Combo Retrospective Learning · Dependency Risk Matrix (Kernel Regression · FGM Copula · Shapley MSI · Sigmoid Mapping)</p>
+          <p className="text-[11px] text-stone-400 mt-3 pt-2 border-t border-stone-100">DuGou Portfolio Optimization Engine v4.9 · Composite Calibration · PAV Isotonic · Learned Context Factors · Walk-Forward Feedback · Entry Correlation (Diagnostic Only) · Conf-Surplus · Anchor Diversification · Portfolio Allocation (Cosine Annealing) · Shared-Draw Monte Carlo · Full-Spectrum WF Hyperparameter Calibration · Adaptive Weight Auto-Apply · Combo Retrospective Learning · Dependency Risk Matrix (Kernel Regression · FGM Copula · Shapley MSI · Sigmoid Mapping)</p>
         </div>
       ), maskText),
     })
@@ -5507,6 +5472,13 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
             <p role="status" className="mb-3 text-xs leading-relaxed text-amber-700">
               {displayedCandidates.filter((item) => item.inputIssue).map((item) => `${item.match}：${item.inputIssue}`).join('；')}
               {' '}以上场次暂不参与自动组合，请在原始记录补正或拆分选项。
+            </p>
+          )}
+
+          {unquotableLegRows.length > 0 && (
+            <p role="status" className="mb-3 text-xs leading-relaxed text-amber-700">
+              {unquotableLegRows.map((item) => `${item.match}：${item.missingLegQuoteReason}`).join('；')}
+              {' '}以上场次没有腿级概率或赔率，无法报价，暂不参与自动组合，请在原始记录补正。
             </p>
           )}
 
@@ -7263,7 +7235,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
             </button>
           </div>
           <p className="text-sm text-stone-500 leading-relaxed">
-            {maskText('基于 Markowitz 均值-方差框架，融合复合概率校准管线（线性回归 + PAV 保序回归自适应混合）、自学习情境因子（Shrinkage K=12）、Walk-Forward 反馈回路（自动调参 Kelly/Odds权重/阈值），构建多资产联合分布并以纯分数 Kelly 准则优化仓位。v4.0 容错引擎实现四级置信度梯度 + C(N,N-1) 容错覆盖 + 边际 Sharpe 门控 + 分层对冲架构。v4.3 引入 Entry 相关性矩阵（Phi 系数修正联合概率）与 Per-Match EJR 追踪。v4.4 新增 Conf-Surplus 反共识信号 + 锚定分散化惩罚 + Portfolio Allocation 优化器 + 50k Monte Carlo。v4.9 全参数自旋转引擎：修复 Kelly 经验因子残留与 Walk-Forward 旁路，新增 backtestComboHyperparams 引擎从结算数据自动校准 20+ 组合生成/评分参数族群（vig、surplus 阈值、分层配额、MMR 惩罚、角色系数、组合优化器、时序权重、软惩罚、覆盖衰减、相关性公式等），可靠度加权混合确保小样本稳健。系统旋转覆盖率从 ~55% 提升至 ~92%。')}
+            {maskText('基于 Markowitz 均值-方差框架，融合复合概率校准管线（线性回归 + PAV 保序回归自适应混合）、自学习情境因子（Shrinkage K=12）、Walk-Forward 反馈回路（自动调参 Kelly/Odds权重/阈值），构建多资产联合分布并以纯分数 Kelly 准则优化仓位。v4.0 容错引擎实现四级置信度梯度 + C(N,N-1) 容错覆盖 + 边际 Sharpe 门控 + 分层对冲架构。v4.3 引入 Entry 相关性矩阵（仅作历史诊断，不修正联合概率）与 Per-Match EJR 追踪。v4.4 新增 Conf-Surplus 反共识信号 + 锚定分散化惩罚 + Portfolio Allocation 优化器 + 50k Monte Carlo。v4.9 全参数自旋转引擎：修复 Kelly 经验因子残留与 Walk-Forward 旁路，新增 backtestComboHyperparams 引擎从结算数据自动校准 20+ 组合生成/评分参数族群（vig、surplus 阈值、分层配额、MMR 惩罚、角色系数、组合优化器、时序权重、软惩罚、覆盖衰减、相关性公式等），可靠度加权混合确保小样本稳健。系统旋转覆盖率从 ~55% 提升至 ~92%。')}
           </p>
           <div className="mt-3 flex flex-wrap gap-1.5">
             {['复合校准','保序回归','自学习因子','Walk-Forward','原子建模','Kelly准则','容错覆盖','Sharpe门控','Conf-Surplus','锚定分散化','Entry相关性','Monte Carlo','Portfolio优化','超参WF校准','自适应权重','全参数自旋转','组合回溯学习'].map(tag => (

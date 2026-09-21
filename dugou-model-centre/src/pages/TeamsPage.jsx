@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
+import { splitInvestmentToMatches } from '../lib/matchAttribution'
 import { Search } from 'lucide-react'
 import { getTeamsSnapshot } from '../lib/analytics'
 import { getInvestments, getTeamProfiles } from '../lib/localData'
@@ -178,23 +179,11 @@ const buildTeamHistoryRowsMap = (periodKey) => {
     const matches = Array.isArray(investment.matches) ? investment.matches : []
     if (matches.length === 0) return
 
-    const inputs = Number.parseFloat(investment.inputs)
-    const revenues = Number.parseFloat(investment.revenues)
-    const settledProfit = Number.parseFloat(investment.profit)
-    const perInput = Number.isFinite(inputs) ? inputs / matches.length : 0
-    const fallbackPerProfit = Number.isFinite(settledProfit) ? settledProfit / matches.length : Number.NaN
     const isPending = investment.status === 'pending'
 
-    const validOdds = matches
-      .map((match) => Number.parseFloat(match?.odds))
-      .filter((odd) => Number.isFinite(odd) && odd > 0)
-    const oddsSum = validOdds.reduce((sum, odd) => sum + odd, 0)
-
-    matches.forEach((match) => {
+    splitInvestmentToMatches(investment).forEach((match) => {
       const odd = Number.parseFloat(match?.odds)
-      const weightedRevenue =
-        Number.isFinite(revenues) && revenues > 0 && oddsSum > 0 && Number.isFinite(odd) && odd > 0 ? (revenues * odd) / oddsSum : Number.NaN
-      const allocatedProfit = Number.isFinite(weightedRevenue) ? weightedRevenue - perInput : fallbackPerProfit
+      const allocatedProfit = match.allocated_profit
       const profitText =
         isPending || !Number.isFinite(allocatedProfit) ? '待结算' : `${allocatedProfit >= 0 ? '+' : '-'}¥${Math.round(Math.abs(allocatedProfit))}`
       const homeTeam = normalizeTeamName(match.home_team, aliasMap)
@@ -349,7 +338,7 @@ export default function TeamsPage() {
     <div className="page-shell page-content-fluid">
       <div className="mb-6">
         <h2 className="text-2xl font-semibold text-stone-800 font-display">球队档案馆</h2>
-        <p className="text-stone-400 text-sm mt-1">球队维度：样本量 / ROI / AJR 走势</p>
+        <p className="text-stone-400 text-sm mt-1">球队维度：样本量 / ROI / AJR 走势 · 串关 ROI 为分摊归因，不是单腿实收收益</p>
       </div>
 
       <div className="glow-card bg-white rounded-2xl p-4 border border-stone-100 mb-6 relative z-30">
@@ -419,8 +408,8 @@ export default function TeamsPage() {
                 <span className="text-xs text-stone-400 block">Avg AJR</span>
                 <span className="text-sm font-medium text-stone-700">{Number(team.avgAjr || 0).toFixed(2)}</span>
               </div>
-              <div>
-                <span className="text-xs text-stone-400 block">{maskText('AJR-Conf')}</span>
+              <div title={maskText('判断残差（归一化 AJR − Conf）：赛前预期与赛后判断评级的差值，衡量判断偏保守或偏激进，不是命中概率的校准误差。')}>
+                <span className="text-xs text-stone-400 block">{maskText('判断残差')}</span>
                 <span className={`text-sm font-medium ${team.ratingDiff >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                   {toSigned(team.ratingDiff, 2)}
                 </span>

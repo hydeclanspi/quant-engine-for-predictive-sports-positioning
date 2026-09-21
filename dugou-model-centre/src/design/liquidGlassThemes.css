@@ -1,0 +1,174 @@
+/* Stable compositions, shared with Console previews. The light field has no
+ * animation loop, so reduced motion and background tabs need no extra work. */
+.composed-glass-scene {
+  --scene-base: #e7ece9;
+  --scene-cool: #acc4c0;
+  --scene-mid: #d1deda;
+  --scene-light: #f5f9f6;
+  --scene-warm: #eee3d5;
+  --scene-warm-light: #faf7ef;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(120deg, var(--scene-light), var(--scene-base) 67%);
+}
+.composed-glass-scene--moon {
+  --scene-base: #e4e9ef;
+  --scene-cool: #acbcd0;
+  --scene-mid: #cfd9e5;
+  --scene-light: #f5f7fb;
+  --scene-warm: #dce0e8;
+  --scene-warm-light: #f2f5f8;
+}
+.composed-glass-scene--sand {
+  --scene-base: #eeebe5;
+  --scene-cool: #c7bba9;
+  --scene-mid: #ded6c9;
+  --scene-light: #faf8f1;
+  --scene-warm: #e9d9c5;
+  --scene-warm-light: #fff8eb;
+}
+.composed-glass-scene__cool {
+  position: absolute;
+  width: 156%;
+  height: 172%;
+  left: 4%;
+  top: -115%;
+  border-radius: 48%;
+  transform: rotate(-24deg);
+  background: linear-gradient(166deg, var(--scene-light) 43%, var(--scene-mid) 68%, var(--scene-cool) 93%);
+  box-shadow: 0 2px 3px #ffffff70, 0 12px 26px #4158510f;
+  filter: blur(2px);
+}
+.composed-glass-scene__warm {
+  position: absolute;
+  width: 160%;
+  height: 140%;
+  left: -54%;
+  top: 74%;
+  border-radius: 48%;
+  transform: rotate(-21deg);
+  background: linear-gradient(30deg, var(--scene-warm) 42%, var(--scene-warm-light) 92%);
+  box-shadow: 0 -2px 6px #ffffff99, 0 -16px 45px #4a554b06;
+  filter: blur(2px);
+}
+.composed-glass-scene__light {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(108deg, #ffffff36, transparent 46%, #ffffff12);
+}
+.composed-glass-scene--preview {
+  position: absolute;
+  border-radius: inherit;
+}
+
+/* Six choices reflow instead of forcing the Console card wider than its page. */
+.glass-theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+.glass-theme-option {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  border: 1px solid #d9dfe3;
+  border-radius: 12px;
+  background: #ffffff80;
+  color: #35434c;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, background-color 160ms ease;
+}
+.glass-theme-option:hover { border-color: #8baba8; background: #ffffffb3; }
+.glass-theme-option[aria-pressed='true'] {
+  border-color: #4c797b;
+  box-shadow: 0 0 0 1px #4c797b;
+  background: #ffffffc4;
+}
+.glass-theme-option:focus-visible { outline: 2px solid #177c9a; outline-offset: 3px; }
+.glass-theme-option__preview {
+  position: relative;
+  display: block;
+  height: 48px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.glass-theme-option__sample {
+  position: absolute;
+  inset: 12px 22%;
+  border: 1px solid #ffffffc9;
+  border-radius: 6px;
+  background: #ffffff4d;
+  -webkit-backdrop-filter: blur(3px) saturate(150%);
+  backdrop-filter: blur(3px) saturate(150%);
+  box-shadow: 0 3px 6px #30464d12;
+}
+.glass-theme-option__name {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.glass-theme-option__description { color: #56666e; font-size: 11px; line-height: 1.5; }
+.glass-theme-option__selected { visibility: hidden; color: #386869; }
+.glass-theme-option[aria-pressed='true'] .glass-theme-option__selected { visibility: visible; }
+
+/* Only the three new themes use these corrections. Existing page materials
+ * carry opaque gradient images as well as background colors; clear both on
+ * primary glass surfaces so the composed backdrop remains visible. */
+html.liquid-glass-composed .lab-editions {
+  --lab-card: #ffffff4d;
+  --lab-glass: #ffffff73;
+  --lab-well: #ffffffad;
+  --lab-rim: #ffffffbf;
+  --lab-edge: inset 0 1px 0 #ffffffd9;
+  --lab-shadow: 0 10px 32px #0f172a14;
+}
+html.liquid-glass-composed .app-main-content::before,
+html.liquid-glass-composed .app-main-content::after { display: none; }
+
+html.liquid-glass-composed :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
+  /* Some existing Console surfaces use !important background shorthands. */
+  background: linear-gradient(135deg, #ffffff14, transparent 65%), #ffffff4d !important;
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+  border-color: #ffffffbf;
+  box-shadow: inset 0 1px 0 #ffffffd9, 0 10px 32px #0f172a14;
+}
+html.liquid-glass-composed .theme-modern .app-main-content :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
+  -webkit-backdrop-filter: blur(30px) saturate(200%);
+  backdrop-filter: blur(30px) saturate(200%);
+}
+
+/* Give dense reading surfaces a stable tint when translucency is unavailable
+ * or the user explicitly asks for more contrast / less transparency. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.liquid-glass-composed :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
+    background: #f8faf9f2 !important;
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html.liquid-glass-composed .lab-editions { --lab-card: #f8faf9f2; --lab-glass: #f8faf9f2; }
+  html.liquid-glass-composed :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
+    background: #f8faf9f2 !important;
+    border-color: #6b7d83;
+  }
+}
+@media (max-width: 640px) {
+  .glass-theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .composed-glass-scene:not(.composed-glass-scene--preview) .composed-glass-scene__cool {
+    left: -35%;
+    width: 225%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-theme-option { transition: none; }
+}

@@ -24,6 +24,7 @@ import { addSettlementTimestamps, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS 
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
+import { DEFAULT_LIQUID_GLASS_STYLE, isLiquidGlassStyle, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
 
 const STORAGE_KEYS = {
   investments: 'dugou.investments.v1',
@@ -127,8 +128,8 @@ const DEFAULT_SYSTEM_CONFIG = {
   pageAmbientThemes: { ...PAGE_AMBIENT_THEME_DEFAULTS },
   // 液态玻璃背景（Liquid Glass）：UI 偏好，默认开启；时光穿越中同 pageAmbientThemes 一样保留当前值
   liquidGlassEnabled: true,
-  // 背景主题：'temp' 流光溢彩引擎×红果配色（默认） / 'vivid' 原版流光溢彩 / 'hongguo' 红果构图化色场
-  liquidGlassStyle: 'temp',
+  // 背景主题选项统一维护于 design/liquidGlassThemes。
+  liquidGlassStyle: DEFAULT_LIQUID_GLASS_STYLE,
 }
 
 const DEFAULT_TEAM_PROFILES = [
@@ -510,9 +511,10 @@ export const getSystemConfig = () => {
     if (typeof currentConfig?.liquidGlassEnabled === 'boolean') {
       merged.liquidGlassEnabled = currentConfig.liquidGlassEnabled
     }
-    if (['vivid', 'hongguo', 'temp'].includes(currentConfig?.liquidGlassStyle)) {
+    if (isLiquidGlassStyle(currentConfig?.liquidGlassStyle)) {
       merged.liquidGlassStyle = currentConfig.liquidGlassStyle
     }
+    merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
     return merged
   }
 
@@ -520,6 +522,7 @@ export const getSystemConfig = () => {
   const saved = readJSON(STORAGE_KEYS.systemConfig, null)
   const merged = { ...DEFAULT_SYSTEM_CONFIG, ...(saved || {}) }
   merged.pageAmbientThemes = normalizePageAmbientThemes(saved?.pageAmbientThemes)
+  merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
   return merged
 }
 

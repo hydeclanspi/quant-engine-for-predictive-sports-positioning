@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { splitInvestmentToMatches } from '../lib/matchAttribution'
 import { useNavigate } from 'react-router-dom'
 import { getAnalysisSnapshot, getDashboardSnapshot, getMetricsSnapshot } from '../lib/analytics'
 import { getInvestments } from '../lib/localData'
@@ -96,6 +97,19 @@ const signed = (value, digits = 1, suffix = '') => {
   const sign = num > 0 ? '+' : ''
   return `${sign}${num.toFixed(digits)}${suffix}`
 }
+
+const hasRealizedProfit = (item) => {
+  if (item?.profit === null || item?.profit === undefined || item?.profit === '') return false
+  return Number.isFinite(Number(item.profit))
+}
+
+const formatRoi = (value, digits = 1) => (Number.isFinite(Number(value)) ? signed(value, digits, '%') : '—')
+
+const roiTone = (value) =>
+  !Number.isFinite(Number(value)) ? 'text-stone-400' : Number(value) >= 0 ? 'text-emerald-600' : 'text-rose-500'
+
+const roiTextTone = (text) =>
+  text === '—' ? 'text-stone-400' : String(text).startsWith('+') ? 'text-emerald-600' : 'text-rose-500'
 
 const toRmb = (value, withSign = false) => {
   const num = Number(value || 0)
@@ -220,39 +234,21 @@ const formatMatchRecord = (investment, match, allocatedInput, allocatedProfit, s
   odds: Number.isFinite(Number(match.odds)) ? Number(match.odds).toFixed(2) : '-',
   ajr: Number.isFinite(Number(match.match_rating)) ? Number(match.match_rating).toFixed(2) : '-',
   conf: Number.isFinite(Number(match.conf)) ? Number(match.conf).toFixed(2) : '-',
-  roi: signed(calcRoi(allocatedProfit, allocatedInput), 1, '%'),
+  roi: formatRoi(calcRoi(allocatedProfit, allocatedInput)),
   amount: toRmb(allocatedProfit, true),
   status: statusLabel,
 })
 
-const splitInvestmentToMatches = (investment) => {
-  const matches = Array.isArray(investment.matches) ? investment.matches : []
-  if (matches.length === 0) return []
-  const input = Math.max(0, toNumber(investment.inputs, 0))
-  const revenues = Math.max(0, toNumber(investment.revenues, 0))
-  const perInput = input / matches.length
-  const odds = matches.map((match) => Math.max(0, toNumber(match.odds, 0)))
-  const oddsSum = odds.reduce((sum, value) => sum + value, 0)
-  const fallbackPerProfit = toNumber(investment.profit, 0) / matches.length
-
-  return matches.map((match, idx) => {
-    const weightedRevenue = revenues > 0 && oddsSum > 0 ? (revenues * odds[idx]) / oddsSum : Number.NaN
-    const allocatedProfit = Number.isFinite(weightedRevenue) ? weightedRevenue - perInput : fallbackPerProfit
-    return {
-      ...match,
-      allocated_input: perInput,
-      allocated_profit: allocatedProfit,
-    }
-  })
-}
 
 const buildAnalysisDeepData = (periodKey) => {
   const range = getPeriodRange(periodKey)
+  // 已实现表现口径只纳入已结算票据，待结算记录没有可用的盈亏数据。
   const investments = getInvestments().filter(
     (item) =>
       !item?.is_archived &&
       inRange(item.created_at, range) &&
-      (item.status === 'win' || item.status === 'lose' || Number.isFinite(Number(item.profit))),
+      item.status !== 'pending' &&
+      (item.status === 'win' || item.status === 'lose' || hasRealizedProfit(item)),
   )
 
   const positionAgg = new Map()
@@ -270,6 +266,7 @@ const buildAnalysisDeepData = (periodKey) => {
         wins: 0,
         inputs: 0,
         profit: 0,
+        profitSamples: 0,
         expectedSum: 0,
         expectedCount: 0,
         actualSum: 0,
@@ -299,6 +296,7 @@ const buildAnalysisDeepData = (periodKey) => {
         wins: 0,
         inputs: 0,
         profit: 0,
+        profitSamples: 0,
         oddsSum: 0,
         nearMiss: 0,
       })
@@ -309,7 +307,8 @@ const buildAnalysisDeepData = (periodKey) => {
     }
 
     const totalInput = Math.max(0, toNumber(investment.inputs, 0))
-    const totalProfit = toNumber(investment.profit, 0)
+    const realizedProfit = hasRealizedProfit(investment) ? Number(investment.profit) : Number.NaN
+    const totalProfit = Number.isFinite(realizedProfit) ? realizedProfit : 0
     const totalOdds = Math.max(1, toNumber(investment.combined_odds, 1))
     const correctCount = matches.filter((match) => match.is_correct === true).length
     const positionRow = positionAgg.get(positionKey)
@@ -319,6 +318,7 @@ const buildAnalysisDeepData = (periodKey) => {
     positionRow.profit += totalProfit
     positionRow.oddsSum += totalOdds
     if (investment.status === 'win') positionRow.wins += 1
+    if (Number.isFinite(realizedProfit)) positionRow.profitSamples += 1
     if (matchCount > 1 && correctCount === matchCount - 1) positionRow.nearMiss += 1
 
     if (meta.kind === 'single') {
@@ -331,14 +331,14 @@ const buildAnalysisDeepData = (periodKey) => {
         odds: Number.isFinite(Number(firstMatch.odds)) ? Number(firstMatch.odds).toFixed(2) : '-',
         ajr: Number.isFinite(Number(firstMatch.match_rating)) ? Number(firstMatch.match_rating).toFixed(2) : '-',
         inputs: toRmb(totalInput),
-        roi: signed(calcRoi(totalProfit, totalInput), 1, '%'),
+        roi: formatRoi(calcRoi(realizedProfit, totalInput)),
       })
     } else {
       positionHistoryData[positionKey].records.push({
         ticket: investment.id,
         date: formatDate(investment.created_at),
         totalInput: toRmb(totalInput),
-        roi: signed(calcRoi(totalProfit, totalInput), 1, '%'),
+        roi: formatRoi(calcRoi(realizedProfit, totalInput)),
         status: statusLabel,
         matches: matches.map((match) =>
           formatMatchRecord(investment, match, match.allocated_input, match.allocated_profit, statusLabel),
@@ -363,6 +363,7 @@ const buildAnalysisDeepData = (periodKey) => {
         wins: 0,
         inputs: 0,
         profit: 0,
+        profitSamples: 0,
       })
       comboHistoryData[comboKey] = []
     }
@@ -372,12 +373,13 @@ const buildAnalysisDeepData = (periodKey) => {
     comboRow.inputs += totalInput
     comboRow.profit += totalProfit
     if (investment.status === 'win') comboRow.wins += 1
+    if (Number.isFinite(realizedProfit)) comboRow.profitSamples += 1
 
     const comboBundleRecord = {
       ticket: investment.id,
       date: formatDate(investment.created_at),
       totalInput: toRmb(totalInput),
-      roi: signed(calcRoi(totalProfit, totalInput), 1, '%'),
+      roi: formatRoi(calcRoi(realizedProfit, totalInput)),
       status: statusLabel,
       matches: matches.map((match) =>
         formatMatchRecord(investment, match, match.allocated_input, match.allocated_profit, statusLabel),
@@ -397,6 +399,7 @@ const buildAnalysisDeepData = (periodKey) => {
           wins: 0,
           inputs: 0,
           profit: 0,
+          profitSamples: 0,
         })
         comboMatrixHistory[matrixKey] = []
       }
@@ -406,6 +409,7 @@ const buildAnalysisDeepData = (periodKey) => {
       matrixCell.inputs += totalInput
       matrixCell.profit += totalProfit
       if (investment.status === 'win') matrixCell.wins += 1
+      if (Number.isFinite(realizedProfit)) matrixCell.profitSamples += 1
       comboMatrixHistory[matrixKey].push(comboBundleRecord)
     }
 
@@ -413,12 +417,17 @@ const buildAnalysisDeepData = (periodKey) => {
       const conf = toNumber(match.conf, Number.NaN)
       const ajr = toNumber(match.match_rating, Number.NaN)
       const odds = toNumber(match.odds, Number.NaN)
+      const allocatedInput = Number(match.allocated_input)
+      const allocatedProfit = Number(match.allocated_profit)
       const confRange = Number.isFinite(conf) ? getConfRange(conf) : '<0.4'
       const confRow = confAgg.get(confRange)
       if (confRow) {
         confRow.samples += 1
-        confRow.inputs += match.allocated_input
-        confRow.profit += match.allocated_profit
+        if (Number.isFinite(allocatedInput)) confRow.inputs += allocatedInput
+        if (Number.isFinite(allocatedProfit)) {
+          confRow.profit += allocatedProfit
+          confRow.profitSamples += 1
+        }
         if (match.is_correct === true) confRow.wins += 1
         if (Number.isFinite(conf)) {
           confRow.expectedSum += conf
@@ -445,6 +454,7 @@ const buildAnalysisDeepData = (periodKey) => {
           wins: 0,
           inputs: 0,
           profit: 0,
+          profitSamples: 0,
           ajrSum: 0,
           ajrCount: 0,
         })
@@ -453,8 +463,11 @@ const buildAnalysisDeepData = (periodKey) => {
 
       const leagueRow = leagueAgg.get(league)
       leagueRow.samples += 1
-      leagueRow.inputs += match.allocated_input
-      leagueRow.profit += match.allocated_profit
+      if (Number.isFinite(allocatedInput)) leagueRow.inputs += allocatedInput
+      if (Number.isFinite(allocatedProfit)) {
+        leagueRow.profit += allocatedProfit
+        leagueRow.profitSamples += 1
+      }
       if (match.is_correct === true) leagueRow.wins += 1
       if (Number.isFinite(ajr)) {
         leagueRow.ajrSum += ajr
@@ -472,14 +485,14 @@ const buildAnalysisDeepData = (periodKey) => {
   const positionRows = [...positionAgg.values()]
     .map((row) => ({
       ...row,
-      roi: calcRoi(row.profit, row.inputs),
+      roi: row.profitSamples === 0 ? Number.NaN : calcRoi(row.profit, row.inputs),
       hitRate: row.samples > 0 ? (row.wins / row.samples) * 100 : 0,
       avgOdds: row.samples > 0 ? row.oddsSum / row.samples : 0,
       partial: row.rank > 1 ? `${row.rank}/${row.rank - 1}中: ${row.nearMiss}/${row.samples}` : null,
     }))
     .sort((a, b) => a.rank - b.rank)
 
-  const maxPositionRoi = positionRows.length > 0 ? Math.max(...positionRows.map((row) => row.roi)) : -Infinity
+  const maxPositionRoi = Math.max(...positionRows.map((row) => (Number.isFinite(row.roi) ? row.roi : -Infinity)), -Infinity)
   const positionRowsWithBest = positionRows.map((row) => ({
     ...row,
     best: row.roi === maxPositionRoi,
@@ -491,9 +504,9 @@ const buildAnalysisDeepData = (periodKey) => {
       combo: row.combo,
       samples: row.samples,
       hitRate: row.samples > 0 ? (row.wins / row.samples) * 100 : 0,
-      roi: calcRoi(row.profit, row.inputs),
+      roi: row.profitSamples === 0 ? Number.NaN : calcRoi(row.profit, row.inputs),
     }))
-    .sort((a, b) => b.roi - a.roi || b.samples - a.samples)
+    .sort((a, b) => (Number.isFinite(b.roi) ? b.roi : -Infinity) - (Number.isFinite(a.roi) ? a.roi : -Infinity) || b.samples - a.samples)
     .slice(0, 6)
 
   const comboMatrixRows = COMBO_SIZE_BUCKETS.map((sizeBucket) => ({
@@ -517,7 +530,7 @@ const buildAnalysisDeepData = (periodKey) => {
         sizeBucket,
         mode,
         samples: row.samples,
-        roi: calcRoi(row.profit, row.inputs),
+        roi: row.profitSamples === 0 ? Number.NaN : calcRoi(row.profit, row.inputs),
         hitRate: row.samples > 0 ? (row.wins / row.samples) * 100 : 0,
         hasData: true,
       }
@@ -542,7 +555,7 @@ const buildAnalysisDeepData = (periodKey) => {
     .map((row) => ({
       league: row.league,
       samples: row.samples,
-      roi: calcRoi(row.profit, row.inputs),
+      roi: row.profitSamples === 0 ? Number.NaN : calcRoi(row.profit, row.inputs),
       hitRate: row.samples > 0 ? (row.wins / row.samples) * 100 : 0,
       avgAjr: row.ajrCount > 0 ? row.ajrSum / row.ajrCount : Number.NaN,
       history: (leagueHistory.get(row.league) || []).sort((a, b) => (a.date < b.date ? 1 : -1)),
@@ -656,7 +669,7 @@ const PaginatedMatchTable = ({ rows }) => {
               <td className={`py-2 font-medium ${getAJRColor(row.ajr)}`}>{Number.isFinite(row.ajr) ? row.ajr.toFixed(2) : '-'}</td>
               <td className="py-2 text-violet-600 italic font-semibold">{Number.isFinite(row.odds) ? row.odds.toFixed(2) : '-'}</td>
               <td className="py-2 text-stone-600">{Number.isFinite(row.rep) ? row.rep.toFixed(2) : '-'}</td>
-              <td className={`py-2 font-medium ${row.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{signed(row.roi, 1, '%')}</td>
+              <td className={`py-2 font-medium ${roiTone(row.roi)}`}>{formatRoi(row.roi)}</td>
             </tr>
           ))}
         </tbody>
@@ -678,7 +691,7 @@ const BundleUnitCards = ({ records }) => (
             </p>
           </div>
           <div className="text-right">
-            <p className={`text-sm font-semibold ${unit.roi.startsWith('+') ? 'text-emerald-600' : 'text-rose-500'}`}>{unit.roi}</p>
+            <p className={`text-sm font-semibold ${roiTextTone(unit.roi)}`}>{unit.roi}</p>
             <p className="text-[10px] text-stone-400">{unit.status}</p>
           </div>
         </div>
@@ -953,7 +966,7 @@ export default function AnalysisPage({ openModal }) {
                     <td className="py-2 text-violet-600 italic font-semibold">{row.odds}</td>
                     <td className={`py-2 font-semibold ${getAJRColor(row.ajr)}`}>{row.ajr}</td>
                     <td className="py-2 text-amber-700">{row.inputs}</td>
-                    <td className={`py-2 font-medium ${row.roi.startsWith('+') ? 'text-emerald-600' : 'text-rose-500'}`}>{row.roi}</td>
+                    <td className={`py-2 font-medium ${roiTextTone(row.roi)}`}>{row.roi}</td>
                   </tr>
                 ))}
               </tbody>
@@ -1048,7 +1061,7 @@ export default function AnalysisPage({ openModal }) {
               {maskText(cell.sizeBucket)} × {maskMode(cell.mode)}
             </span>
             <span className="text-xs text-stone-500">
-              {cell.samples} 样本 · ROI {signed(cell.roi, 1, '%')} · 命中率 {cell.hitRate.toFixed(1)}%
+              {cell.samples} 样本 · ROI {formatRoi(cell.roi)} · 命中率 {cell.hitRate.toFixed(1)}%
             </span>
           </div>
           <BundleUnitCards records={rows} />
@@ -1101,7 +1114,7 @@ export default function AnalysisPage({ openModal }) {
                   <td className="py-2 text-stone-500">{row.result}</td>
                   <td className={`py-2 font-semibold ${getConfColor(row.conf)}`}>{row.conf}</td>
                   <td className={`py-2 font-semibold ${getAJRColor(row.ajr)}`}>{row.ajr}</td>
-                  <td className={`py-2 font-medium ${row.roi.startsWith('+') ? 'text-emerald-600' : 'text-rose-500'}`}>{row.roi}</td>
+                  <td className={`py-2 font-medium ${roiTextTone(row.roi)}`}>{row.roi}</td>
                 </tr>
               ))}
             </tbody>
@@ -1157,7 +1170,7 @@ export default function AnalysisPage({ openModal }) {
                   <td className={`py-2 font-medium ${getAJRColor(row.ajr)}`}>{Number.isFinite(row.ajr) ? row.ajr.toFixed(2) : '-'}</td>
                   <td className="py-2 text-violet-600 italic font-semibold">{Number.isFinite(row.odds) ? row.odds.toFixed(2) : '-'}</td>
                   <td className="py-2 text-stone-600">{Number.isFinite(row.rep) ? row.rep.toFixed(2) : '-'}</td>
-                  <td className={`py-2 font-medium ${row.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{signed(row.roi, 1, '%')}</td>
+                  <td className={`py-2 font-medium ${roiTone(row.roi)}`}>{formatRoi(row.roi)}</td>
                 </tr>
               ))}
             </tbody>
@@ -1178,6 +1191,7 @@ export default function AnalysisPage({ openModal }) {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-semibold text-stone-800 font-display">深度分析</h2>
+          <p className="text-sm text-stone-500">跨球队／联赛的串关金额为分摊归因，并非单腿实收收益。</p>
           <p className="text-stone-400 text-sm mt-1">多维度投资表现洞察</p>
         </div>
         <TimeRangePicker value={timePeriod} onChange={setTimePeriod} options={PERIOD_LABELS} />
@@ -1298,8 +1312,8 @@ export default function AnalysisPage({ openModal }) {
                           </div>
                           <p className="text-sm font-medium text-stone-700 truncate">{maskCombo(row.combo)}</p>
                         </div>
-                        <span className={`text-lg font-semibold ${isPositive ? '' : profileMeta.roiTone}`} style={roiColorStyle}>
-                          {signed(row.roi, 1, '%')}
+                        <span className={`text-lg font-semibold ${roiTone(row.roi)}`} style={roiColorStyle}>
+                          {formatRoi(row.roi)}
                         </span>
                       </div>
 
@@ -1369,7 +1383,7 @@ export default function AnalysisPage({ openModal }) {
                           {cell.confBucket} × {cell.oddsBucket}
                         </span>
                         <span className="flex items-center gap-2">
-                          <span className="font-medium text-emerald-700">{signed(cell.roi, 1, '%')}</span>
+                          <span className="font-medium text-emerald-700">{formatRoi(cell.roi)}</span>
                           <span className="motion-v2-ghost-btn inline-flex text-[10px] text-amber-600 rounded-md px-1" onClick={(event) => {
                             event.stopPropagation()
                             applyAdvantageFilterToCombo(cell)
@@ -1398,7 +1412,7 @@ export default function AnalysisPage({ openModal }) {
                           {cell.confBucket} × {cell.oddsBucket}
                         </span>
                         <span className="flex items-center gap-2">
-                          <span className="font-medium text-rose-600">{signed(cell.roi, 1, '%')}</span>
+                          <span className="font-medium text-rose-600">{formatRoi(cell.roi)}</span>
                           <span className="motion-v2-ghost-btn inline-flex text-[10px] text-amber-600 rounded-md px-1" onClick={(event) => {
                             event.stopPropagation()
                             applyAdvantageFilterToCombo(cell)
@@ -1439,7 +1453,7 @@ export default function AnalysisPage({ openModal }) {
                           : cell.roi >= 0
                             ? `rgba(16,185,129,${0.08 + intensity * 0.18})`
                             : `rgba(251,113,133,${0.06 + intensity * 0.14})`
-                        const textTone = !cell.hasData ? 'text-stone-300' : cell.roi >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                        const textTone = !cell.hasData ? 'text-stone-300' : roiTone(cell.roi)
 
                         return (
                           <td key={`adv-cell-${confBucket}-${oddsBucket}`} className="py-2 px-1">
@@ -1451,7 +1465,7 @@ export default function AnalysisPage({ openModal }) {
                                 cell.hasData ? 'hover:shadow-sm' : 'cursor-not-allowed'
                               }`}
                             >
-                              <p className={`text-sm font-semibold ${textTone}`}>{cell.hasData ? signed(cell.roi, 1, '%') : '--'}</p>
+                              <p className={`text-sm font-semibold ${textTone}`}>{cell.hasData ? formatRoi(cell.roi) : '--'}</p>
                               <p className="text-[10px] text-stone-500">{cell.hasData ? `${cell.samples}场 · ${cell.hitRate.toFixed(0)}%` : '无样本'}</p>
                             </button>
                           </td>
@@ -1492,7 +1506,7 @@ export default function AnalysisPage({ openModal }) {
                           : cell.roi >= 0
                             ? `rgba(16,185,129,${0.1 + intensity * 0.22})`
                             : `rgba(251,113,133,${0.08 + intensity * 0.16})`
-                        const textTone = !cell.hasData ? 'text-stone-300' : cell.roi >= 0 ? 'text-emerald-700' : 'text-rose-600'
+                        const textTone = !cell.hasData ? 'text-stone-300' : roiTone(cell.roi)
 
                         return (
                           <td key={cell.key} className="py-2 px-1">
@@ -1504,7 +1518,7 @@ export default function AnalysisPage({ openModal }) {
                                 cell.hasData ? 'hover:shadow-sm' : 'cursor-not-allowed'
                               }`}
                             >
-                              <p className={`text-sm font-semibold ${textTone}`}>{cell.hasData ? signed(cell.roi, 1, '%') : '--'}</p>
+                              <p className={`text-sm font-semibold ${textTone}`}>{cell.hasData ? formatRoi(cell.roi) : '--'}</p>
                               <p className="text-[10px] text-stone-500">{cell.hasData ? `${cell.samples}场 · ${cell.hitRate.toFixed(0)}%` : '无样本'}</p>
                             </button>
                           </td>
@@ -1533,7 +1547,6 @@ export default function AnalysisPage({ openModal }) {
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
                 {deepData.positionRows.map((item, index) => {
-                  const isPositive = item.roi >= 0
                   return (
                     <div
                       key={item.type}
@@ -1558,8 +1571,8 @@ export default function AnalysisPage({ openModal }) {
                         </div>
                         <div className="text-right">
                           <p className="text-[11px] text-stone-400">ROI</p>
-                          <p className={`text-xl font-semibold leading-tight ${isPositive ? 'text-emerald-600' : 'text-rose-500'}`}>
-                            {signed(item.roi, 1, '%')}
+                          <p className={`text-xl font-semibold leading-tight ${roiTone(item.roi)}`}>
+                            {formatRoi(item.roi)}
                           </p>
                         </div>
                       </div>
@@ -1610,8 +1623,8 @@ export default function AnalysisPage({ openModal }) {
                     <div className="flex items-center gap-4">
                       <span className="font-medium text-stone-700 w-16">{item.league}</span>
                       <span className="text-xs text-stone-400">{item.samples} 样本</span>
-                      <span className={`font-semibold text-sm ${item.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                        {signed(item.roi, 1, '%')}
+                      <span className={`font-semibold text-sm ${roiTone(item.roi)}`}>
+                        {formatRoi(item.roi)}
                       </span>
                     </div>
                     <div className="flex items-center gap-5">
@@ -1710,7 +1723,7 @@ export default function AnalysisPage({ openModal }) {
                 <th className="py-2 font-medium">样本数</th>
                 <th className="py-2 font-medium">ROI</th>
                 <th className="py-2 font-medium">命中率</th>
-                <th className="py-2 font-medium">{maskText('Avg(Act-Conf)')}</th>
+                <th className="py-2 font-medium">{maskText('判断残差（归一化 AJR − Conf，非概率误差）')}</th>
                 <th className="py-2 font-medium">平均 Odds</th>
                 <th className="py-2 font-medium">建议 Kelly</th>
               </tr>
@@ -1724,7 +1737,7 @@ export default function AnalysisPage({ openModal }) {
                 >
                   <td className="py-3 font-medium text-stone-700">{maskMode(row.mode)}</td>
                   <td className="py-3 text-stone-600">{row.samples}</td>
-                  <td className={`py-3 font-medium ${row.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{signed(row.roi, 1, '%')}</td>
+                  <td className={`py-3 font-medium ${roiTone(row.roi)}`}>{formatRoi(row.roi)}</td>
                   <td className="py-3 text-stone-600">{row.hitRate.toFixed(1)}%</td>
                   <td className={`py-3 font-medium ${row.avgActualMinusConf >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {signed(row.avgActualMinusConf, 2)}
@@ -1756,8 +1769,8 @@ export default function AnalysisPage({ openModal }) {
                     <tr key={row.marketType} className="border-b border-stone-100">
                       <td className="py-2.5 font-medium text-stone-700">{row.marketLabel}</td>
                       <td className="py-2.5 text-stone-600">{row.samples}</td>
-                      <td className={`py-2.5 font-medium ${row.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
-                        {signed(row.roi, 1, '%')}
+                      <td className={`py-2.5 font-medium ${roiTone(row.roi)}`}>
+                        {formatRoi(row.roi)}
                       </td>
                       <td className="py-2.5 text-stone-600">{row.hitRate.toFixed(1)}%</td>
                       <td className="py-2.5 text-stone-500 text-xs">{row.examples || '-'}</td>

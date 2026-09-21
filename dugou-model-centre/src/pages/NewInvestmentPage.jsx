@@ -1,3 +1,4 @@
+import { predictMatchProbability } from "../lib/matchPrediction"
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Plus, X, ChevronDown, ChevronRight, Sparkles, Loader2, ShieldCheck, Archive, RotateCcw } from 'lucide-react'
@@ -54,31 +55,23 @@ const FID_OPTIONS = ['0', '0.25', '0.4', '0.6', '0.75']
 const CONF_QUICK_OPTIONS = [0.2, 0.4, 0.5, 0.6, 0.8]
 const FSE_QUICK_OPTIONS = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]
 
-const MODE_FACTOR_MAP = {
-  常规: 1.0,
-  '常规-稳': 1.05,
-  '常规-杠杆': 0.95,
-  '常规-激进': 0.95,
-  半彩票半保险: 0.92,
-  保险产品: 1.08,
-  赌一把: 0.88,
+const EXCLUDED_ENTRY_REASON_TEXT = {
+  missing_name: '缺少名称',
+  invalid_odds: '赔率需 > 1',
 }
 
-const TYS_FACTOR_MAP = {
-  S: 0.94,
-  M: 1.0,
-  L: 1.04,
-  H: 1.08,
-}
+// 这枚数字是各场校准命中概率的算术平均，即保存时写入的
+// expected_rating_semantics = MEAN_LEG_RATING_SEMANTICS。Portfolio 会把整票命中概率写进
+// 同一个 expected_rating 字段，两者只靠该语义标签区分，所以屏幕标签必须写明口径。
+const EXPECTED_RATING_COPY = {
+  [MEAN_LEG_RATING_SEMANTICS]: {
+    label: 'Expected Rating（单场均值）',
+    hint: '各场校准命中概率的均值，非整票命中概率',
+  },
+}[MEAN_LEG_RATING_SEMANTICS]
 
-const FID_FACTOR_MAP = {
-  '0': 0.92,
-  '0.25': 0.99,
-  '0.4': 1.02,
-  '0.5': 1.05,
-  '0.6': 1.07,
-  '0.75': 1.1,
-}
+
+
 
 const createEmptyMatch = () => ({
   homeTeam: '',
@@ -101,11 +94,6 @@ const normalizeTeamNameInput = (value) =>
     .trim()
 
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
-const getFactorWeight = (value, fallback) => {
-  const n = Number.parseFloat(value)
-  if (!Number.isFinite(n)) return fallback
-  return clamp(n, 0.01, 1.5)
-}
 
 const buildId = (prefix = 'id') => {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -696,10 +684,32 @@ export default function NewInvestmentPage() {
 
   const parseOdds = (value) => Number.parseFloat(value)
 
-  const getValidEntries = (entries) =>
-    entries
-      .map((entry) => normalizeEntryRecord({ name: entry.name, odds: parseOdds(entry.odds) }, parseOdds(entry.odds)))
-      .filter((entry) => entry.name && isValidDecimalOdds(entry.odds))
+  const normalizeEntry = (entry) =>
+    normalizeEntryRecord({ name: entry.name, odds: parseOdds(entry.odds) }, parseOdds(entry.odds))
+
+  // 计算与「未计入」提示共用同一判定，显示永远不会和 calcMatchOdds / combinedOdds 分叉。
+  const isUsableEntry = (entry) => Boolean(entry.name) && isValidDecimalOdds(entry.odds)
+
+  const getValidEntries = (entries) => entries.map(normalizeEntry).filter(isUsableEntry)
+
+  // 同一条 Entry 可能名称与赔率同时不合规，按录入顺序先判名称。
+  const getExcludedEntries = (entries) =>
+    (entries || [])
+      .map((entry, index) => ({
+        index,
+        hasInput: Boolean(String(entry.name || '').trim() || String(entry.odds || '').trim()),
+        normalized: normalizeEntry(entry),
+      }))
+      .filter(({ normalized }) => !isUsableEntry(normalized))
+      .map(({ index, hasInput, normalized }) => ({ index, hasInput, reason: normalized.name ? 'invalid_odds' : 'missing_name' }))
+
+  const describeExcludedEntries = (excluded) => {
+    const counts = new Map()
+    excluded.forEach((row) => counts.set(row.reason, (counts.get(row.reason) || 0) + 1))
+    return [...counts]
+      .map(([reason, count]) => (counts.size > 1 ? `${EXCLUDED_ENTRY_REASON_TEXT[reason]} ${count} 条` : EXCLUDED_ENTRY_REASON_TEXT[reason]))
+      .join(' · ')
+  }
 
   const calcMatchOdds = (entries) => {
     const validEntries = getValidEntries(entries)
@@ -711,66 +721,9 @@ export default function NewInvestmentPage() {
     return estimateEntryAnchorOdds(validEntries, systemConfig.defaultOdds)
   }
 
-  const calcAdjustedConf = (match) => {
-    // 优先使用回归方程校准（含可靠度收缩），回退到分组平均乘数
-    const rawConf = clamp(match.conf / 100, 0.05, 0.95)
-    const confBase =
-      typeof calibrationContext?.calibrate === 'function'
-        ? clamp(calibrationContext.calibrate(rawConf), 0.05, 0.95)
-        : clamp(rawConf * clamp(Number(calibrationContext?.multipliers?.conf || 1), 0.75, 1.25), 0.05, 0.95)
-    const fseMultiplier = clamp(Number(calibrationContext?.multipliers?.fse || 1), 0.75, 1.25)
-
-    // ── Use LEARNED factors from calibrationContext if available, fallback to hardcoded priors ──
-    const lf = calibrationContext?.learnedFactors
-    const hasLearnedFactors = lf && lf.reliability > 0.15
-
-    const modeFactor = hasLearnedFactors && lf.mode?.[match.mode] != null
-      ? lf.mode[match.mode]
-      : (MODE_FACTOR_MAP[match.mode] || 1)
-
-    const tysHome = hasLearnedFactors && lf.tys?.[match.tys_home] != null
-      ? lf.tys[match.tys_home]
-      : (TYS_FACTOR_MAP[match.tys_home] || 1)
-    const tysAway = hasLearnedFactors && lf.tys?.[match.tys_away] != null
-      ? lf.tys[match.tys_away]
-      : (TYS_FACTOR_MAP[match.tys_away] || 1)
-    const tysFactor = (tysHome + tysAway) / 2
-
-    const fidKey = String(match.fid)
-    const fidFactor = hasLearnedFactors && lf.fid?.[fidKey] != null
-      ? lf.fid[fidKey]
-      : (FID_FACTOR_MAP[match.fid] || 1)
-
-    // FSE: match.fse_home/fse_away are 0-100 scale in NewInvestmentPage, normalize to 0-1
-    const fseHome = clamp(match.fse_home / 100, 0.05, 1)
-    const fseAway = clamp(match.fse_away / 100, 0.05, 1)
-    const fseMatch = Math.sqrt(fseHome * fseAway)
-    const fseFactor = hasLearnedFactors && typeof lf.fse?.interpolate === 'function'
-      ? clamp(lf.fse.interpolate(fseMatch) * fseMultiplier, 0.72, 1.35)
-      : clamp((0.88 + fseMatch * 0.24) * fseMultiplier, 0.72, 1.35)
-
-    const odds = calcMatchAnchorOdds(match.entries)
-    // Context-factor lift (mode, TYS, FID, FSE — everything EXCEPT conf itself)
-    const contextLift =
-      modeFactor ** getFactorWeight(systemConfig.weightMode, 0.16) *
-      tysFactor ** getFactorWeight(systemConfig.weightTys, 0.12) *
-      fidFactor ** getFactorWeight(systemConfig.weightFid, 0.14) *
-      fseFactor ** getFactorWeight(systemConfig.weightFse, 0.07)
-    // baseProbability = calibrated conf × context lift (conf is the foundation, not 0.5)
-    const baseProbability = clamp(confBase * contextLift, 0.05, 0.95)
-    if (typeof calibrationContext?.calibrateProbabilityForMatch !== 'function') return baseProbability
-    return clamp(
-      calibrationContext.calibrateProbabilityForMatch({
-        baseProbability,
-        conf: rawConf,
-        odds,
-        homeTeam: match.homeTeam,
-        awayTeam: match.awayTeam,
-      }),
-      0.05,
-      0.95,
-    )
-  }
+  const calcAdjustedConf = (match) => predictMatchProbability({
+    ...match, conf: match.conf / 100, fse_home: match.fse_home / 100, fse_away: match.fse_away / 100,
+  }, systemConfig, calibrationContext)
 
   const atomicMatchProfiles = useMemo(
     () =>
@@ -821,6 +774,11 @@ export default function NewInvestmentPage() {
     const average = atomicMatchProfiles.reduce((sum, row) => sum + row.hitProbability, 0) / atomicMatchProfiles.length
     return Number.isFinite(average) ? average : 0
   }, [atomicMatchProfiles])
+
+  // 纯展示派生值：被 getValidEntries 排除、因而没有进入赔率计算的 Entry。
+  // 只有用户已经开始录入的行才算「被丢掉的腿」，否则空表单一打开就会报警。
+  const excludedEntriesByMatch = matches.map((match) => getExcludedEntries(match.entries).filter((row) => row.hasInput))
+  const excludedEntryTotal = excludedEntriesByMatch.reduce((sum, rows) => sum + rows.length, 0)
 
   // S4: 计算综合 Kelly 分母（加权平均各场 Mode 的 Kelly 分母）
   const effectiveKellyDivisor = useMemo(() => {
@@ -1114,6 +1072,7 @@ export default function NewInvestmentPage() {
     const forecastSnapshot = buildForecastSnapshot({
       combinedProfile: draftMetrics.combinedProfile,
       generatedAt,
+      calibrationMetadata: calibrationContext.metadata,
       legs: normalizedMatches.map((match, index) => ({ match, profile: draftMetrics.profiles[index], investmentId })),
     })
     if (!forecastSnapshot) return { validationMessage: `${label ? `${label}：` : ''}预测分布无效，请检查输入后重试。`, payload: null }
@@ -1676,6 +1635,7 @@ export default function NewInvestmentPage() {
             const awayTeamKey = normalizeTeamKey(match.awayTeam)
             const homeFseHistorySuggestion = homeTeamKey ? (latestTeamFseMap.get(homeTeamKey) ?? null) : null
             const awayFseHistorySuggestion = awayTeamKey ? (latestTeamFseMap.get(awayTeamKey) ?? null) : null
+            const excludedEntries = excludedEntriesByMatch[idx] || []
 
             return (
               <div key={idx} className={`motion-v2-match-card relative lab-new-match ${idx > 0 ? 'pt-6 border-t border-stone-100' : ''}`}>
@@ -1900,6 +1860,11 @@ export default function NewInvestmentPage() {
                     <p className="text-xs text-stone-500 mt-2">
                       Overall Odds（原子等效）:{' '}
                       <span className="font-semibold text-amber-600">{calcMatchOdds(match.entries).toFixed(2)}</span>
+                    </p>
+                  )}
+                  {excludedEntries.length > 0 && (
+                    <p className="mt-1 text-[11px] text-amber-600">
+                      {excludedEntries.length} 条 Entry 未计入（{describeExcludedEntries(excludedEntries)}）
                     </p>
                   )}
                   {getMatchOddsWarnings(match.entries).length > 0 && (
@@ -2165,11 +2130,17 @@ export default function NewInvestmentPage() {
                   <span className="text-xs text-stone-400 block whitespace-nowrap cursor-help underline decoration-dotted decoration-stone-300 underline-offset-2">综合 Odds</span>
                 </ExplainHover>
                 <span className="text-xl font-semibold text-stone-800">{Number.isFinite(combinedOdds) ? combinedOdds.toFixed(2) : '--'}</span>
+                {Number.isFinite(combinedOdds) && excludedEntryTotal > 0 && (
+                  <span className="block text-[10px] text-amber-600 mt-0.5">
+                    {excludedEntryTotal} 条 Entry 未计入（{describeExcludedEntries(excludedEntriesByMatch.flat())}）
+                  </span>
+                )}
               </div>
               <div className="w-px h-10 bg-stone-200" />
               <div>
-                <span className="text-xs text-stone-400 block whitespace-nowrap">Expected Rating</span>
+                <span className="text-xs text-stone-400 block whitespace-nowrap">{EXPECTED_RATING_COPY.label}</span>
                 <span className="text-xl font-semibold text-stone-800">{Number.isFinite(expectedRating) ? expectedRating.toFixed(2) : '--'}</span>
+                <span className="block text-[10px] text-stone-400 mt-0.5">{EXPECTED_RATING_COPY.hint}</span>
               </div>
               <div className="w-px h-10 bg-stone-200" />
               <div>

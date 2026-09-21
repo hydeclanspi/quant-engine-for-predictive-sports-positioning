@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Activity, TrendingUp, X } from 'lucide-react'
-import { assessComboFragility, getOddsBand } from '../lib/analytics'
-import { getInvestments } from '../lib/localData'
+import { assessComboFragility, getOddsBand, getDependencyHistory } from '../lib/analytics'
 import ExplainHover from './ExplainHover'
 
 const getMedian = (values = []) => {
@@ -84,31 +83,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
   }, [])
 
   // 历史数据缓存
-  const historicalData = useMemo(() => {
-    const investments = getInvestments()
-    const settledInvestments = investments
-      .filter(inv => {
-        const matches = Array.isArray(inv.matches) ? inv.matches : []
-        if (inv.is_archived || matches.length < 2) return false
-        const hasMatchResults = matches.some(m => typeof m.is_correct === 'boolean')
-        const hasRevenues = inv.revenues !== undefined && inv.revenues !== null
-        const isSettled = inv.status === 'win' || inv.status === 'lose' || inv.status === 'settled' || inv.status === 'settled_win' || inv.status === 'settled_loss'
-        return hasMatchResults && (hasRevenues || isSettled)
-      })
-      .map(inv => {
-        const matches = Array.isArray(inv.matches) ? inv.matches : []
-        return {
-          matches: matches.map(m => ({
-            odds: Number(m.odds) || 1,
-            result: typeof m.is_correct === 'boolean' ? m.is_correct : undefined,
-          })),
-          succeeded: Number(inv.revenues || 0) > 0 || inv.status === 'settled_win' || inv.status === 'win',
-          createdAt: inv.created_at || inv.createdAt,
-        }
-      })
-      .filter(d => d.matches.length >= 2 && d.matches.some(m => m.result !== undefined))
-    return settledInvestments
-  }, [dataRevision])
+  const historicalData = useMemo(() => getDependencyHistory(), [dataRevision])
 
   // 脆弱性矩阵计算 — 含完整 assessment 数据
   const fragilityMatrix = useMemo(() => {
@@ -748,7 +723,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                       <div className="pt-3 mt-1 border-t border-stone-100/60 space-y-2">
                         <div className="flex items-center justify-between rounded-lg border border-indigo-100/60 bg-white/70 px-3.5 py-2.5">
                           <div className="flex flex-col">
-                            <span className="text-sm font-semibold text-stone-500 tracking-wide">Premium (%)</span>
+                            <span className="text-sm font-semibold text-stone-500 tracking-wide">Premium (pp)</span>
                           </div>
                           <span
                             className="min-w-[88px] text-right whitespace-nowrap text-[18px] leading-none font-semibold tabular-nums tracking-[0.012em]"
@@ -758,7 +733,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                           </span>
                         </div>
                         <div className="flex items-center justify-between rounded-lg border border-sky-100/60 bg-sky-50/35 px-3.5 py-2.5">
-                          <span className="text-xs font-semibold text-stone-500 tracking-wide">Marginal Survival Impact (pp)</span>
+                          <span className="text-xs font-semibold text-stone-500 tracking-wide" title="代理函数的 Shapley 分摊，不是真实尾部概率或因果贡献">MSI · 代理指数分摊</span>
                           <span className={`min-w-[88px] text-right whitespace-nowrap text-[16px] leading-none font-semibold tabular-nums tracking-[0.012em] ${
                             Number(deltaSurvivalPair) >= 0 ? 'text-emerald-500' : 'text-amber-500'
                           }`}>
@@ -786,7 +761,7 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
                 )}
                 {hasBias && (
                   <span className="text-indigo-400">
-                    Bias adj. {(biasStrength * 100).toFixed(0)}%
+                    稀疏度折扣 {(biasStrength * 100).toFixed(0)}%
                     <span className="text-stone-300 ml-1">({matchedExact}e+{matchedNeighbor}n)</span>
                   </span>
                 )}

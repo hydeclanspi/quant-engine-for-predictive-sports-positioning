@@ -272,7 +272,10 @@ export const normalizeEntryRecord = (entryInput, fallbackOdds = Number.NaN) => {
           name: entryInput,
         }
   const semantic = parseEntrySemantic(source.name || source.entry || '')
-  const odds = toNumber(source.odds, toNumber(fallbackOdds, Number.NaN))
+  // A supplied malformed quote must remain invalid, not silently inherit the
+  // parent/default price. Only genuinely absent legacy fields may use fallback.
+  const odds = Object.prototype.hasOwnProperty.call(source, 'odds')
+    ? toNumber(source.odds, Number.NaN) : toNumber(fallbackOdds, Number.NaN)
 
   return {
     ...source,

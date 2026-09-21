@@ -114,6 +114,90 @@ export const lineResidual = (market, actual) => {
   return { raw: adjustedMargin, wonBy: market.outcome === 'lose' ? -adjustedMargin : adjustedMargin }
 }
 
+// ── 比分距离（2.0）：把"足球含义"写进惩罚形状 ─────────────────────────
+//
+// 口径（已确认，锁定 2026-09）：transform=exponential，scale=1.8，
+// totalWeight=0.31。取代早期的 L1 版 pointDistance（后者仅保留作对照）。
+//
+// 需求（来自真实使用反馈的迭代）：
+//   ① 同方向、大分差之间（3-0 → 5-0）几乎没有本质区别 → 高区要"几乎封顶"；
+//   ② 跨过平局线（1-0 → 0-1）是质变 → 变换保号、过零，符号翻转处罚大；
+//   ③ 险胜区间差 2 球（4-1 → 3-2）比大胜区间差 2 球更扎眼 → 低区要陡；
+//   ④ 平局变大胜（2-2 → 4-0）要重于一球方向反转 → 0→4 的跨度要足够长。
+// ①②③④ 合起来 = "低区最陡、高区几乎平" = 指数饱和（起步快、封顶早）。
+//
+// 三个候选（同一族递增凹函数，区别在"封不封顶、封得多快"）：
+//   sqrt        — 无界压缩：一直涨、越来越慢（早期候选）
+//   saturating  — 有界压缩（softsign）：中段近似线性，趋近 ±1
+//   exponential — 指数饱和：低区最陡、高区最平（当前默认）
+//
+// 关于 scale（=1.8）：指数饱和的"球数尺度"——净胜球差达到 scale 时，函数
+// 走到封顶值的 1−e^(−1) ≈ 63%。它由需求 ④ 反推而来：要求 2-2→4-0 高于标尺
+// 100 ⟺ f(4)/f(1) > 2 ⟺ scale > 1.68；取 1.8 让该案例落在 104 上下。
+//
+// 关于 totalWeight（=0.31）：总进球维度值多少。0.31 让 1-1→5-5 有可见差别
+// （≈11.8），又不至于把 0-0→3-0（≈124.6）、1-0→4-0（≈71.5）抬得过多。
+//
+// 接线备忘（尚未接线）：① 训练信号——读球信任度/区域模型的损失原料
+// （接法：θ 的更新梯度 = 实际距离 − 期望距离）；② 展示——复盘面板的
+// "读球质量分"（用 normalizedDistance）。它赛后才有 → 永不作为预测特征；
+// 它不是概率 → 不进 Kelly。
+export const SCORELINE_EXPONENTIAL_SCALE = 1.8
+export const SCORELINE_TRANSFORMS = Object.freeze({
+  sqrt: (value) => Math.sign(value) * Math.sqrt(Math.abs(value)),
+  saturating: (value) => value / (1 + Math.abs(value)),
+  exponential: (value) =>
+    Math.sign(value) * (1 - Math.exp(-Math.abs(value) / SCORELINE_EXPONENTIAL_SCALE)),
+})
+
+// 锁定口径：展示与训练都以这三个数为准，改动前先想清楚
+export const SCORELINE_DISTANCE_DEFAULTS = Object.freeze({
+  transform: 'exponential',
+  totalWeight: 0.31,
+  exponentialScale: SCORELINE_EXPONENTIAL_SCALE,
+})
+
+const resolveScorelineTransform = (transform, exponentialScale) => {
+  if (typeof transform === 'function') return transform
+  if (transform === 'exponential') {
+    return (value) => Math.sign(value) * (1 - Math.exp(-Math.abs(value) / exponentialScale))
+  }
+  return SCORELINE_TRANSFORMS[transform] || SCORELINE_TRANSFORMS.exponential
+}
+
+/**
+ * 比分距离：d = |f(净胜球差)| + totalWeight · |f(总进球差)|，f 取凹变换。
+ * 输入约定：两个 { home, away }，均为 ≥0 的有限数字（调用方先用
+ * normalizePoint / buildReadRecord 校验；无效输入会得到 NaN）。
+ *
+ * 返回：
+ *   marginDistance     净胜球维度贡献
+ *   totalDistance      总进球维度贡献
+ *   distance           合计 d
+ *   normalizedDistance 归一距离：以「预测 1-0、实际 0-1」（一球方向反转）
+ *                      为 100 的标尺；0 = 完全命中，可超过 100（方向错且
+ *                      幅度也错时）。它是"破坏程度"刻度，不是上限 100
+ *                      的分数，也不是概率。
+ */
+export const scorelineDistance = (predicted, actual, options = {}) => {
+  const { transform, totalWeight, exponentialScale } = { ...SCORELINE_DISTANCE_DEFAULTS, ...options }
+  const fn = resolveScorelineTransform(transform, exponentialScale)
+  const predictedMargin = predicted.home - predicted.away
+  const actualMargin = actual.home - actual.away
+  const predictedTotal = predicted.home + predicted.away
+  const actualTotal = actual.home + actual.away
+  const marginDistance = Math.abs(fn(predictedMargin) - fn(actualMargin))
+  const totalDistance = Math.abs(fn(predictedTotal) - fn(actualTotal))
+  const distance = marginDistance + totalWeight * totalDistance
+  const unit = 2 * fn(1) // 标尺：一球方向反转 = 2·f(1)
+  return {
+    marginDistance,
+    totalDistance,
+    distance,
+    normalizedDistance: unit > 0 ? (distance / unit) * 100 : 0,
+  }
+}
+
 // ── 读球记录（每条已结算腿 → 一条学习样本）────────────────────────────
 
 export const buildReadRecord = (investment, match, index = 0) => {

@@ -12,6 +12,7 @@ import DemoBubble from './components/DemoBubble'
 import LabEditionBar from './components/LabEditionBar'
 import Inspiration2609Shell from './components/Inspiration2609Shell'
 import LiquidGlassBackdrop from './components/LiquidGlassBackdrop'
+import { isComposedGlassStyle, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
 import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
 
@@ -72,8 +73,7 @@ function App() {
   const displayMode = useDisplayMode()
   // 液态玻璃背景层：默认开启，systemConfig.liquidGlassEnabled === false 时关闭
   const liquidGlassEnabled = systemConfigSnapshot?.liquidGlassEnabled !== false
-  const liquidGlassStyleRaw = systemConfigSnapshot?.liquidGlassStyle
-  const liquidGlassStyle = liquidGlassStyleRaw === 'vivid' || liquidGlassStyleRaw === 'hongguo' ? liquidGlassStyleRaw : 'temp'
+  const liquidGlassStyle = normalizeLiquidGlassStyle(systemConfigSnapshot?.liquidGlassStyle)
   const liquidGlass = liquidGlassEnabled ? <LiquidGlassBackdrop variant={liquidGlassStyle} /> : null
 
   // Listen for layout mode changes from ParamsPage
@@ -166,9 +166,16 @@ function App() {
 
   // 液态玻璃开关联动 <html> class：CSS 覆写全部挂在 .liquid-glass-on 下，关闭时零视觉差异
   useEffect(() => {
-    document.documentElement.classList.toggle('liquid-glass-on', liquidGlassEnabled)
-    return () => document.documentElement.classList.remove('liquid-glass-on')
-  }, [liquidGlassEnabled])
+    const root = document.documentElement
+    root.classList.toggle('liquid-glass-on', liquidGlassEnabled)
+    root.classList.toggle('liquid-glass-composed', liquidGlassEnabled && isComposedGlassStyle(liquidGlassStyle))
+    if (liquidGlassEnabled) root.dataset.liquidGlassStyle = liquidGlassStyle
+    else delete root.dataset.liquidGlassStyle
+    return () => {
+      root.classList.remove('liquid-glass-on', 'liquid-glass-composed')
+      delete root.dataset.liquidGlassStyle
+    }
+  }, [liquidGlassEnabled, liquidGlassStyle])
 
   // 顶栏液态玻璃 morph：滚动容器下滚超过阈值后，<html> 加 .lg-scrolled 触发形态切换
   useEffect(() => {

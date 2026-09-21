@@ -17,6 +17,7 @@ import {
   pointForecastToLambda,
   poissonPmf,
   readStateAutocorrelation,
+  scorelineDistance,
   sigmoid,
   simulateCalibrationLoop,
 } from '../readQuality'
@@ -261,5 +262,53 @@ describe('simulated calibration loop', () => {
     // 全程平均损失有限（不构成证据，只保证管线健康）
     expect(Number.isFinite(sim.overallLoss.raw)).toBe(true)
     expect(Number.isFinite(sim.overallLoss.calibrated)).toBe(true)
+  })
+})
+
+describe('scoreline distance shape', () => {
+  const dist = (transform) => (a, b) =>
+    scorelineDistance({ home: a[0], away: a[1] }, { home: b[0], away: b[1] }, { transform }).distance
+
+  it.each(['sqrt', 'saturating', 'exponential'])('%s transform ranks the three reference cases correctly', (transform) => {
+    const d = dist(transform)
+    expect(d([4, 1], [3, 2])).toBeGreaterThan(d([3, 0], [5, 0]))
+    expect(d([1, 0], [0, 1])).toBeGreaterThan(d([4, 1], [3, 2]))
+  })
+
+  it('is zero on an exact hit and symmetric when swapping the roles', () => {
+    const d = dist('saturating')
+    expect(d([2, 1], [2, 1])).toBe(0)
+    expect(d([1, 0], [0, 1])).toBeCloseTo(d([0, 1], [1, 0]), 10)
+  })
+
+  it('keeps same-direction blowout drift cheaper than crossing the draw line', () => {
+    const d = dist('saturating')
+    expect(d([3, 0], [5, 0])).toBeLessThan(d([1, 0], [0, 0]))
+    expect(d([2, 0], [3, 0])).toBeLessThan(d([1, 0], [0, 1]))
+  })
+
+  it('adds the total-goals term only through its weight knob', () => {
+    const withTotal = scorelineDistance({ home: 1, away: 1 }, { home: 2, away: 2 }, { totalWeight: 0.5 }).distance
+    const noTotal = scorelineDistance({ home: 1, away: 1 }, { home: 2, away: 2 }, { totalWeight: 0 }).distance
+    expect(noTotal).toBe(0)
+    expect(withTotal).toBeGreaterThan(0)
+  })
+
+  it('locks the chosen defaults (exponential · scale 1.8 · totalWeight 0.31)', () => {
+    const d = (a, b) => scorelineDistance({ home: a[0], away: a[1] }, { home: b[0], away: b[1] }).distance
+    const normalized = (a, b) =>
+      scorelineDistance({ home: a[0], away: a[1] }, { home: b[0], away: b[1] }).normalizedDistance
+    // 预测 0-1 的三档破坏程度：净胜球对/差1/差2
+    expect(d([0, 1], [1, 2])).toBeCloseTo(0.1193, 3)
+    expect(d([0, 1], [1, 3])).toBeCloseTo(0.3888, 3)
+    expect(d([0, 1], [0, 3])).toBeCloseTo(0.5042, 3)
+    // 标尺：反向一球 = 2×f(1) → 归一恒为 100
+    expect(d([0, 1], [1, 0])).toBeCloseTo(0.8525, 3)
+    expect(normalized([0, 1], [1, 0])).toBeCloseTo(100, 6)
+    // 归一距离 = 展示口径（0 = 完美；可超过 100）
+    expect(normalized([0, 1], [1, 2])).toBeCloseTo(14.0, 1)
+    expect(normalized([0, 1], [1, 3])).toBeCloseTo(45.6, 1)
+    expect(normalized([0, 1], [0, 3])).toBeCloseTo(59.1, 1)
+    expect(normalized([2, 1], [2, 1])).toBe(0)
   })
 })

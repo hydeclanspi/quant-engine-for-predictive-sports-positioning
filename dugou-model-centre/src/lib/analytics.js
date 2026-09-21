@@ -30,7 +30,7 @@
  *
  *  5. 模型校验 (Validation & Calibration)
  *     - 预测序贯（prequential）切分回测、校准回归（拟合度 R²）、
- *       依赖风险溢价 / 脆弱性评分（二项检验 + 互补误差函数 erfc）。
+ *       依赖风险溢价 / 脆弱性评分（ESS 支持权重，仅探索性推断，不出 p 值）。
  *
  * ────────────────────────────────────────────────────────────────────────
  *  记忆化缓存系统（Memoization）—— 见下方 analyticsMemo
@@ -74,7 +74,20 @@ import { getPrimaryEntryMarket } from './entryParsing'
 import { lookupTeam } from './teamDatabase'
 import { isPreviewMode } from './displayMode'
 import { solveKellyFractionByAtomicDistribution } from './atomicParlay'
-import { buildSettledSelectionResolver, getSelectionIdentityKey } from './investmentIdentity'
+import { getReturnRiskRatios } from './returnRisk'
+import { predictMatchProbability } from './matchPrediction'
+import {
+  OUTCOME_AVAILABILITY_BASIS,
+  historyFromRows,
+  matchEventKey,
+  resolveOutcomeAvailability,
+  uniqueMatchRows,
+  validTime,
+} from './temporalValidation'
+import { probabilityLoss, validatesProbabilityUpdate } from './adaptiveValidation'
+import { canonicalDependencyHistory, toDependencyHistory } from './dependencyHistory'
+import { splitInvestmentToMatches } from './matchAttribution'
+import { buildSettledSelectionResolver, getSelectionIdentityKey, getMatchSourceIdentity } from './investmentIdentity'
 
 const MODE_KEYS = ['常规', '常规-稳', '常规-杠杆', '半彩票半保险', '保险产品', '赌一把']
 const MODE_ALIAS = {
@@ -94,6 +107,10 @@ const MONTE_CARLO_OP_BUDGET = 6000000
 const PREQUENTIAL_STEP_MATCHES = 7
 const PREQUENTIAL_MIN_TRAIN_MATCHES = 14
 const PREQUENTIAL_MIN_TEST_MATCHES = 7
+const WINDOW_TIME_BASIS = Object.freeze({
+  derivedAvailability: 'contains_derived_availability',
+  recordedOnly: 'recorded_only',
+})
 const ANALYTICS_CACHE_EVENT = 'dugou:data-changed'
 const ANALYTICS_CACHE_HANDLER_KEY = '__dugouAnalyticsCacheInvalidator__'
 
@@ -168,6 +185,7 @@ const normalize = (value) => String(value || '').trim().toLowerCase()
 const normalizeMode = (mode) => MODE_ALIAS[mode] || mode
 const isActiveInvestment = (item) => !item?.is_archived
 const getActiveInvestments = () => getInvestments().filter(isActiveInvestment)
+export const getDependencyHistory = () => toDependencyHistory(getActiveInvestments())
 const getWeightFactor = (value, fallback = 0.06) => clamp(toNumber(value, fallback), 0.01, 1.5)
 
 const toImpliedProbability = (odds, floor = 0.02, ceil = 0.98) => {
@@ -209,39 +227,11 @@ const inRange = (value, range) => {
   return time >= range.start.getTime() && time <= range.end.getTime()
 }
 
-const splitInvestmentToMatches = (investment) => {
-  const matches = Array.isArray(investment.matches) ? investment.matches : []
-  if (matches.length === 0) return []
-
-  const inputs = Math.max(0, toNumber(investment.inputs))
-  // Legacy records may carry a realized profit without a revenue field;
-  // deriving the payout keeps missing revenue from reading as a total loss.
-  const declaredRevenue = toNumber(investment.revenues, Number.NaN)
-  const profit = toNumber(investment.profit, Number.NaN)
-  const revenues = Number.isFinite(declaredRevenue)
-    ? Math.max(0, declaredRevenue)
-    : Number.isFinite(profit)
-      ? Math.max(0, inputs + profit)
-      : 0
-  const perInput = inputs / matches.length
-  const odds = matches.map((match) => Math.max(0, toNumber(match.odds)))
-  const oddsSum = odds.reduce((sum, value) => sum + value, 0)
-
-  return matches.map((match, idx) => {
-    const weightedRevenue = revenues > 0 && oddsSum > 0 ? (revenues * odds[idx]) / oddsSum : 0
-    return {
-      ...match,
-      allocated_input: perInput,
-      allocated_revenue: weightedRevenue,
-      allocated_profit: weightedRevenue - perInput,
-    }
-  })
-}
 
 const getSettledInvestments = (investments) =>
   investments.filter(
     (item) =>
-      isActiveInvestment(item) &&
+      isActiveInvestment(item) && item.status !== 'pending' &&
       (item.status === 'win' || item.status === 'lose' || Number.isFinite(Number.parseFloat(item.profit))),
   )
 
@@ -257,20 +247,30 @@ const calcRatingFit = (rows) => {
 const getRatingRowsFromInvestments = (investments) => {
   const rows = []
   investments.forEach((item) => {
-    const expectedFromInvestment = toNumber(item.expected_rating, NaN)
+    const normalizedInvestmentRating = normalizeAjrForModel(item.expected_rating, Number.NaN)
     const matches = Array.isArray(item.matches) ? item.matches : []
     matches.forEach((match) => {
-      const expected = Number.isFinite(expectedFromInvestment)
-        ? expectedFromInvestment
-        : toNumber(match.conf, NaN)
-      const actual = toNumber(match.match_rating, NaN)
-      if (!Number.isFinite(expected) || !Number.isFinite(actual)) return
+      // 期望-实际都取同一场（leg）的 0~1 判断值口径；投资级 expected_rating 只作最后兜底，
+      // 且必须先归一化，不能与单腿 conf / 评分直接相减。
+      const calibrated = toNumber(match.calibrated_probability, NaN)
+      const conf = toNumber(match.conf, NaN)
+      const expectation = Number.isFinite(calibrated)
+        ? { value: calibrated, basis: 'leg_calibrated_probability' }
+        : Number.isFinite(conf) && conf > 0 && conf <= 1
+          ? { value: conf, basis: 'leg_conf' }
+          : Number.isFinite(normalizedInvestmentRating)
+            ? { value: normalizedInvestmentRating, basis: 'investment_expected_rating_normalized' }
+            : null
+      const actual = normalizeAjrForModel(match.match_rating, Number.NaN)
+      if (!expectation || !Number.isFinite(actual)) return
       rows.push({
         investment_id: item.id,
         date: item.created_at,
         match: `${match.home_team || '-'} vs ${match.away_team || '-'}`,
-        expected_rating: expected,
+        expected_rating: expectation.value,
         actual_rating: actual,
+        expectedBasis: expectation.basis,
+        actualBasis: 'normalized_AJR',
       })
     })
   })
@@ -298,7 +298,8 @@ const buildConfCalibration = (investments) => {
     const matches = Array.isArray(item.matches) ? item.matches : []
     matches.forEach((match) => {
       const conf = toNumber(match.conf, NaN)
-      const actual = toNumber(match.match_rating, NaN)
+      // actual 侧用归一化 AJR（0~1），否则会拿 0~0.8 的原始 AJR 与 0~1 的 conf 相减。
+      const actual = normalizeAjrForModel(match.match_rating, Number.NaN)
       if (!Number.isFinite(conf) || !Number.isFinite(actual)) return
       const row = rows.find((bin) => conf >= bin.min && conf < bin.max)
       if (!row) return
@@ -315,6 +316,7 @@ const buildConfCalibration = (investments) => {
       label: row.label,
       expected,
       actual,
+      actualBasis: 'normalized_AJR_judgment_scale',
       samples: row.samples,
     }
   })
@@ -616,8 +618,15 @@ const toKellySimulationRowsFromInvestments = (investments) =>
         : estimateInvestmentExpected(item)
       const odds = states ? Math.max(...states.map((s) => s.gross)) : estimateInvestmentOdds(item)
       if (!Number.isFinite(expected) || !Number.isFinite(odds) || odds <= 1) return null
+      const availability = resolveOutcomeAvailability(
+        item.outcome_available_at || item.settled_at,
+        item.created_at,
+      )
       return {
         createdAt: item.created_at,
+        outcome_available_at: availability.at,
+        outcome_availability_basis: availability.basis,
+        eventKeys: (item.matches || []).map((m) => matchEventKey(m, item.id)).filter(Boolean),
         expected,
         odds,
         inputs,
@@ -847,11 +856,29 @@ const buildPrequentialWalkForwardWindows = (
   )
 
   const windows = []
-  for (let split = startTrain; split + minTest <= ordered.length; split += stride) {
-    const trainRows = ordered.slice(0, split)
+  for (let split = startTrain; split + minTest <= ordered.length; split += testSize) {
     const testRows = ordered.slice(split, Math.min(ordered.length, split + testSize))
+    const cutoff = getRowTemporalTs(testRows[0])
+    const keys = (row) => row.eventKeys || (row.eventKey ? [row.eventKey] : [])
+    const testEvents = new Set(testRows.flatMap(keys))
+    const trainRows = ordered.slice(0, split).filter((row) =>
+      getRowTemporalTs(row) < cutoff && validTime(row.outcome_available_at) < cutoff
+      && keys(row).length > 0 && !keys(row).some((key) => testEvents.has(key)))
     if (trainRows.length < minTrain || testRows.length < minTest) continue
-    windows.push({ trainRows, testRows })
+    // Unknown identity/time cannot establish an out-of-event temporal test.
+    const eligibleTest = testRows.filter((row) => keys(row).length > 0 && Number.isFinite(validTime(row.outcome_available_at)))
+    if (eligibleTest.length < minTest) continue
+    const derivedAvailabilityRows = [...trainRows, ...eligibleTest]
+      .filter((row) => row.outcome_availability_basis === OUTCOME_AVAILABILITY_BASIS.derived).length
+    windows.push({
+      trainRows,
+      testRows: eligibleTest,
+      cutoff: new Date(cutoff).toISOString(),
+      derivedAvailabilityRows,
+      timeBasis: derivedAvailabilityRows > 0
+        ? WINDOW_TIME_BASIS.derivedAvailability
+        : WINDOW_TIME_BASIS.recordedOnly,
+    })
   }
   return windows
 }
@@ -985,6 +1012,10 @@ const evaluateKellyDivisorWalkForward = (rows, divisor, config) => {
     sharpe: Number(sharpe.toFixed(4)),
     score: Number(score.toFixed(3)),
     evaluationMethod: 'walk_forward',
+    derivedAvailabilityRows: windows.reduce((sum, window) => sum + window.derivedAvailabilityRows, 0),
+    timeBasis: windows.some((window) => window.timeBasis === WINDOW_TIME_BASIS.derivedAvailability)
+      ? WINDOW_TIME_BASIS.derivedAvailability
+      : WINDOW_TIME_BASIS.recordedOnly,
   }
 }
 
@@ -1009,6 +1040,8 @@ const pickKellyDivisor = (rows, config, fallbackDivisor = 4, divisors = KELLY_DI
       ...simulateKellyDivisorFromRows(rows, divisor, config),
       evaluationMethod: 'bootstrap',
       walkForwardWindows: 0,
+      derivedAvailabilityRows: 0,
+      timeBasis: WINDOW_TIME_BASIS.recordedOnly,
     }
   })
   const validRows = results.filter((row) => row.samples > 0)
@@ -1022,6 +1055,8 @@ const pickKellyDivisor = (rows, config, fallbackDivisor = 4, divisors = KELLY_DI
       reliability: 0,
       recommendedDivisor: safeFallback,
       sampleCount: 0,
+      timeBasis: WINDOW_TIME_BASIS.recordedOnly,
+      derivedAvailabilityRows: 0,
     }
   }
 
@@ -1039,6 +1074,8 @@ const pickKellyDivisor = (rows, config, fallbackDivisor = 4, divisors = KELLY_DI
     reliability: Number(reliability.toFixed(3)),
     recommendedDivisor,
     sampleCount: best.samples,
+    timeBasis: best.timeBasis || WINDOW_TIME_BASIS.recordedOnly,
+    derivedAvailabilityRows: best.derivedAvailabilityRows || 0,
   }
 }
 
@@ -1353,6 +1390,7 @@ export const getDashboardSnapshot = (periodKey = '2w') => {
           entry: match.entry_text || (Array.isArray(match.entries) ? match.entries.map((entry) => entry.name).join(', ') : '-') || '-',
           conf,
           ajr,
+          normalizedAjr: Number.isFinite(ajr) ? normalizeAjrForModel(ajr) : Number.NaN,
           rep,
           odds: toNumber(match.odds, NaN),
           input,
@@ -1414,7 +1452,8 @@ export const getDashboardSnapshot = (periodKey = '2w') => {
     if (!bucket) return
     bucket.samples += 1
     bucket.expectedSum += row.conf
-    if (Number.isFinite(row.ajr)) bucket.actualSum += row.ajr
+    // actual / diff 与 conf 同为 0~1 口径；行内保留原始 ajr 供展示，另附 normalizedAjr。
+    if (Number.isFinite(row.ajr)) bucket.actualSum += row.normalizedAjr
     bucket.inputs += row.input
     bucket.profit += row.profit
     if (row.status === 'win') bucket.wins += 1
@@ -1789,9 +1828,15 @@ export const getKellyDivisorMatrix = () => {
         hitRate,
         kellyDivisor: pick.recommendedDivisor,
         kellyReliability: pick.reliability,
+        timeBasis: pick.timeBasis,
       }
     })
     .sort((a, b) => b.samples - a.samples)
+
+  // 行级 timeBasis 已够页面判定，包级字段与 getKellyDivisorBacktest 保持同一口径
+  // （数组即"包"：属性附加在返回的数组上，不改变其数组语义）。
+  matrix.timeBasis = globalPick.timeBasis
+  matrix.derivedAvailabilityRows = globalPick.derivedAvailabilityRows
 
   analyticsMemo.kellyMatrix.set(cacheKey, matrix)
   return matrix
@@ -1834,8 +1879,13 @@ export const getModeKellyRecommendations = () => {
       roi,
       kellyDivisor: pick.recommendedDivisor,
       reliability: pick.reliability,
+      timeBasis: pick.timeBasis,
     }
   })
+
+  // 同 getKellyDivisorMatrix：数组即"包"，包级字段取自全局 pick。
+  recommendations.timeBasis = globalPick.timeBasis
+  recommendations.derivedAvailabilityRows = globalPick.derivedAvailabilityRows
 
   analyticsMemo.modeKelly.set(cacheKey, recommendations)
   return recommendations
@@ -2304,7 +2354,7 @@ const summarizeBlendWalkForward = (windows) => {
   }
 }
 
-const evaluateBlendWalkForward = (rows, config, teamProfiles) => {
+const evaluateBlendWalkForward = (rows, config, teamProfiles, includeStrategy = true) => {
   const windows = buildPrequentialWalkForwardWindows(rows, {
     minRows: 24,
     minTrain: 14,
@@ -2336,9 +2386,9 @@ const evaluateBlendWalkForward = (rows, config, teamProfiles) => {
     }
 
     const divisor = Math.max(1, toNumber(config.kellyDivisor, 4))
-    const strategyCalibrated = simulateKellyStrategyByRows(testRows, predictCalibrated, config, divisor)
-    const strategyMarket = simulateKellyStrategyByRows(testRows, predictMarket, config, divisor)
-    const strategyBlended = simulateKellyStrategyByRows(testRows, predictBlended, config, divisor)
+    const strategyCalibrated = includeStrategy ? simulateKellyStrategyByRows(testRows, predictCalibrated, config, divisor) : { roi: null }
+    const strategyMarket = includeStrategy ? simulateKellyStrategyByRows(testRows, predictMarket, config, divisor) : { roi: null }
+    const strategyBlended = includeStrategy ? simulateKellyStrategyByRows(testRows, predictBlended, config, divisor) : { roi: null }
 
     return {
       label: `B${idx + 1}`,
@@ -2350,9 +2400,9 @@ const evaluateBlendWalkForward = (rows, config, teamProfiles) => {
       calibratedLogLoss: Number(calcLogLoss(testRows, predictCalibrated).toFixed(4)),
       marketLogLoss: Number(calcLogLoss(testRows, predictMarket).toFixed(4)),
       blendedLogLoss: Number(calcLogLoss(testRows, predictBlended).toFixed(4)),
-      calibratedRoi: Number(strategyCalibrated.roi.toFixed(2)),
-      marketRoi: Number(strategyMarket.roi.toFixed(2)),
-      blendedRoi: Number(strategyBlended.roi.toFixed(2)),
+      calibratedRoi: strategyCalibrated.roi == null ? null : Number(strategyCalibrated.roi.toFixed(2)),
+      marketRoi: strategyMarket.roi == null ? null : Number(strategyMarket.roi.toFixed(2)),
+      blendedRoi: strategyBlended.roi == null ? null : Number(strategyBlended.roi.toFixed(2)),
     }
   })
 }
@@ -2496,20 +2546,14 @@ export const getPredictionCalibrationContext = (options = {}) => {
   const detail = options?.detail === 'lite' ? 'lite' : 'full'
   const includeHeavy = detail === 'full'
   const cacheKey = getRevisionCacheKey('calibrationContext', detail)
-  const cached = analyticsMemo.calibrationContext.get(cacheKey)
+  const isolated = Array.isArray(options.investments)
+  const cached = !isolated && analyticsMemo.calibrationContext.get(cacheKey)
   if (cached) return cached
 
-  const config = getSystemConfig()
-  const teamProfiles = getTeamProfiles()
-  const settled = getSettledInvestments(getActiveInvestments())
-  const matchRows = settled
-    .flatMap((investment) =>
-      splitInvestmentToMatches(investment).map((match) => ({
-        investment,
-        match,
-        created_at: investment.created_at,
-      })),
-    )
+  const config = options.config || getSystemConfig()
+  const teamProfiles = options.teamProfiles || (isolated ? [] : getTeamProfiles())
+  const settled = getSettledInvestments(isolated ? options.investments : getActiveInvestments())
+  const matchRows = uniqueMatchRows(settled)
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
 
   const sampleCount = matchRows.length
@@ -2571,7 +2615,7 @@ export const getPredictionCalibrationContext = (options = {}) => {
       : 1
 
   // 获取回归校准数据
-  const regressionData = getConfRegressionCalibration()
+  const regressionData = getConfRegressionCalibration(matchRows)
   const baseConfCalibrate = (conf) => {
     const cleanConf = clamp(toNumber(conf, Number.NaN), 0.02, 0.98)
     if (!Number.isFinite(cleanConf)) return 0.5
@@ -2582,22 +2626,22 @@ export const getPredictionCalibrationContext = (options = {}) => {
   }
   const teamCalibration = buildTeamCalibrationModelFromMatchRows(matchRows, teamProfiles, baseConfCalibrate, n)
 
-  const binaryRows = getBinaryOutcomeRows()
-  const blendWalkForward = includeHeavy ? evaluateBlendWalkForward(binaryRows, config, teamProfiles) : []
+  const binaryRows = getBinaryOutcomeRows(settled, teamProfiles)
+  const blendWalkForward = includeHeavy ? evaluateBlendWalkForward(binaryRows, config, teamProfiles, !isolated) : []
   const blendSummary = summarizeBlendWalkForward(blendWalkForward)
 
   // ── Conf×Odds 交叉校准层 ──
   const confOddsCalibration = buildConfOddsCalibrationLayer(matchRows)
 
   // ── FIX #1: Learned context factors ──
-  const learnedFactors = learnContextFactors()
+  const learnedFactors = learnContextFactors(settled)
 
   // ── FIX #2: Isotonic regression calibration ──
-  const isotonicModel = buildIsotonicRegression()
+  const isotonicModel = buildIsotonicRegression(binaryRows)
 
   // ── FIX #3: Walk-forward feedback ──
   const walkForwardFeedback = includeHeavy
-    ? computeWalkForwardFeedback(blendWalkForward)
+    ? computeWalkForwardFeedback(blendWalkForward, { config, rows: binaryRows, teamProfiles })
     : {
         ready: false,
         adjustments: {},
@@ -2614,7 +2658,7 @@ export const getPredictionCalibrationContext = (options = {}) => {
 
   // ── FIX #4: Entry correlation matrix ──
   const entryCorrelation = includeHeavy
-    ? buildEntryCorrelationMatrix()
+    ? buildEntryCorrelationMatrix(settled)
     : {
         ready: false,
         avgCorrelation: 0,
@@ -2624,12 +2668,12 @@ export const getPredictionCalibrationContext = (options = {}) => {
       }
 
   // ── FIX #6: Comprehensive combo hyperparameter calibration ──
-  const comboHyperparams = includeHeavy ? backtestComboHyperparams() : null
+  const comboHyperparams = includeHeavy && !isolated ? backtestComboHyperparams() : null
 
   // ── FIX #7: Adaptive weight evaluation (side-effect free in render path) ──
   // IMPORTANT: do not write system config while pages are rendering.
   // Auto-apply can be triggered from explicit user actions in Console.
-  const adaptiveWeightSnapshot = includeHeavy
+  const adaptiveWeightSnapshot = includeHeavy && !isolated
     ? computeAdaptiveWeightSuggestions()
     : {
         suggestions: [],
@@ -2693,6 +2737,14 @@ export const getPredictionCalibrationContext = (options = {}) => {
   }
 
   const context = {
+    metadata: {
+      pipeline_version: '2026-09-calibration-v2',
+      parameters: Object.fromEntries(['weightMode', 'weightTys', 'weightFid', 'weightFse', 'weightOdds', 'defaultOdds', 'kellyDivisor'].map((key) => [key, config[key] ?? null])),
+      stage: detail,
+      data_revision: isolated ? null : analyticsMemo.revision,
+      fitted_at: new Date().toISOString(),
+      training_samples: sampleCount,
+    },
     detail,
     sampleCount,
     n,
@@ -2749,6 +2801,7 @@ export const getPredictionCalibrationContext = (options = {}) => {
       ready: isotonicModel.ready,
       reliability: isotonicModel.reliability,
       brierImprovement: isotonicModel.brierImprovement || 0,
+      evaluationBasis: 'in_sample_fit_only',
       nodeCount: isotonicModel.nodes?.length || 0,
       sampleCount: isotonicModel.sampleCount,
     },
@@ -2771,10 +2824,10 @@ export const getPredictionCalibrationContext = (options = {}) => {
     // FIX #7: Adaptive weight auto-apply result
     adaptiveWeightResult,
     // FIX #8: Per-match EJR diagnostics (was dead code — now wired in)
-    ejrDiagnostics: getPerMatchEjrSnapshot(),
+    ejrDiagnostics: isolated ? null : getPerMatchEjrSnapshot(),
   }
 
-  analyticsMemo.calibrationContext.set(cacheKey, context)
+  if (!isolated) analyticsMemo.calibrationContext.set(cacheKey, context)
   return context
 }
 
@@ -2785,36 +2838,37 @@ const toCalibrationMatchRows = (rows) =>
       created_at: row.created_at,
     },
     match: {
+      ...row.match,
       conf: row.conf,
-      match_rating: row.actual,
+      match_rating: row.match?.match_rating ?? row.ajr,
       match_rep: row.rep,
-      home_team: '',
-      away_team: '',
+      home_team: row.homeTeam || '',
+      away_team: row.awayTeam || '',
     },
     created_at: row.created_at,
   }))
 
-const getBinaryOutcomeRows = () => {
-  const teamProfiles = getTeamProfiles()
-  const settled = getSettledInvestments(getActiveInvestments())
-  return settled
-    .flatMap((investment) =>
-      splitInvestmentToMatches(investment).map((match) => {
+const getBinaryOutcomeRows = (investments = getActiveInvestments(), teamProfiles = getTeamProfiles()) => {
+  const settled = getSettledInvestments(investments)
+  return uniqueMatchRows(settled)
+      .map((source) => {
+        const { investment, match } = source
         if (typeof match.is_correct !== 'boolean') return null
         const conf = toNumber(match.conf, Number.NaN)
         const odds = toNumber(match.odds, Number.NaN)
         if (!Number.isFinite(conf) || !Number.isFinite(odds) || conf <= 0 || odds <= 1) return null
         return {
+          ...source,
           created_at: investment.created_at,
           conf: clamp(conf, 0.02, 0.98),
           actual: match.is_correct ? 1 : 0,
           odds,
+          binaryPayout: !Array.isArray(match.entries) || match.entries.length <= 1,
           rep: toNumber(match.match_rep, toNumber(investment.rep, Number.NaN)),
           homeTeam: resolveTeamNameForCalibration(match.home_team, teamProfiles),
           awayTeam: resolveTeamNameForCalibration(match.away_team, teamProfiles),
         }
-      }),
-    )
+      })
     .filter(Boolean)
     .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
 }
@@ -2868,6 +2922,7 @@ const calcCalibrationMae = (rows, predictFn, bins = 8) => {
 const simulateKellyStrategyByRows = (rows, predictFn, config, divisor) => {
   const simRows = []
   rows.forEach((row) => {
+    if (row.binaryPayout === false) return
     const p = clamp(toNumber(predictFn(row), row.conf), 0.02, 0.98)
     const odds = Math.max(1.01, toNumber(row.odds, toNumber(config.defaultOdds, 2.5)))
     const stake = Math.round(calcKellyStake(p, odds, divisor, config))
@@ -2924,9 +2979,9 @@ const summarizeModelValidationPrequential = (rows, config) => {
 
   windows.forEach((window, idx) => {
     const { trainRows, testRows } = window
-    const fit = getConfRegressionCalibration(toCalibrationMatchRows(trainRows))
+    const fit = getPredictionCalibrationContext({ investments: historyFromRows(trainRows), config, detail: 'full' })
     const rawPredict = (row) => row.conf
-    const calibratedPredict = (row) => fit.calibrate(row.conf)
+    const calibratedPredict = (row) => predictMatchProbability(row.match, config, fit)
 
     const trainRawBrier = calcBrierScore(trainRows, rawPredict)
     const trainCalBrier = calcBrierScore(trainRows, calibratedPredict)
@@ -2958,6 +3013,9 @@ const summarizeModelValidationPrequential = (rows, config) => {
 
     walkForward.push({
       label: `W${idx + 1}`,
+      cutoff: window.cutoff,
+      trainingIds: trainRows.map((row) => row.eventKey),
+      predictions: testRows.map((row) => ({ eventKey: row.eventKey, created_at: row.created_at, probability: calibratedPredict(row), actual: row.actual })),
       trainSamples: trainRows.length,
       testSamples: testRows.length,
       rawBrier: Number(testRawBrier.toFixed(4)),
@@ -2967,6 +3025,7 @@ const summarizeModelValidationPrequential = (rows, config) => {
 
     const divisor = Math.max(1, toNumber(config.kellyDivisor, 4))
     testRows.forEach((row) => {
+      if (row.binaryPayout === false) return
       const odds = Math.max(1.01, toNumber(row.odds, toNumber(config.defaultOdds, 2.5)))
       const unitReturn = row.actual === 1 ? odds - 1 : -1
       const pRaw = clamp(toNumber(rawPredict(row), row.conf), 0.02, 0.98)
@@ -2984,6 +3043,7 @@ const summarizeModelValidationPrequential = (rows, config) => {
 
   if (weighted.trainWeight <= 0 || weighted.testWeight <= 0) return null
   const latestWindow = windows[windows.length - 1] || { trainRows: [], testRows: [] }
+  const derivedAvailabilityRows = windows.reduce((sum, window) => sum + window.derivedAvailabilityRows, 0)
   const meanTrain = (value) => value / weighted.trainWeight
   const meanTest = (value) => value / weighted.testWeight
   const strategyRawMc = runKellyBootstrapMonteCarlo(
@@ -3025,6 +3085,10 @@ const summarizeModelValidationPrequential = (rows, config) => {
     },
     walkForward,
     positiveWalkForward: walkForward.filter((row) => row.gainPct > 0).length,
+    derivedAvailabilityRows,
+    timeBasis: derivedAvailabilityRows > 0
+      ? WINDOW_TIME_BASIS.derivedAvailability
+      : WINDOW_TIME_BASIS.recordedOnly,
   }
 }
 
@@ -3045,7 +3109,7 @@ export const getModelValidationSnapshot = () => {
       trainSamples: 0,
       testSamples: 0,
       stability: 'insufficient',
-      message: `样本不足：需至少 ${minimumSamples} 场已结算且含命中信息。`,
+      message: `尚无法进行严格时间验证：需要至少 ${minimumSamples} 场含事件身份与命中结果的记录。`,
       walkForward: [],
     }
     analyticsMemo.modelValidation.set(cacheKey, insufficient)
@@ -3061,7 +3125,7 @@ export const getModelValidationSnapshot = () => {
       trainSamples: 0,
       testSamples: 0,
       stability: 'insufficient',
-      message: `样本不足：需至少 ${minimumSamples} 场已结算且含命中信息。`,
+      message: `尚无法进行严格时间验证：需要足够的独立事件样本与可用时间顺序；缺少结算时间的旧记录按“创建后 72 小时视为已知”近似参与排序。`,
       walkForward: [],
     }
     analyticsMemo.modelValidation.set(cacheKey, insufficient)
@@ -3078,6 +3142,8 @@ export const getModelValidationSnapshot = () => {
     strategy,
     walkForward,
     positiveWalkForward,
+    timeBasis,
+    derivedAvailabilityRows,
   } = prequentialSummary
   const brierGainPct = brier.testRaw > 0 ? ((brier.testRaw - brier.testCalibrated) / brier.testRaw) * 100 : 0
   const logLossGainPct = logLoss.testRaw > 0 ? ((logLoss.testRaw - logLoss.testCalibrated) / logLoss.testRaw) * 100 : 0
@@ -3093,6 +3159,8 @@ export const getModelValidationSnapshot = () => {
 
   const snapshot = {
     ready: true,
+    evaluationBasis: 'production_probability_pipeline_fixed_config_prequential',
+    strategyBasis: 'single_selection_leg_diagnostic_not_account_replay',
     minimumSamples,
     sampleCount: rows.length,
     trainSamples,
@@ -3138,6 +3206,8 @@ export const getModelValidationSnapshot = () => {
     },
     walkForward,
     positiveWalkForward,
+    timeBasis,
+    derivedAvailabilityRows,
   }
 
   analyticsMemo.modelValidation.set(cacheKey, snapshot)
@@ -3307,7 +3377,7 @@ export const getAnalysisSnapshot = (periodKey = 'all') => {
       const conf = toNumber(match.conf, NaN)
       const ajr = toNumber(match.match_rating, NaN)
       if (Number.isFinite(conf) && Number.isFinite(ajr)) {
-        row.diffSum += ajr - conf
+        row.diffSum += normalizeAjrForModel(ajr) - conf
         row.diffCount += 1
       }
     })
@@ -3322,6 +3392,7 @@ export const getAnalysisSnapshot = (periodKey = 'all') => {
       hitRate: row.samples > 0 ? (row.wins / row.samples) * 100 : 0,
       avgOdds: row.samples > 0 ? row.oddsSum / row.samples : 0,
       avgActualMinusConf: row.diffCount > 0 ? row.diffSum / row.diffCount : 0,
+      diffBasis: 'normalized_AJR_minus_conf_judgment_residual_not_probability_error',
       kelly: modeKellyMap.get(row.mode) || 4,
     }))
     .sort((a, b) => b.samples - a.samples)
@@ -3452,10 +3523,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
 
   const volatility = calcStdDev(returns) * 100
   const meanReturn = returns.length > 0 ? returns.reduce((sum, value) => sum + value, 0) / returns.length : 0
-  const downsideReturns = returns.filter((value) => value < 0)
-  const downsideVolatility = calcStdDev(downsideReturns.length > 0 ? downsideReturns : [0])
-  const sharpe = volatility > 0 ? (meanReturn / (volatility / 100)) * Math.sqrt(returns.length || 1) : 0
-  const sortino = downsideVolatility > 0 ? (meanReturn / downsideVolatility) * Math.sqrt(returns.length || 1) : 0
+  const { sharpe, sortino } = getReturnRiskRatios(returns)
 
   const grossProfit = settled.reduce((sum, item) => sum + Math.max(0, toNumber(item.profit)), 0)
   const grossLoss = Math.abs(settled.reduce((sum, item) => sum + Math.min(0, toNumber(item.profit)), 0))
@@ -3540,6 +3608,8 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
         confCount: 0,
         ajrSum: 0,
         ajrCount: 0,
+        normalizedAjrSum: 0,
+        normalizedAjrCount: 0,
       },
     ]),
   )
@@ -3592,7 +3662,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
         modeRow.ajrCount += 1
       }
       if (Number.isFinite(conf) && Number.isFinite(ajr)) {
-        modeRow.diffSum += ajr - conf
+        modeRow.diffSum += normalizeAjrForModel(ajr) - conf
         modeRow.diffCount += 1
       }
 
@@ -3607,7 +3677,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
           confRow.expectedCount += 1
         }
         if (Number.isFinite(ajr)) {
-          confRow.actualSum += ajr
+          confRow.actualSum += normalizeAjrForModel(ajr)
           confRow.actualCount += 1
         }
       }
@@ -3625,6 +3695,8 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
         if (Number.isFinite(ajr)) {
           oddsRow.ajrSum += ajr
           oddsRow.ajrCount += 1
+          oddsRow.normalizedAjrSum += normalizeAjrForModel(ajr)
+          oddsRow.normalizedAjrCount += 1
         }
       }
 
@@ -3640,6 +3712,8 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
           confCount: 0,
           ajrSum: 0,
           ajrCount: 0,
+          normalizedAjrSum: 0,
+          normalizedAjrCount: 0,
           oddsSum: 0,
           oddsCount: 0,
         })
@@ -3656,6 +3730,8 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
       if (Number.isFinite(ajr)) {
         entryRow.ajrSum += ajr
         entryRow.ajrCount += 1
+        entryRow.normalizedAjrSum += normalizeAjrForModel(ajr)
+        entryRow.normalizedAjrCount += 1
       }
       if (Number.isFinite(odds)) {
         entryRow.oddsSum += odds
@@ -3698,6 +3774,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
         mode,
         conf: Number.isFinite(conf) ? conf : Number.NaN,
         ajr: Number.isFinite(ajr) ? ajr : Number.NaN,
+        normalizedAjr: Number.isFinite(ajr) ? normalizeAjrForModel(ajr) : Number.NaN,
         odds: Number.isFinite(odds) ? odds : Number.NaN,
         rep: Number.isFinite(rep) ? rep : Number.NaN,
         fid: Number.isFinite(fid) ? fid : Number.NaN,
@@ -3728,6 +3805,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
       avgConf: row.confCount > 0 ? row.confSum / row.confCount : 0,
       avgAjr: row.ajrCount > 0 ? row.ajrSum / row.ajrCount : 0,
       avgActualMinusConf: row.diffCount > 0 ? row.diffSum / row.diffCount : 0,
+      diffBasis: 'normalized_AJR_minus_conf_judgment_residual_not_probability_error',
       kelly: modeKellyMap.get(row.mode) || toNumber(config.kellyDivisor, 4),
     }))
     .sort((a, b) => b.samples - a.samples)
@@ -3744,6 +3822,7 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
         roi: calcRoi(row.profit, row.inputs),
         expected,
         actual,
+        actualBasis: 'normalized_AJR_judgment_scale',
         diff: actual - expected,
       }
     })
@@ -3757,7 +3836,11 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
       roi: calcRoi(row.profit, row.inputs),
       avgConf: row.confCount > 0 ? row.confSum / row.confCount : 0,
       avgAjr: row.ajrCount > 0 ? row.ajrSum / row.ajrCount : 0,
-      diff: row.confCount > 0 && row.ajrCount > 0 ? row.ajrSum / row.ajrCount - row.confSum / row.confCount : 0,
+      diff:
+        row.confCount > 0 && row.normalizedAjrCount > 0
+          ? row.normalizedAjrSum / row.normalizedAjrCount - row.confSum / row.confCount
+          : 0,
+      diffBasis: 'normalized_AJR_minus_conf_judgment_residual_not_probability_error',
     }))
 
   const entriesMatrix = [...entryMatrixMap.values()]
@@ -3771,7 +3854,11 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
       avgConf: row.confCount > 0 ? row.confSum / row.confCount : 0,
       avgAjr: row.ajrCount > 0 ? row.ajrSum / row.ajrCount : 0,
       avgOdds: row.oddsCount > 0 ? row.oddsSum / row.oddsCount : 0,
-      diff: row.confCount > 0 && row.ajrCount > 0 ? row.ajrSum / row.ajrCount - row.confSum / row.confCount : 0,
+      diff:
+        row.normalizedAjrCount > 0 && row.confCount > 0
+          ? row.normalizedAjrSum / row.normalizedAjrCount - row.confSum / row.confCount
+          : 0,
+      diffBasis: 'normalized_AJR_minus_conf_judgment_residual_not_probability_error',
     }))
     .sort((a, b) => b.samples - a.samples || b.roi - a.roi)
 
@@ -3922,164 +4009,78 @@ const computeInvestmentScore = (investment, weights) => {
   return { score: roi, profit, inputs, components }
 }
 
-/**
- * 估计权重参数的梯度
- * 使用数值微分近似
- */
-const estimateWeightGradients = (investments, currentWeights, epsilon = 0.01) => {
-  const gradients = {}
-  const baseScore = computePortfolioScore(investments, currentWeights)
-
-  WEIGHT_KEYS.forEach((key) => {
-    // 正向扰动
-    const weightsPlus = { ...currentWeights, [key]: currentWeights[key] + epsilon }
-    const scorePlus = computePortfolioScore(investments, weightsPlus)
-
-    // 负向扰动
-    const weightsMinus = { ...currentWeights, [key]: currentWeights[key] - epsilon }
-    const scoreMinus = computePortfolioScore(investments, weightsMinus)
-
-    // 中心差分梯度
-    gradients[key] = (scorePlus - scoreMinus) / (2 * epsilon)
-  })
-
-  return { gradients, baseScore }
-}
-
-/**
- * 计算投资组合的综合得分
- * 考虑ROI、风险调整、权重偏好
- */
-const computePortfolioScore = (investments, weights) => {
-  if (investments.length === 0) return 0
-
-  let totalWeightedProfit = 0
-  let totalInputs = 0
-  let losses = []
-
-  investments.forEach((inv) => {
-    const { profit, inputs, components } = computeInvestmentScore(inv, weights)
-
-    // 加权因子 = 各维度特征 × 对应权重的加权和
-    const weightFactor =
-      (components.conf ?? 0.5) * (weights.weightConf ?? 0.45) +
-      (components.mode ?? 0.5) * (weights.weightMode ?? 0.16) +
-      (components.tys ?? 0.5) * (weights.weightTys ?? 0.12) +
-      (components.fid ?? 0.5) * (weights.weightFid ?? 0.14) +
-      (components.odds ?? 0.5) * (weights.weightOdds ?? 0.06) +
-      (components.fse ?? 0.5) * (weights.weightFse ?? 0.07)
-
-    totalWeightedProfit += profit * weightFactor
-    totalInputs += inputs
-
-    if (profit < 0) losses.push(profit)
-  })
-
-  const roi = totalInputs > 0 ? totalWeightedProfit / totalInputs : 0
-
-  // 风险惩罚项
-  const avgLoss = losses.length > 0 ? losses.reduce((s, l) => s + l, 0) / losses.length : 0
-  const riskPenalty = Math.abs(avgLoss) * 0.1
-
-  return roi - riskPenalty
-}
-
-/**
- * 计算建议的权重调整
- * 返回每个权重的建议值和置信度
- */
+/** Actual production-loss tuning with a disjoint, later promotion check. */
 export const computeAdaptiveWeightSuggestions = () => {
   const config = getSystemConfig()
-  const adaptiveConfig = config.adaptiveWeights || {}
-  const bounds = adaptiveConfig.bounds || DEFAULT_WEIGHT_BOUNDS
-  const priors = adaptiveConfig.initialPriors || DEFAULT_WEIGHT_PRIORS
-  const learningRate = toNumber(adaptiveConfig.learningRate, 0.05)
-  const maxSingleChange = toNumber(adaptiveConfig.maxSingleChange, 0.02)
-  const priorStrength = toNumber(adaptiveConfig.priorStrength, 0.1)
-  const minSamples = toNumber(adaptiveConfig.minSamples, 50)
-
-  const investments = getSettledInvestments(getActiveInvestments())
-  const sampleCount = investments.length
-
-  // 样本量不足
-  if (sampleCount < minSamples) {
-    return {
-      suggestions: WEIGHT_KEYS.map((key) => ({
-        key,
-        label: key.replace('weight', ''),
-        current: toNumber(config[key], priors[key]),
-        suggested: toNumber(config[key], priors[key]),
-        prior: priors[key],
-        bounds: bounds[key] || DEFAULT_WEIGHT_BOUNDS[key],
-        gradient: 0,
-        confidence: 0,
-        change: 0,
-        reason: '样本量不足',
-      })),
-      sampleCount,
-      minSamples,
-      ready: false,
-      lastUpdateAt: adaptiveConfig.lastUpdateAt || null,
-      updateCount: adaptiveConfig.updateCount || 0,
-    }
-  }
-
-  // 提取当前权重
-  const currentWeights = {}
-  WEIGHT_KEYS.forEach((key) => {
-    currentWeights[key] = toNumber(config[key], priors[key])
+  const adaptive = config.adaptiveWeights || {}
+  const priors = adaptive.initialPriors || DEFAULT_WEIGHT_PRIORS
+  const bounds = adaptive.bounds || DEFAULT_WEIGHT_BOUNDS
+  const minSamples = Math.max(24, toNumber(adaptive.minSamples, 50))
+  const rows = getBinaryOutcomeRows()
+  const windows = buildPrequentialWalkForwardWindows(rows)
+  const derivedAvailabilityRows = windows.reduce((sum, window) => sum + window.derivedAvailabilityRows, 0)
+  const timeBasis = derivedAvailabilityRows > 0
+    ? WINDOW_TIME_BASIS.derivedAvailability
+    : WINDOW_TIME_BASIS.recordedOnly
+  const current = Object.fromEntries(WEIGHT_KEYS.map((key) => [key, toNumber(config[key], priors[key])]))
+  const empty = (reason) => ({
+    suggestions: WEIGHT_KEYS.map((key) => ({ key, label: key.replace('weight', ''), current: current[key], suggested: current[key],
+      prior: priors[key], bounds: bounds[key] || DEFAULT_WEIGHT_BOUNDS[key], gradient: 0, confidence: 0, change: 0, reason })),
+    sampleCount: rows.length, minSamples, ready: false,
+    evaluationBasis: 'production_brier_temporal_tuning', confidenceBasis: 'direction_agreement_not_probability',
+    lastUpdateAt: adaptive.lastUpdateAt || null, updateCount: adaptive.updateCount || 0,
+    timeBasis, derivedAvailabilityRows,
   })
-
-  // 计算梯度
-  const { gradients, baseScore } = estimateWeightGradients(investments, currentWeights)
-
-  const suggestionsList = WEIGHT_KEYS.map((key) => {
-    // Conf is the production probability foundation, not a weighted factor.
-    // Keep its manual setting compatible, but do not claim an effective auto-tune.
+  if (rows.length < minSamples || windows.length < 2) return empty('独立事件或结算时间不足，未进行权重验证')
+  const tuning = windows.slice(0, -1)
+  const holdout = windows[windows.length - 1]
+  const contexts = new Map()
+  const evaluate = (window, weights) => {
+    const cfg = { ...config, ...weights }
+    const key = window.cutoff + ':' + cfg.weightOdds
+    if (!contexts.has(key)) contexts.set(key, getPredictionCalibrationContext({
+      investments: historyFromRows(window.trainRows), config: cfg, detail: 'full',
+    }))
+    return probabilityLoss(window.testRows, (row) => predictMatchProbability(row.match, cfg, contexts.get(key)))
+  }
+  const tuneScore = (weights) => {
+    const n = tuning.reduce((sum, w) => sum + w.testRows.length, 0)
+    return -tuning.reduce((sum, w) => sum + evaluate(w, weights).brier * w.testRows.length, 0) / n
+  }
+  const learningRate = Math.max(0, toNumber(adaptive.learningRate, 0.05))
+  const priorStrength = Math.max(0, toNumber(adaptive.priorStrength, 0.1))
+  const maxChange = Math.min(0.02, Math.max(0, toNumber(adaptive.maxSingleChange, 0.02)))
+  let remaining = 0.08
+  const suggestions = WEIGHT_KEYS.map((key) => {
     const inactive = key === 'weightConf'
-    const gradient = inactive ? 0 : gradients[key] || 0
-    const current = currentWeights[key]
-    const prior = priors[key]
-    const [minBound, maxBound] = bounds[key] || DEFAULT_WEIGHT_BOUNDS[key]
-
-    // 梯度下降更新 + 向先验回归
-    let rawChange = inactive ? 0 : learningRate * gradient - priorStrength * (current - prior)
-
-    // 限制单次变化幅度
-    rawChange = clamp(rawChange, -maxSingleChange, maxSingleChange)
-
-    // 计算建议值并约束在边界内
-    const suggested = inactive ? current : clamp(current + rawChange, minBound, maxBound)
-    const actualChange = suggested - current
-
-    // 置信度计算：基于梯度一致性和样本量
-    const gradientMagnitude = Math.abs(gradient)
-    const sampleFactor = Math.min(1, sampleCount / 100)
-    const confidence = clamp(gradientMagnitude * 10 * sampleFactor, 0, 1)
-
-    return {
-      key,
-      label: key.replace('weight', ''),
-      current: Number(current.toFixed(4)),
-      suggested: Number(suggested.toFixed(4)),
-      prior,
-      bounds: [minBound, maxBound],
-      gradient: Number(gradient.toFixed(6)),
-      confidence: Number(confidence.toFixed(2)),
-      change: Number(actualChange.toFixed(4)),
-      reason: inactive ? '当前生产管线未使用该权重，不自动调整' : actualChange > 0 ? '建议上调' : actualChange < 0 ? '建议下调' : '维持不变',
-    }
+    const limits = bounds[key] || DEFAULT_WEIGHT_BOUNDS[key]
+    const plus = { ...current, [key]: clamp(current[key] + 0.01, ...limits) }
+    const minus = { ...current, [key]: clamp(current[key] - 0.01, ...limits) }
+    const width = plus[key] - minus[key]
+    const gradient = inactive || width <= 0 ? 0 : (tuneScore(plus) - tuneScore(minus)) / width
+    const agreement = inactive || Math.abs(gradient) < 1e-10 ? 0 : tuning.filter((w) =>
+      Math.sign(evaluate(w, minus).brier - evaluate(w, plus).brier) === Math.sign(gradient)).length / tuning.length
+    let change = inactive || agreement < 0.3 ? 0 : clamp(
+      learningRate * gradient - priorStrength * (current[key] - priors[key]), -maxChange, maxChange)
+    change = clamp(current[key] + change, ...limits) - current[key]
+    if (Math.abs(change) > remaining || Math.abs(change) < 0.001 || inactive) change = 0
+    const suggested = Number((current[key] + change).toFixed(4))
+    remaining -= Math.abs(suggested - current[key])
+    return { key, label: key.replace('weight', ''), current: current[key], suggested, prior: priors[key], bounds: limits,
+      gradient, confidence: agreement, confidenceBasis: 'window_direction_agreement', change: suggested - current[key],
+      reason: inactive ? '当前生产管线未使用该权重，不自动调整' : change ? '基于完整预测管道的 Brier 调参建议' : '维持不变' }
   })
-
-  return {
-    suggestions: suggestionsList,
-    sampleCount,
-    minSamples,
-    ready: true,
-    baseScore: Number(baseScore.toFixed(4)),
-    lastUpdateAt: adaptiveConfig.lastUpdateAt || null,
-    updateCount: adaptiveConfig.updateCount || 0,
-  }
+  const proposed = { ...current, ...Object.fromEntries(suggestions.map((s) => [s.key, s.suggested])) }
+  const baseline = evaluate(holdout, current)
+  const candidate = evaluate(holdout, proposed)
+  const accepted = validatesProbabilityUpdate(baseline, candidate)
+  return { suggestions, sampleCount: rows.length, minSamples, ready: true,
+    baseScore: tuneScore(current), evaluationBasis: 'production_brier_temporal_tuning',
+    confidenceBasis: 'direction_agreement_not_probability',
+    validation: { accepted, baseline, candidate, cutoff: holdout.cutoff, samples: holdout.testRows.length,
+      tuningWindows: tuning.length, note: '本次未参与调参的后置检查；不代表长期实盘收益保证' },
+    lastUpdateAt: adaptive.lastUpdateAt || null, updateCount: adaptive.updateCount || 0,
+    timeBasis, derivedAvailabilityRows }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -4088,9 +4089,9 @@ export const computeAdaptiveWeightSuggestions = () => {
 // Uses shrinkage estimation: factor = shrink * empirical + (1 - shrink) * prior(1.0)
 // ═══════════════════════════════════════════════════════════════
 
-export const learnContextFactors = () => {
-  const settled = getSettledInvestments(getActiveInvestments())
-  const matchRows = settled.flatMap((item) => splitInvestmentToMatches(item))
+export const learnContextFactors = (investments = getActiveInvestments()) => {
+  const settled = getSettledInvestments(investments)
+  const matchRows = uniqueMatchRows(settled).map((row) => row.match).filter((m) => typeof m.is_correct === 'boolean')
   const minSamplesPerBucket = 5
   const shrinkageK = 12 // higher = more conservative, stays closer to prior 1.0
 
@@ -4132,7 +4133,7 @@ export const learnContextFactors = () => {
   matchRows.forEach((m) => {
     const home = m.tys_home || 'M'
     const away = m.tys_away || 'M'
-    ;[home, away].forEach((tys) => {
+    ;[...new Set([home, away])].forEach((tys) => {
       const key = tysValues.includes(tys) ? tys : 'M'
       const row = tysStats.get(key)
       row.total += 1
@@ -4348,10 +4349,10 @@ export const buildIsotonicRegression = (binaryRows = null) => {
 // weight based on recent Brier score, LogLoss, and ROI.
 // ═══════════════════════════════════════════════════════════════
 
-export const computeWalkForwardFeedback = (precomputedWindows = null) => {
-  const config = getSystemConfig()
-  const rows = getBinaryOutcomeRows()
-  const teamProfiles = getTeamProfiles()
+export const computeWalkForwardFeedback = (precomputedWindows = null, options = {}) => {
+  const config = options.config || getSystemConfig()
+  const rows = options.rows || getBinaryOutcomeRows()
+  const teamProfiles = options.teamProfiles || getTeamProfiles()
   const wf = Array.isArray(precomputedWindows) ? precomputedWindows : evaluateBlendWalkForward(rows, config, teamProfiles)
 
   const fallback = {
@@ -4451,8 +4452,8 @@ export const computeWalkForwardFeedback = (precomputedWindows = null) => {
 // that deviation as a correlation coefficient.
 // ═══════════════════════════════════════════════════════════════
 
-export const buildEntryCorrelationMatrix = () => {
-  const settled = getSettledInvestments(getActiveInvestments())
+export const buildEntryCorrelationMatrix = (investments = getActiveInvestments()) => {
+  const settled = getSettledInvestments(investments)
   const fallback = {
     ready: false,
     getCorrelation: () => ({ rho: 0, samples: 0, reliability: 0 }),
@@ -4469,6 +4470,8 @@ export const buildEntryCorrelationMatrix = () => {
     })
     .map((inv) => inv.matches.map((m) => ({
       key: `${m.home_team || '-'} vs ${m.away_team || '-'}`,
+      identity: getSelectionIdentityKey(m, inv.id),
+      eventKey: m.event_id ? `event:${m.event_id}` : '',
       entryType: m.entry_market_type || 'other',
       isCorrect: m.is_correct === true,
       odds: toNumber(m.odds, 2.0),
@@ -4479,11 +4482,16 @@ export const buildEntryCorrelationMatrix = () => {
 
   // Build pairwise co-occurrence statistics by entry-type pairs
   const pairStats = new Map()
+  const seenEventPairs = new Set()
   combos.forEach((legs) => {
     for (let i = 0; i < legs.length; i++) {
       for (let j = i + 1; j < legs.length; j++) {
         const [a, b] = [legs[i], legs[j]].sort((left, right) =>
           left.entryType < right.entryType ? -1 : left.entryType > right.entryType ? 1 : 0)
+        if (a.eventKey && a.eventKey === b.eventKey) continue
+        const evidenceKey = a.identity && b.identity ? JSON.stringify([a.identity, b.identity].sort()) : ''
+        if (evidenceKey && seenEventPairs.has(evidenceKey)) continue
+        if (evidenceKey) seenEventPairs.add(evidenceKey)
         const pairKey = [a.entryType, b.entryType].join('|')
         if (!pairStats.has(pairKey)) {
           pairStats.set(pairKey, { key: pairKey, n: 0, bothWin: 0, aWin: 0, bWin: 0, sumAConf: 0, sumBConf: 0 })
@@ -4610,6 +4618,7 @@ export const buildComboRetrospective = (planHistory) => {
   const seenCombos = new Set()
   const seenAnchors = new Set()
   const seenSurplus = new Set()
+  const evidenceEvents = new Set()
 
   const FT_LAYER_ALIAS = { '主推': 'core', '次推': 'satellite', '博冷': 'moonshot' }
 
@@ -4642,6 +4651,10 @@ export const buildComboRetrospective = (planHistory) => {
       const signature = JSON.stringify(subset.map((leg) => getSelectionIdentityKey(leg)).sort())
       if (seenCombos.has(signature)) return
       seenCombos.add(signature)
+      legResults.forEach(({ match, investment }) => {
+        const key = matchEventKey(match, investment.id)
+        if (key) evidenceEvents.add(key)
+      })
       newEvidence = true
 
       const comboHit = legResults.every((r) => r.isCorrect)
@@ -4701,7 +4714,7 @@ export const buildComboRetrospective = (planHistory) => {
   if (epochsWithData < 1) return fallback
 
   // Compute learning signals
-  const reliability = clamp((epochsWithData - 1) / 9, 0, 1) // ramp: 2 epochs → 0.11, 10 epochs → 1.0
+  const reliability = clamp((evidenceEvents.size - 1) / 9, 0, 1)
 
   // Layer hit rates
   const layerHitRates = {}
@@ -4742,6 +4755,8 @@ export const buildComboRetrospective = (planHistory) => {
     ready: true,
     reliability: Number(reliability.toFixed(3)),
     epochCount: epochsWithData,
+    uniqueEventCount: evidenceEvents.size,
+    reliabilityBasis: 'unique_events_not_generated_plans',
     layerHitRates,
     legsHitMap,
     globalComboHitRate: Number(globalHitRate.toFixed(3)),
@@ -4766,8 +4781,9 @@ export const getPerMatchEjrSnapshot = () => {
   const settled = getSettledInvestments(getActiveInvestments())
   const matchRows = settled.flatMap((item) =>
     splitInvestmentToMatches(item).map((match, idx) => {
-      const ejr = toNumber(match.conf, Number.NaN) // conf IS the per-match EJR
+      const ejr = toNumber(match.conf, Number.NaN) // raw user judgment, not saved calibrated probability
       const ajr = toNumber(match.match_rating, Number.NaN)
+      const normalizedAjr = normalizeAjrForModel(ajr, Number.NaN)
       const odds = toNumber(match.odds, Number.NaN)
       return {
         id: `${item.id}-m${idx}`,
@@ -4782,8 +4798,9 @@ export const getPerMatchEjrSnapshot = () => {
         fseGeo: Number(Math.sqrt(clamp(toNumber(match.fse_home, 0.5), 0.05, 1) * clamp(toNumber(match.fse_away, 0.5), 0.05, 1)).toFixed(3)),
         ejr: Number.isFinite(ejr) ? Number(ejr.toFixed(3)) : null,
         ajr: Number.isFinite(ajr) ? Number(ajr.toFixed(3)) : null,
+        normalizedAjr: Number.isFinite(normalizedAjr) ? normalizedAjr : null,
         odds: Number.isFinite(odds) ? Number(odds.toFixed(2)) : null,
-        delta: Number.isFinite(ejr) && Number.isFinite(ajr) ? Number((ajr - ejr).toFixed(3)) : null,
+        delta: Number.isFinite(ejr) && Number.isFinite(normalizedAjr) ? Number((normalizedAjr - ejr).toFixed(3)) : null,
         isCorrect: match.is_correct,
       }
     }),
@@ -4815,9 +4832,11 @@ export const getPerMatchEjrSnapshot = () => {
 
   return {
     matches: matchRows,
+    metricBasis: 'normalized_AJR_minus_raw_Conf_judgment_residual_not_probability_error',
     totalMatches: matchRows.length,
     matchesWithAjr: withAjr.length,
     calibrationStats: {
+      basis: 'judgment_scale_0_to_1_not_hit_probability_calibration',
       meanDelta: Number(meanDelta.toFixed(4)),
       mae: Number(maeScore.toFixed(4)),
       rmse: Number(rmse.toFixed(4)),
@@ -5330,18 +5349,17 @@ const getAdaptiveTrainingRevision = (investments) => {
     const right = JSON.stringify(b)
     return left < right ? -1 : left > right ? 1 : 0
   }
-  const rows = investments.map((inv) => ({
-    id: inv.id,
+  const rows = uniqueMatchRows(investments).map(({ investment: inv, match: m, eventKey }) => ({
+    id: eventKey,
+    selection: getMatchSourceIdentity(m, inv.id).selection_key,
     createdAt: inv.created_at,
+    outcomeAvailableAt: m.outcome_available_at || inv.outcome_available_at || inv.settled_at,
     status: inv.status,
-    inputs: inv.inputs,
-    profit: inv.profit,
     mode: inv.mode,
     // Include the resolved scoring features too: malformed modern fields may
     // fall back to legacy values, which must still invalidate this revision.
-    components: computeInvestmentScore(inv, {}).components,
-    matches: (inv.matches || []).map((m) => ({
-      id: m.id,
+    components: computeInvestmentScore({ ...inv, matches: [m] }, {}).components,
+    match: {
       home: m.home_team,
       away: m.away_team,
       conf: m.conf,
@@ -5354,7 +5372,9 @@ const getAdaptiveTrainingRevision = (investments) => {
       fseAway: m.fse_away,
       isCorrect: m.is_correct,
       rating: m.match_rating,
-    })).sort(compareCanonicalRows),
+      rep: m.match_rep ?? inv.rep,
+      entries: m.entries,
+    },
   })).sort(compareCanonicalRows)
   const serialized = JSON.stringify(rows)
   let hash = 2166136261
@@ -5362,8 +5382,8 @@ const getAdaptiveTrainingRevision = (investments) => {
     hash = Math.imul(hash ^ serialized.charCodeAt(i), 16777619)
   }
   return {
-    signature: `v1:${serialized.length}:${hash >>> 0}`,
-    matchCount: rows.reduce((sum, row) => sum + row.matches.length, 0),
+    signature: `v2:${serialized.length}:${hash >>> 0}`,
+    matchCount: rows.length,
   }
 }
 
@@ -5390,6 +5410,7 @@ export const autoApplyAdaptiveWeights = () => {
 
   const result = computeAdaptiveWeightSuggestions()
   if (!result.ready) return { applied: false, reason: 'insufficient_samples', ...result }
+  if (!result.validation?.accepted) return { ...result, applied: false, reason: 'validation_not_improved' }
 
   const minConfidence = 0.3 // Only apply suggestions with >= 30% confidence
   const maxTotalChange = 0.08 // Safety: cap total weight shift per cycle
@@ -5428,7 +5449,7 @@ export const autoApplyAdaptiveWeights = () => {
   }
 
   // Apply updates + record metadata
-  saveSystemConfig({
+  const saved = saveSystemConfig({
     ...updates,
     adaptiveWeights: {
       ...(config.adaptiveWeights || {}),
@@ -5437,8 +5458,14 @@ export const autoApplyAdaptiveWeights = () => {
       lastAppliedMatchCount: revision.matchCount,
       updateCount: ((config.adaptiveWeights || {}).updateCount || 0) + 1,
       lastAppliedChanges: appliedChanges,
+      lastValidation: result.validation,
     },
   })
+  const persisted = getSystemConfig()
+  if (!saved || persisted.adaptiveWeights?.lastAppliedDataSignature !== revision.signature
+    || Object.entries(updates).some(([key, value]) => persisted[key] !== value)) {
+    return { applied: false, reason: 'save_rejected', suggestions: result.suggestions }
+  }
 
   return {
     applied: true,
@@ -5647,6 +5674,8 @@ export const getWeightedObservedFailure = (historicalData = [], oddsA, oddsB, ba
     return { failedTogether: 0, totalWeight: 0, effectiveSampleSize: 0, rawPairCount: 0 }
   }
 
+  historicalData = canonicalDependencyHistory(historicalData)
+  const seenPairs = new Set()
   const bw = bandwidths || computeAdaptiveBandwidths(historicalData)
   const targetIdxA = getBandIndex(oddsA)
   const targetIdxB = getBandIndex(oddsB)
@@ -5668,6 +5697,7 @@ export const getWeightedObservedFailure = (historicalData = [], oddsA, oddsB, ba
     let bestKernelW = 0
     let bestFailedBoth = false
     let bestPartialMiss = false
+    let bestIdentity = ''
 
     for (let i = 0; i < matches.length; i++) {
       const mOddsI = toNumber(matches[i]?.odds, 0)
@@ -5676,6 +5706,7 @@ export const getWeightedObservedFailure = (historicalData = [], oddsA, oddsB, ba
 
       for (let j = 0; j < matches.length; j++) {
         if (j === i) continue
+        if (matches[i].eventKey && matches[i].eventKey === matches[j].eventKey) continue
         const mOddsJ = toNumber(matches[j]?.odds, 0)
         if (mOddsJ <= 1) continue
         const rI = matches[i]?.result
@@ -5690,11 +5721,15 @@ export const getWeightedObservedFailure = (historicalData = [], oddsA, oddsB, ba
           bestKernelW = kw
           bestFailedBoth = rI === false && rJ === false
           bestPartialMiss = (rI === true && rJ === false) || (rI === false && rJ === true)
+          bestIdentity = matches[i].identityKey && matches[j].identityKey
+            ? JSON.stringify([matches[i].identityKey, matches[j].identityKey].sort()) : ''
         }
       }
     }
 
     if (bestKernelW > 1e-6) {
+      if (bestIdentity && seenPairs.has(bestIdentity)) return
+      if (bestIdentity) seenPairs.add(bestIdentity)
       const w = bestKernelW * temporalW
       totalWeight += w
       sumW2 += w * w
@@ -5743,6 +5778,7 @@ export const calculateDependencyPremium = (
 ) => {
   const oddsA = toNumber(raceA?.odds, Number.NaN)
   const oddsB = toNumber(raceB?.odds, Number.NaN)
+  historicalData = canonicalDependencyHistory(historicalData)
 
   if (!Number.isFinite(oddsA) || !Number.isFinite(oddsB)) {
     return {
@@ -5875,14 +5911,11 @@ export const calculateDependencyPremium = (
   // 步骤5：基于有效样本量的信心权重（ESS替代raw count）
   const confidenceWeight = getConfidenceWeight(observed.effectiveSampleSize)
 
-  // An approximate weighted-normal diagnostic, NOT an exact binomial test:
-  // arbitrary scaling of kernel weights must not manufacture observations.
-  const effectiveSampleSize = observed.effectiveSampleSize
-  const pValue = effectiveSampleSize > 0 && Number.isFinite(pFailBothObserved)
-    ? calculateBinomialPValue(pFailBothObserved * effectiveSampleSize, effectiveSampleSize, pFailBothIndependent)
-    : Number.NaN
-
-  const isSignificant = pValue < 0.03
+  // Kernel-selected, overlapping event pairs are not IID binomial trials.
+  // ESS fixes weight scale, not the sampling assumptions. No valid inferential
+  // p-value (and hence no significance/multiple-testing claim) is available.
+  const pValue = Number.NaN
+  const isSignificant = false
 
   return {
     premium: clamp(premium, -1, 1),
@@ -5894,65 +5927,14 @@ export const calculateDependencyPremium = (
     effectiveSampleSize: observed.effectiveSampleSize,
     confidence: confidenceWeight,
     pValue,
-    pValueMethod: 'ess_normal_approximation',
+    pValueMethod: 'unavailable_dependent_selected_sample',
+    inferenceStatus: 'exploratory_only',
+    confidenceBasis: 'ess_support_weight_not_statistical_confidence',
     isSignificant,
     observedFailedCount: observed.failedTogether,
     observedPartialMiss: observed.partialMiss,
     weightedCount: observed.totalWeight,
   }
-}
-
-/**
- * 使用正态近似计算二项p值
- * 检验：H0 = 观察到的失败率与预期失败率无显著差异
- *
- * @param {number} observedFailures - 观察到的失败次数（已加权）
- * @param {number} totalTrials - 总试验次数
- * @param {number} expectedProbability - 期望失败概率
- * @returns {number} p值
- */
-export const calculateBinomialPValue = (observedFailures, totalTrials, expectedProbability) => {
-  if (totalTrials === 0 || !Number.isFinite(expectedProbability)) return 1.0
-
-  const expectedCount = totalTrials * expectedProbability
-  const variance = totalTrials * expectedProbability * (1 - expectedProbability)
-  const stdDev = Math.sqrt(variance)
-
-  if (stdDev === 0) return 1.0
-
-  // Z分数
-  const z = Math.abs((observedFailures - expectedCount) / stdDev)
-
-  // 近似p值（双尾检验）
-  // 使用error function的简化形式
-  const pValue = erfc(z / Math.sqrt(2))
-  return clamp(pValue, 0, 1)
-}
-
-/**
- * 互补误差函数（Complementary Error Function）。
- *
- * 使用 Abramowitz & Stegun 公式 7.1.26 的多项式近似（最大绝对误差 ≈ 1.5e-7）。
- * 对于 x ≥ 0：erfc(x) = (a1·t + … + a5·t⁵)·e^(−x²)，其中 t = 1/(1+p·x)。
- * 对于 x < 0：利用对称性 erfc(−x) = 2 − erfc(x)。
- *
- * @param {number} x
- * @returns {number} erfc(x)，取值范围 [0, 2]
- */
-const erfc = (x) => {
-  const a1 = 0.254829592
-  const a2 = -0.284496736
-  const a3 = 1.421413741
-  const a4 = -1.453152027
-  const a5 = 1.061405429
-  const p = 0.3275911
-
-  const z = Math.abs(x)
-  const t = 1.0 / (1.0 + p * z)
-  // erfc(|x|) —— 注意这里直接得到的是互补误差函数本身，而非 erf。
-  const erfcAbs = ((((a5 * t + a4) * t + a3) * t + a2) * t + a1) * t * Math.exp(-z * z)
-
-  return x >= 0 ? erfcAbs : 2.0 - erfcAbs
 }
 
 /**
@@ -6098,8 +6080,8 @@ export const checkSurvivingBias = (
 }
 
 /**
- * 保守的基准率调整
- * 将依赖风险溢价与全局失败率进行对比，但不过于激进
+ * Historical API name; applies a heuristic sign-dependent display adjustment.
+ * This is not a fitted base-rate correction or an inferential estimator.
  *
  * @param {number} premium - 依赖风险溢价
  * @param {Array} historicalData - 历史组合数据
@@ -6126,7 +6108,7 @@ export const adjustForBaseRate = (premium, historicalData = [], conservativeFact
 
   const globalFailureRate = totalCombos > 0 ? totalFailed / totalCombos : 0
 
-  // 如果溢价与全局失败率方向相反，进行保守调整
+  // Legacy exploratory display heuristic, independent of globalFailureRate.
   const adjustmentFactor = premium > 0 ? 1 - conservativeFactor : 1 + conservativeFactor
   const adjustedPremium = premium * adjustmentFactor
 
@@ -6135,6 +6117,7 @@ export const adjustForBaseRate = (premium, historicalData = [], conservativeFact
     adjustmentFactor,
     globalFailureRate,
     conservativeFactor,
+    method: 'heuristic_sign_scaling_not_base_rate_estimation',
   }
 }
 
@@ -6207,7 +6190,7 @@ export const assessFragilityScore = (
     100,
   )
 
-  const fragilityPercentage = `${fragilityScore.toFixed(2)}%`
+  const fragilityPercentage = `${fragilityScore.toFixed(2)} / 100` // legacy field name; value is an index
 
   // 步骤5：确定风险级别
   let riskLevel = 'low'
@@ -6217,6 +6200,7 @@ export const assessFragilityScore = (
 
   return {
     fragilityScore: Number(fragilityScore.toFixed(2)),
+    metricType: 'exploratory_relative_index_not_probability',
     fragilityPercentage,
     riskLevel,
     isSignificant: premium.isSignificant,
@@ -6271,7 +6255,8 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
   }
 
   if (!pairAnalysis.some((pair) => Number.isFinite(pair.assessment.fragilityScore))) {
-    return { comboSize: matchGroup.length, overallFragility: Number.NaN, pairAnalysis, criticalPairs: [], recommendations: [] }
+    return { comboSize: matchGroup.length, overallFragility: Number.NaN, pairAnalysis, criticalPairs: [],
+      recommendations: generateFragilityRecommendations(matchGroup, pairAnalysis, []) }
   }
 
   // ==========================================================================
@@ -6456,6 +6441,7 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
 
       if (!pairItem.assessment.components) pairItem.assessment.components = {}
       pairItem.assessment.components.msi = {
+        attributionBasis: 'edge_product_proxy_game_not_causal_tail_probability',
         marginalSurvivalImpactPP: Number(msiPP.toFixed(3)),
         copulaTheta: Number(edge.copulaTheta.toFixed(4)),
         qIndependent: Number(edge.qInd.toFixed(6)),
@@ -6510,10 +6496,14 @@ export const assessComboFragility = (matchGroup = [], historicalData = []) => {
 export const generateFragilityRecommendations = (matchGroup = [], pairAnalysis = [], criticalPairs = []) => {
   const recommendations = []
 
+  if (!pairAnalysis.some((pair) => Number.isFinite(pair.assessment?.fragilityScore))) {
+    return [{ type: 'insufficient_data', description: '历史证据不足，暂无法判断依赖风险。', riskReduction: null }]
+  }
+
   if (criticalPairs.length === 0) {
     recommendations.push({
       type: 'maintain',
-      description: '当前组合稳定，无需调整',
+      description: '当前探索性指数未触发高风险阈值；不代表已证实安全。',
       riskReduction: 0,
     })
     return recommendations
@@ -6577,6 +6567,10 @@ export const generateFragilityRecommendations = (matchGroup = [], pairAnalysis =
  * 从而锁定回归。请勿在 UI / 页面层 import 本对象。
  */
 export const __testables = {
+  computeInvestmentScore,
+  getBinaryOutcomeRows,
+  toCalibrationMatchRows,
+  summarizeModelValidationPrequential,
   calcKellyStake,
   calcKellyRowStake,
   getForecastStates,

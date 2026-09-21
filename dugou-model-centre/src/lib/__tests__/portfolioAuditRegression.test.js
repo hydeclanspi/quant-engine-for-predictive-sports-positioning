@@ -12,6 +12,15 @@ const candidates = Array.from({ length: 10 }, (_, i) => ({
 const generate = (matches, context = {}) => p.generateRecommendations(matches, 50, 120, config, context, { minCoverageEnabled: false })
 
 describe('atomic payout model', () => {
+  it('keeps rounded allocations inside the budget, including invalid and tiny limits', () => {
+    for (const cap of [-10, 0, 0.5, 5.99, 19.9, 23.3, 123.4, 1200]) {
+      const amounts = p.allocateAmountsWithinRiskCap([0.01, 0.7, 0.29], cap, 10, 3)
+      expect(amounts.every((amount) => Number.isInteger(amount) && amount >= 0)).toBe(true)
+      expect(amounts.reduce((sum, amount) => sum + amount, 0)).toBeLessThanOrEqual(Math.max(0, cap))
+    }
+    expect(p.allocateAmountsWithinRiskCap([0.5, 0.5], Infinity)).toEqual([0, 0])
+    expect(p.allocateAmountsWithinRiskCap([Infinity, 0, NaN], 100)).toEqual([0, 0, 0])
+  })
   it('does not create a miss for exhaustive 1X2 coverage', () => {
     const profile = buildAtomicMatchProfile({ entries: ['win', 'draw', 'lose'].map((name) => ({ name, odds: 3 })), unionProbability: 0.5 })
     expect(profile.valid).toBe(true)
@@ -43,6 +52,30 @@ describe('Portfolio Monte Carlo uses the saved return shape and actual money', (
     expect(mc.profitProb).toBeCloseTo(profile.profitWinProbability, 2)
     expect(Math.abs(mc.mean - profile.expectedReturn * 100)).toBeLessThan(2)
     expect(mc.maxPnl).toBe(300)
+  })
+  it('holds the loss tail and the all-lose probability against the enumerated states', () => {
+    const mc = p.runPortfolioMonteCarlo([item], 50000)
+    // 枚举口径：states 按 net 升序累加概率，累计概率首次覆盖 5% 的档位即 VaR；
+    // 全灭概率即所有 gross === 0 状态的概率之和。持仓 100 元，故按元缩放。
+    const states = [...profile.states].sort((a, b) => a.net - b.net)
+    let cumulative = 0
+    let enumeratedVar95 = states[states.length - 1].net
+    for (const state of states) {
+      cumulative += state.probability
+      if (cumulative >= 0.05) {
+        enumeratedVar95 = state.net
+        break
+      }
+    }
+    const enumeratedAllLose = profile.states
+      .filter((state) => !(state.gross > 0))
+      .reduce((sum, state) => sum + state.probability, 0)
+    // 已注资的方案必须真的带左尾，否则本用例无法与零注资用例的 === 0 形成对照。
+    expect(enumeratedVar95).toBeLessThan(0)
+    expect(enumeratedAllLose).toBeGreaterThan(0)
+    expect(mc.var95).toBeCloseTo(enumeratedVar95 * item.amount, 2)
+    expect(mc.minPnl).toBeCloseTo(states[0].net * item.amount, 2)
+    expect(mc.allLoseProb).toBeCloseTo(enumeratedAllLose, 2)
   })
   it('keeps zero stake zero even when theoretical weight is nonzero', () => {
     const zero = { ...item, amount: 0, allocatedWeight: 0.25 }
@@ -85,6 +118,24 @@ describe('allocation and ranking invariants', () => {
     ]
     expect(p.stratifiedSelect(rows, 1, 2)[0].id).toBe('corrected')
     expect(p.applyCoverageDynamicBoost(rows, candidates.slice(0, 3))[0].boostedUtility).toBeGreaterThanOrEqual(10)
+  })
+  it('lets the coverage weight flip which candidate the ranking selects', () => {
+    // m0 已被两条头部组合覆盖（boost 衰减到 0.6^2 = 0.36），
+    // 而 m1 / m2 无人覆盖（各保留 0.6），故覆盖面更宽的 raw 效用略低者能靠覆盖分反超。
+    const rows = [
+      { id: 'highUtility', subset: [candidates[0]], utility: 1, sharpe: 1 },
+      { id: 'm0Rival', subset: [candidates[0]], utility: 0.4, sharpe: 1 },
+      { id: 'broadCoverage', subset: [candidates[1], candidates[2]], utility: 0.9, sharpe: 1 },
+    ]
+    const selected = candidates.slice(0, 3)
+    // 排序口径与调用点一致：boostedUtility 降序，同分再看 utility。原始效用差 0.1。
+    const ranking = (scored) =>
+      [...scored]
+        .sort((a, b) => b.boostedUtility - a.boostedUtility || b.utility - a.utility)
+        .map((row) => row.id)
+    expect(ranking(p.applyCoverageDynamicBoost(rows, selected))).toEqual(['highUtility', 'broadCoverage', 'm0Rival'])
+    expect(ranking(p.applyCoverageDynamicBoost(rows, selected, 0.6, { coverageDecayBoost: 0.04 }))).toEqual(['highUtility', 'broadCoverage', 'm0Rival'])
+    expect(ranking(p.applyCoverageDynamicBoost(rows, selected, 0.6, { coverageDecayBoost: 0.16 }))).toEqual(['broadCoverage', 'highUtility', 'm0Rival'])
   })
   it('keeps diagnostic pair correlation from changing only probability but not EV', () => {
     const plain = generate(candidates.slice(0, 3))

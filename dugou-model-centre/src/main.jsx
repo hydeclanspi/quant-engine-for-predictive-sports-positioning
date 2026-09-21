@@ -8,6 +8,7 @@ import { getDesignPreviewBase } from './design/labEditions'
 import './index.css'
 import './design/labEditions.css'
 import './design/inspiration2609.css'
+import './design/liquidGlassThemes.css'
 
 const renderApp = () => {
   // The hidden owner entry behaves like a complete copy of the app mounted at

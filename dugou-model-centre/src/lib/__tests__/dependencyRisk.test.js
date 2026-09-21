@@ -11,7 +11,6 @@ import {
   getTemporalWeight,
   getWeightedObservedFailure,
   calculateDependencyPremium,
-  calculateBinomialPValue,
   checkSurvivingBias,
   adjustForBaseRate,
   assessFragilityScore,
@@ -230,29 +229,19 @@ describe('Dependency Risk Premium Analysis', () => {
   })
 
   // ==========================================================================
-  // 测试5：p值计算
+  // 测试5：推断口径
   // ==========================================================================
 
-  describe('calculateBinomialPValue', () => {
-    it('应该返回0-1之间的p值', () => {
-      const pValue = calculateBinomialPValue(5, 10, 0.5)
+  describe('dependency risk inference', () => {
+    it('不提供二项检验 p 值，显著性一律不可用', () => {
+      const raceA = { odds: 2.0 }
+      const raceB = { odds: 3.0 }
+      const result = calculateDependencyPremium(raceA, raceB, [])
 
-      expect(pValue).toBeGreaterThanOrEqual(0)
-      expect(pValue).toBeLessThanOrEqual(1)
-    })
-
-    it('应该在完全匹配预期时返回高p值', () => {
-      // 观察到的正好是预期的
-      const pValue = calculateBinomialPValue(5, 10, 0.5)
-
-      expect(pValue).toBeGreaterThan(0.3)
-    })
-
-    it('应该在严重偏离预期时返回低p值', () => {
-      // 观察到10次都失败，而预期只有50%
-      const pValue = calculateBinomialPValue(10, 10, 0.05)
-
-      expect(pValue).toBeLessThan(0.01)
+      expect(result.pValue).toBeNaN()
+      expect(result.isSignificant).toBe(false)
+      expect(result.pValueMethod).toBe('unavailable_dependent_selected_sample')
+      expect(result.confidenceBasis).toBe('ess_support_weight_not_statistical_confidence')
     })
   })
 
@@ -350,6 +339,7 @@ describe('Dependency Risk Premium Analysis', () => {
       expect(result.comboSize).toBe(4)
       expect(Number.isNaN(result.overallFragility)).toBe(true)
       expect(result.criticalPairs).toEqual([])
+      expect(result.recommendations[0].type).toBe('insufficient_data')
       expect(Array.isArray(result.pairAnalysis)).toBe(true)
       expect(Array.isArray(result.criticalPairs)).toBe(true)
       expect(Array.isArray(result.recommendations)).toBe(true)

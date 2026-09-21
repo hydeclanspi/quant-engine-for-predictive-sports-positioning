@@ -68,6 +68,8 @@ import { isPreviewMode } from '../lib/displayMode'
 import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import InspirationIcon from '../components/InspirationIcon'
+import ComposedGlassScene from '../components/ComposedGlassScene'
+import { LIQUID_GLASS_THEMES, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -4334,9 +4336,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     saveSystemConfig({ liquidGlassEnabled: next })
     setConfig((prev) => ({ ...prev, liquidGlassEnabled: next }))
   }
-  // 背景主题：vivid（流光溢彩） / hongguo（红果 · 构图化色场）
-  const liquidGlassStyleRaw = config.liquidGlassStyle
-  const liquidGlassStyle = liquidGlassStyleRaw === 'vivid' || liquidGlassStyleRaw === 'hongguo' ? liquidGlassStyleRaw : 'temp'
+  const liquidGlassStyle = normalizeLiquidGlassStyle(config.liquidGlassStyle)
   const setLiquidGlassStyle = (style) => {
     saveSystemConfig({ liquidGlassStyle: style })
     setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
@@ -4984,11 +4984,13 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
           <div>
             <span className="text-sm text-stone-700">液态玻璃背景 Liquid Glass</span>
-            <p className="text-xs text-stone-400 mt-0.5">流体渐变背景与玻璃质感卡片 · 默认开启</p>
+            <p className="text-xs text-stone-400 mt-0.5">透光背景与玻璃质感卡片 · 默认开启</p>
           </div>
           <button
             type="button"
             onClick={toggleLiquidGlass}
+            aria-pressed={liquidGlassEnabled}
+            aria-label="液态玻璃背景"
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               liquidGlassEnabled
                 ? 'bg-sky-100 text-sky-700 border border-sky-200'
@@ -4999,28 +5001,27 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
         {liquidGlassEnabled && (
-          <div className="mt-3 flex items-center justify-between gap-4">
+          <div className="mt-4">
             <div>
-              <span className="text-sm text-stone-700">背景主题</span>
-              <p className="text-xs text-stone-400 mt-0.5">temp = 流光溢彩引擎 × 品牌青橙配色（默认） · 流光溢彩 = 原版蓝橙 · 红果 = 青橙构图化色场</p>
+              <span id="liquid-glass-theme-label" className="text-sm text-stone-700">背景主题</span>
+              <p className="text-xs text-stone-400 mt-0.5">流动色彩，或安静的光影 · 选择后即刻生效</p>
             </div>
-            <div className="flex gap-1.5 shrink-0">
-              {[
-                { key: 'temp', label: 'temp' },
-                { key: 'vivid', label: '流光溢彩' },
-                { key: 'hongguo', label: '红果' },
-              ].map((opt) => (
+            <div className="glass-theme-options" role="group" aria-labelledby="liquid-glass-theme-label">
+              {LIQUID_GLASS_THEMES.map((opt) => (
                 <button
                   key={opt.key}
                   type="button"
                   onClick={() => setLiquidGlassStyle(opt.key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                    liquidGlassStyle === opt.key
-                      ? 'bg-sky-100 text-sky-700 border-sky-200'
-                      : 'bg-stone-100 text-stone-500 border-stone-200 hover:bg-stone-200'
-                  }`}
+                  aria-pressed={liquidGlassStyle === opt.key}
+                  aria-label={opt.label}
+                  className="glass-theme-option"
                 >
-                  {opt.label}
+                  <span className="glass-theme-option__preview" aria-hidden="true" style={opt.preview ? { background: opt.preview } : undefined}>
+                    {opt.composed && <ComposedGlassScene variant={opt.key} preview />}
+                    <span className="glass-theme-option__sample" />
+                  </span>
+                  <span className="glass-theme-option__name">{opt.label}<span className="glass-theme-option__selected" aria-hidden="true">✓</span></span>
+                  <span className="glass-theme-option__description">{opt.description}</span>
                 </button>
               ))}
             </div>

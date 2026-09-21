@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const state = vi.hoisted(() => ({ config: {}, investments: [], writes: [] }))
+const state = vi.hoisted(() => ({ config: {}, investments: [], writes: [], rejectSave: false }))
 
 vi.mock('../localData', () => ({
   getInvestments: () => state.investments,
@@ -9,7 +9,9 @@ vi.mock('../localData', () => ({
   findTeamProfile: () => null,
   saveSystemConfig: (update) => {
     state.writes.push(update)
+    if (state.rejectSave) return { ...state.config, ...update }
     state.config = { ...state.config, ...update }
+    return state.config
   },
 }))
 
@@ -31,6 +33,7 @@ const makeMatch = (extra = {}) => ({
 
 const makeInvestment = (id, matches = [makeMatch()]) => ({
   id: `inv-${id}`, created_at: new Date(Date.UTC(2026, 0, id + 1)).toISOString(),
+  outcome_available_at: new Date(Date.UTC(2026, 0, id + 1, 1)).toISOString(),
   inputs: 10, profit: 10, status: 'win', matches,
 })
 
@@ -42,6 +45,7 @@ beforeEach(() => {
   }
   state.investments = []
   state.writes = []
+  state.rejectSave = false
 })
 
 describe('PAV calibration ties', () => {
@@ -138,19 +142,19 @@ describe('combo prequential evaluation', () => {
 describe('adaptive feature extraction', () => {
   it('reads modern per-match TYS, FID and mode fields', () => {
     state.investments = Array.from({ length: 50 }, (_, i) => makeInvestment(i))
-    const gradients = Object.fromEntries(computeAdaptiveWeightSuggestions().suggestions.map((s) => [s.key, s.gradient]))
-    expect(gradients.weightTys).toBeCloseTo(0.6)
-    expect(gradients.weightFid).toBeCloseTo(0.75)
-    expect(gradients.weightMode).toBeCloseTo(0.1)
+    const { components } = __testables.computeInvestmentScore(state.investments[0], state.config)
+    expect(components.tys).toBeCloseTo(0.6)
+    expect(components.fid).toBeCloseTo(0.75)
+    expect(components.mode).toBeCloseTo(0.1)
   })
 
   it('supports legacy field names and preserves zero-valued features', () => {
     const match = { conf: 0.6, odds: 2, tys_base_home: 'L', tys_base_away: 'S', fid_base_home: 0, fse_home: 0.5, fse_away: 0.5 }
     state.investments = Array.from({ length: 50 }, (_, i) => ({ ...makeInvestment(i, [{ ...match }]), mode: '常规-稳' }))
-    const gradients = Object.fromEntries(computeAdaptiveWeightSuggestions().suggestions.map((s) => [s.key, s.gradient]))
-    expect(gradients.weightTys).toBeCloseTo(0.7)
-    expect(gradients.weightFid).toBe(0)
-    expect(gradients.weightMode).toBeCloseTo(0.7)
+    const { components } = __testables.computeInvestmentScore(state.investments[0], state.config)
+    expect(components.tys).toBeCloseTo(0.7)
+    expect(components.fid).toBe(0)
+    expect(components.mode).toBeCloseTo(0.7)
   })
 
   it('does not advertise a production-effective auto-change for weightConf', () => {
@@ -175,6 +179,24 @@ describe('adaptive auto-apply permissions and revision cadence', () => {
     expect(autoApplyAdaptiveWeights().applied).toBe(false)
     expect(state.writes).toHaveLength(0)
   })
+  it('reports a rejected/read-only save instead of claiming success', () => {
+    state.rejectSave = true
+    expect(autoApplyAdaptiveWeights().reason).toBe('save_rejected')
+    expect(state.config.adaptiveWeights.lastAppliedDataSignature).toBeUndefined()
+  })
+  it('assumes a missing settlement time 72 hours after creation and labels it', () => {
+    state.investments.forEach((inv) => { delete inv.outcome_available_at })
+    const rows = __testables.getBinaryOutcomeRows()
+    expect(rows.every((row) => row.outcome_availability_basis === 'derived_created_at_plus_72h')).toBe(true)
+    const windows = __testables.buildPrequentialWalkForwardWindows(rows)
+    expect(windows.length).toBeGreaterThan(0)
+    expect(windows.every((w) => w.timeBasis === 'contains_derived_availability')).toBe(true)
+  })
+
+  it('refuses a temporal split when a record has no time at all', () => {
+    state.investments.forEach((inv) => { delete inv.outcome_available_at; delete inv.created_at })
+    expect(__testables.buildPrequentialWalkForwardWindows(__testables.getBinaryOutcomeRows())).toEqual([])
+  })
 
   it('applies once per training revision and ignores record-order changes', () => {
     expect(autoApplyAdaptiveWeights().applied).toBe(true)
@@ -197,10 +219,15 @@ describe('adaptive auto-apply permissions and revision cadence', () => {
 
   it('recognizes a correction to existing settled data without sample growth', () => {
     expect(autoApplyAdaptiveWeights().applied).toBe(true)
-    state.investments[0].profit = 9
+    state.investments[0].matches[0].match_rating = 0.7
     expect(autoApplyAdaptiveWeights().applied).toBe(true)
     expect(autoApplyAdaptiveWeights().reason).toBe('unchanged_data')
     expect(state.writes).toHaveLength(2)
+  })
+  it('does not retrain probabilities merely because the currency amount was corrected', () => {
+    expect(autoApplyAdaptiveWeights().applied).toBe(true)
+    state.investments[0].profit = 9
+    expect(autoApplyAdaptiveWeights().reason).toBe('unchanged_data')
   })
 
   it('includes resolved legacy fallback features in the training revision', () => {

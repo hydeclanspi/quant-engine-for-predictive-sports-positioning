@@ -24,9 +24,9 @@ const PERIOD_LABELS = {
 const CHART_OPTIONS = [
   { key: 'fund', label: '资金走势' },
   { key: 'single_roi', label: '单次 ROI 走势' },
-  { key: 'conf', label: 'Conf 相关性走势' },
+  { key: 'conf', label: '判断拟合走势' },
   { key: 'rating', label: 'AJR 走势' },
-  { key: 'ajr_delta', label: 'AJR-Conf 偏差走势' },
+  { key: 'ajr_delta', label: '判断残差走势' },
   { key: 'corr_rolling', label: 'Conf ↔ AJR 滚动相关' },
   { key: 'error_rolling', label: '滚动 Brier / LogLoss' },
 ]
@@ -60,6 +60,14 @@ const toPercent = (value, digits = 1) => `${Number(value || 0).toFixed(digits)}%
 
 const toRmb = (value) => `¥${Number(value || 0).toFixed(0)}`
 const clamp = (value, min, max) => Math.max(min, Math.min(max, value))
+
+// Suffix shown next to a leg-level expectation so the residual's basis is
+// explicit. Rows without `expectedBasis` render no suffix.
+const EXPECTED_BASIS_SUFFIX = {
+  leg_calibrated_probability: ' · 校准概率',
+  leg_conf: ' · 原始 Conf',
+  investment_expected_rating_normalized: ' · 票级归一预期',
+}
 
 const formatChartNumeric = (chartKey, value, digits = 1) => {
   const safe = Number(value || 0)
@@ -716,20 +724,20 @@ export default function DashboardPage({ openModal }) {
     }
     if (chartKey === 'conf') {
       return {
-        title: 'Conf 相关性走势展示的是置信度校准后的真实命中表现曲线（以 AJR 校准结果为观测目标）。',
-        subtitle: 'Trend 趋近稳定高位，说明置信度分层有效；若下滑，表示当前参数对新样本解释力减弱。',
+        title: '该曲线为滚动窗口内的判断拟合度（1 − 平均绝对判断残差）：赛前预期（腿级校准概率或原始 Conf）与归一化 AJR 的贴合程度。',
+        subtitle: 'Trend 趋近稳定高位，说明预期与赛后判断评级的一致性较强；若下滑，表示当前参数对新样本解释力减弱。',
       }
     }
     if (chartKey === 'rating') {
       return {
         title: 'AJR 走势基于赛后评分序列的滑动平均，过滤短噪声后观察模型真实输出质量轨迹。',
-        subtitle: 'Trend 持续上行说明近期执行质量改善；若出现下行拐点，建议同步检查 AJR-Conf 偏差与相关性衰减。',
+        subtitle: 'Trend 持续上行说明近期执行质量改善；若出现下行拐点，建议同步检查判断残差（归一化 AJR − Conf）与相关性衰减。',
       }
     }
     if (chartKey === 'ajr_delta') {
       return {
-        title: 'AJR-Conf 偏差用于衡量校准偏向：正值偏保守，负值偏激进，0 附近代表较均衡。',
-        subtitle: 'Trend 持续偏离 0 说明参数结构存在系统性偏差，建议联动校准阈值与仓位权重做重估。',
+        title: '判断残差 = 归一化 AJR − 赛前预期（腿级校准概率或原始 Conf）：正值代表赛后判断评级高于预期，负值相反。它是判断残差，不是命中概率的校准误差。',
+        subtitle: 'Trend 持续偏离 0 说明预期结构存在系统性偏差，建议联动预期阈值与仓位权重做重估。',
       }
     }
     if (chartKey === 'corr_rolling') {
@@ -797,10 +805,10 @@ export default function DashboardPage({ openModal }) {
     const bestEdge = [...rows].sort((a, b) => b.roi - a.roi || b.hitRate - a.hitRate)[0]
     const note =
       weightedDiff > 0.03
-        ? '整体 AJR 高于 Conf，模型偏保守，可在高质量样本轻微上调。'
+        ? '整体判断残差为正（归一化 AJR − Conf），模型偏保守，可在高质量样本轻微上调。'
         : weightedDiff < -0.03
-          ? '整体 AJR 低于 Conf，模型偏激进，建议下调高置信仓位。'
-          : '整体校准接近中性，优先按具体区间做微调。'
+          ? '整体判断残差为负（归一化 AJR − Conf），模型偏激进，建议下调高置信仓位。'
+          : '整体判断残差接近中性（归一化 AJR − Conf），优先按具体区间做微调。'
     return { weightedDiff, mae, stable, drift, bestEdge, note }
   }, [confDetailRows])
   const repMixRows = useMemo(() => {
@@ -828,7 +836,7 @@ export default function DashboardPage({ openModal }) {
         .map((row) => ({
           ...row,
           absDiff: Math.abs(row.diff),
-          steer: row.diff >= 0 ? '偏低估' : '偏高估',
+          steer: row.diff >= 0 ? '高于预期' : '低于预期',
         }))
         .sort((a, b) => b.absDiff - a.absDiff || b.samples - a.samples),
     [confDetailRows],
@@ -1070,21 +1078,24 @@ export default function DashboardPage({ openModal }) {
 
   const openRatingModal = () => {
     openModal({
-      title: maskText(`${PERIOD_LABELS[timePeriod]} Conf vs AJR · 历史记录`),
+      title: maskText(`${PERIOD_LABELS[timePeriod]} 判断残差（归一化 AJR − 赛前预期）· 历史记录`),
       content: (
         <div className="space-y-4">
           <div className="p-4 bg-stone-50 rounded-xl">
             <p className="text-sm text-stone-500">拟合评分（1 - 平均绝对偏差）</p>
             <p className="text-2xl font-bold text-stone-800">{snapshot.ratingFit.toFixed(2)}</p>
+            <p className="mt-2 text-[11px] leading-5 text-stone-400">
+              {maskText('判断残差 = 归一化 AJR − 腿级预期（校准概率或原始 Conf）。它衡量赛前预期与赛后判断评级的差，属于判断残差，不是命中概率的校准误差。')}
+            </p>
           </div>
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-stone-200 text-left text-stone-500">
                 <th className="py-2">日期</th>
                 <th className="py-2">比赛</th>
-                <th className="py-2">{maskText('Conf')}</th>
-                <th className="py-2">AJR</th>
-                <th className="py-2">差值</th>
+                <th className="py-2">{maskText('预期（腿级）')}</th>
+                <th className="py-2">归一化 AJR</th>
+                <th className="py-2">判断残差</th>
               </tr>
             </thead>
             <tbody>
@@ -1092,7 +1103,12 @@ export default function DashboardPage({ openModal }) {
                 <tr key={`${row.investment_id}-${idx}`} className="border-b border-stone-100">
                   <td className="py-2">{row.dateLabel}</td>
                   <td className="py-2 text-stone-700">{row.match}</td>
-                  <td className="py-2">{row.expected_rating.toFixed(2)}</td>
+                  <td className="py-2">
+                    {row.expected_rating.toFixed(2)}
+                    {EXPECTED_BASIS_SUFFIX[row.expectedBasis] ? (
+                      <span className="text-stone-400">{maskText(EXPECTED_BASIS_SUFFIX[row.expectedBasis])}</span>
+                    ) : null}
+                  </td>
                   <td className="py-2">{row.actual_rating.toFixed(2)}</td>
                   <td className={`py-2 font-medium ${row.diff >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {toSigned(row.diff, 2)}
@@ -1270,7 +1286,7 @@ export default function DashboardPage({ openModal }) {
                 <th className="py-2">日期</th>
                 <th className="py-2">比赛</th>
                 <th className="py-2">{maskText('Conf')}</th>
-                <th className="py-2">AJR</th>
+                <th className="py-2">归一化 AJR</th>
                 <th className="py-2">状态</th>
                 <th className="py-2">ROI</th>
               </tr>
@@ -1281,7 +1297,7 @@ export default function DashboardPage({ openModal }) {
                   <td className="py-2 text-stone-500">{row.dateLabel}</td>
                   <td className="py-2 text-stone-700">{row.match}</td>
                   <td className="py-2 font-medium text-sky-600">{Number.isFinite(row.conf) ? row.conf.toFixed(2) : '-'}</td>
-                  <td className="py-2 font-medium text-emerald-600">{Number.isFinite(row.ajr) ? row.ajr.toFixed(2) : '-'}</td>
+                  <td className="py-2 font-medium text-emerald-600">{Number.isFinite(row.normalizedAjr) ? row.normalizedAjr.toFixed(2) : '-'}</td>
                   <td className={`py-2 text-xs font-medium ${getStatusTone(row.status)}`}>{getStatusLabel(row.status)}</td>
                   <td className={`py-2 font-medium ${row.roi >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>{toSigned(row.roi, 1, '%')}</td>
                 </tr>
@@ -1377,7 +1393,7 @@ export default function DashboardPage({ openModal }) {
 
   const openConfModal = () => {
     openModal({
-      title: maskText(`${PERIOD_LABELS[timePeriod]} Conf 校准曲线 · 详细数据`),
+      title: maskText(`${PERIOD_LABELS[timePeriod]} 判断残差（归一化 AJR − Conf，非概率校准误差）· 详细数据`),
       content: <ConfDetailContent />,
     })
   }
@@ -1721,7 +1737,7 @@ export default function DashboardPage({ openModal }) {
             onClick={openConfModal}
             className="motion-v2-surface glow-card bg-white rounded-2xl p-5 border border-stone-100 cursor-pointer h-full flex flex-col"
           >
-            <h3 className="font-medium text-stone-700 mb-4">{maskText('Conf 校准曲线')}</h3>
+            <h3 className="font-medium text-stone-700 mb-4">{maskText('判断残差（归一化 AJR − Conf）')}</h3>
             <div className="space-y-2.5">
               {snapshot.confCalibration.map((row) => (
                 <div key={row.label} className="flex items-center gap-3">
@@ -1752,7 +1768,7 @@ export default function DashboardPage({ openModal }) {
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[11px] text-stone-500">
-                    <span>{maskText('整体偏差 (AJR-Conf)')}</span>
+                    <span>{maskText('整体判断残差 (归一化 AJR − Conf)')}</span>
                     <span className={`font-medium ${confSummary.weightedDiff >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                       {toSigned(confSummary.weightedDiff * 100, 1, 'pp')}
                     </span>
@@ -1766,11 +1782,11 @@ export default function DashboardPage({ openModal }) {
                   </p>
                 </>
               ) : (
-                <p className="text-[11px] text-stone-400">{maskText('当前窗口暂无 Conf 校准样本。')}</p>
+                <p className="text-[11px] text-stone-400">{maskText('当前窗口暂无判断残差样本。')}</p>
               )}
               {confPriorityRows.length > 0 && (
                 <div className="mt-1.5 rounded-xl border border-stone-100 bg-stone-50/70 p-2.5 space-y-2">
-                  <p className="text-[10px] uppercase tracking-[0.12em] text-stone-400">校准优先级</p>
+                  <p className="text-[10px] uppercase tracking-[0.12em] text-stone-400">判断残差优先级</p>
                   {confPriorityRows.slice(0, 3).map((row) => {
                     const emphasisClass = row.diff >= 0 ? 'text-emerald-600' : 'text-rose-500'
                     const barClass = row.diff >= 0 ? 'bg-emerald-400' : 'bg-rose-400'
@@ -1798,7 +1814,7 @@ export default function DashboardPage({ openModal }) {
                 </div>
               )}
             </div>
-            <p className="text-xs text-stone-400 mt-3 text-center">{maskText('定义：比较赛前 Conf 与赛后 AJR 的长期偏差。')}</p>
+            <p className="text-xs text-stone-400 mt-3 text-center">{maskText('定义：判断残差 = 归一化 AJR − 赛前 Conf 的长期偏差，不是命中概率的校准误差。')}</p>
           </div>
         </div>
       </div>

@@ -26,6 +26,7 @@ const PERIOD_LABELS = {
   '1m': '近一月',
   all: '全部',
 }
+const formatRiskRatio = (value) => Number.isFinite(value) ? value.toFixed(2) : '—'
 
 const MATRIX_TABS = [
   { id: 'mode', label: 'Mode 矩阵', labelKey: 'mode' },
@@ -404,8 +405,8 @@ export default function MetricsPage({ openModal }) {
     {
       id: 'sharpe',
       label: 'Sharpe Ratio',
-      value: snapshot.headline.sharpe.toFixed(2),
-      description: '风险调整后收益',
+      value: formatRiskRatio(snapshot.headline.sharpe),
+      description: '逐笔收益口径 · 未年化',
       IconComp: Gauge,
       tone: 'sky',
     },
@@ -481,7 +482,7 @@ export default function MetricsPage({ openModal }) {
         return [
           { label: '历史最长连败', value: `${snapshot.headline.maxLoseStreak} 场` },
           { label: '最大回撤', value: `-${snapshot.risk.maxDrawdown.toFixed(2)}%`, tone: 'negative' },
-          { label: 'Sortino Ratio', value: snapshot.risk.sortino.toFixed(2), tone: snapshot.risk.sortino >= 0 ? 'positive' : 'negative' },
+          { label: 'Sortino（逐笔，目标 0）', value: formatRiskRatio(snapshot.risk.sortino), tone: snapshot.risk.sortino >= 0 ? 'positive' : 'negative' },
         ]
       case 'avgConf':
         return [
@@ -497,8 +498,8 @@ export default function MetricsPage({ openModal }) {
         ]
       case 'sharpe':
         return [
-          { label: 'Sharpe', value: snapshot.headline.sharpe.toFixed(2), tone: snapshot.headline.sharpe >= 0 ? 'positive' : 'negative' },
-          { label: 'Sortino', value: snapshot.risk.sortino.toFixed(2), tone: snapshot.risk.sortino >= 0 ? 'positive' : 'negative' },
+          { label: 'Sharpe（逐笔，未年化）', value: formatRiskRatio(snapshot.headline.sharpe), tone: snapshot.headline.sharpe >= 0 ? 'positive' : 'negative' },
+          { label: 'Sortino（逐笔，目标 0）', value: formatRiskRatio(snapshot.risk.sortino), tone: snapshot.risk.sortino >= 0 ? 'positive' : 'negative' },
           { label: '波动率', value: `${snapshot.risk.volatility.toFixed(2)}%` },
         ]
       case 'hitRateEdge':
@@ -642,7 +643,7 @@ export default function MetricsPage({ openModal }) {
         const rows = matchRowsDesc.filter((row) => Number.isFinite(row.conf))
         return {
           title: 'Conf 历史明细',
-          note: '按时间追踪每场 Conf、AJR 与偏差（AJR-Conf），用于置信度校准复盘。',
+          note: '按时间追踪每场 Conf、AJR 与判断残差（归一化 AJR − Conf）。该残差刻画赛前预期与赛后判断评级的方向差，属于判断残差，不是命中概率的校准误差。',
           rows,
           columns: [
             { key: 'date', label: '日期', render: (row) => row.dateLabel },
@@ -651,10 +652,11 @@ export default function MetricsPage({ openModal }) {
             { key: 'ajr', label: 'AJR', align: 'right', render: (row) => <span className={getAJRColor(row.ajr)}>{formatNumberMaybe(row.ajr, 2)}</span> },
             {
               key: 'diff',
-              label: 'AJR-Conf',
+              label: '判断残差',
               align: 'right',
               render: (row) => {
-                const diff = Number.isFinite(row.ajr) && Number.isFinite(row.conf) ? row.ajr - row.conf : Number.NaN
+                const diff =
+                  Number.isFinite(row.normalizedAjr) && Number.isFinite(row.conf) ? row.normalizedAjr - row.conf : Number.NaN
                 return <span className={diff >= 0 ? 'text-emerald-600 font-medium' : 'text-rose-500 font-medium'}>{Number.isFinite(diff) ? signed(diff, 2) : '--'}</span>
               },
             },
@@ -907,8 +909,8 @@ export default function MetricsPage({ openModal }) {
               <span className="text-sm font-semibold text-stone-700">{snapshot.risk.volatility.toFixed(2)}%</span>
             </div>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-stone-500">Sortino Ratio</span>
-              <span className="text-sm font-semibold text-stone-700">{snapshot.risk.sortino.toFixed(2)}</span>
+              <span className="text-sm text-stone-500" title="目标收益 0；全样本下行偏差；逐笔、未年化；无下行样本时不估计。">Sortino · 未年化</span>
+              <span className="text-sm font-semibold text-stone-700">{formatRiskRatio(snapshot.risk.sortino)}</span>
             </div>
           </div>
         </div>
@@ -997,7 +999,7 @@ export default function MetricsPage({ openModal }) {
                   <th className="py-2">ROI</th>
                   <th className="py-2">命中率</th>
                   <th className="py-2">Avg Odds</th>
-                  <th className="py-2">{maskText('Avg(Act-Conf)')}</th>
+                  <th className="py-2" title={maskText('归一化 AJR − Conf 的均值：判断残差（0–1 判断口径），不是命中概率的校准误差。')}>{maskText('Avg 判断残差')}</th>
                   <th className="py-2">Kelly</th>
                 </tr>
               </thead>

@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
+import ComposedGlassScene from './ComposedGlassScene'
+import { isComposedGlassStyle } from '../design/liquidGlassThemes'
 
 /* ── LIQUID_PARAMS：全部调色与行为参数集中在此，微调只改这里 ──
  * 颜色用 hex，运行时转 [r,g,b]（0-1）。
@@ -428,6 +430,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
   const canvasRef = useRef(null)
 
   useEffect(() => {
+    if (isComposedGlassStyle(variant)) return undefined
     if (import.meta.env.DEV) window.__liquidGlassDebug = { stage: 'effect-enter' }
     const canvas = canvasRef.current
     if (!canvas) return undefined
@@ -728,6 +731,9 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
   }, [variant])
 
   if (typeof document === 'undefined') return null
+  if (isComposedGlassStyle(variant)) {
+    return createPortal(<ComposedGlassScene variant={variant} />, document.body)
+  }
   return createPortal(
     <canvas
       ref={canvasRef}
