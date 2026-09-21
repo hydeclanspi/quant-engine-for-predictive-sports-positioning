@@ -1,6 +1,6 @@
 // Shared by Console, the renderer and persisted UI preferences.
 // Keep existing installations on their chosen theme; the new studies are opt-in.
-export const DEFAULT_LIQUID_GLASS_STYLE = 'daylight'
+export const DEFAULT_LIQUID_GLASS_STYLE = 'hongguo'
 
 export const LIQUID_GLASS_THEMES = [
   { key: 'temp', label: 'temp', description: '青橙流光', preview: 'linear-gradient(135deg, #b4e7dd, #75bfdb 35%, #b2b7ed 65%, #efbf8e)' },
