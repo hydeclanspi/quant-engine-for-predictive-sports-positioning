@@ -12,7 +12,7 @@ import DemoBubble from './components/DemoBubble'
 import LabEditionBar from './components/LabEditionBar'
 import Inspiration2609Shell from './components/Inspiration2609Shell'
 import LiquidGlassBackdrop from './components/LiquidGlassBackdrop'
-import { isComposedGlassStyle, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
+import { isComposedGlassStyle, isDarkGlassStyle, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
 import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
 
@@ -178,10 +178,11 @@ function App() {
     const root = document.documentElement
     root.classList.toggle('liquid-glass-on', liquidGlassEnabled)
     root.classList.toggle('liquid-glass-composed', liquidGlassEnabled && isComposedGlassStyle(liquidGlassStyle))
+    root.classList.toggle('liquid-glass-dark', liquidGlassEnabled && isDarkGlassStyle(liquidGlassStyle))
     if (liquidGlassEnabled) root.dataset.liquidGlassStyle = liquidGlassStyle
     else delete root.dataset.liquidGlassStyle
     return () => {
-      root.classList.remove('liquid-glass-on', 'liquid-glass-composed')
+      root.classList.remove('liquid-glass-on', 'liquid-glass-composed', 'liquid-glass-dark')
       delete root.dataset.liquidGlassStyle
     }
   }, [liquidGlassEnabled, liquidGlassStyle])

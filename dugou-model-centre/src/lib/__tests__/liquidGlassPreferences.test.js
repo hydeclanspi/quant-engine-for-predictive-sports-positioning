@@ -52,14 +52,14 @@ beforeEach(() => {
 afterAll(() => vi.unstubAllGlobals())
 
 describe('liquid glass UI preferences', () => {
-  it.each(['vivid', 'hongguo', 'daylight', 'moon', 'sand'])('persists and reads %s without changing other settings', (style) => {
+  it.each(['vivid', 'hongguo', 'daylight', 'moon', 'sand', 'xuanji', 'spectra', 'starward'])('persists and reads %s without changing other settings', (style) => {
     saveSystemConfig({ liquidGlassStyle: style })
     expect(JSON.parse(storage.get(key))).toMatchObject({ liquidGlassStyle: style, initialCapital: 12345, liquidGlassEnabled: true })
     expect(getSystemConfig().liquidGlassStyle).toBe(style)
     expect(dispatchEvent.mock.calls.at(-1)[0].detail.key).toBe(key)
   })
 
-  it.each(['daylight', 'moon', 'sand'])('retains current %s while browsing an older snapshot', (style) => {
+  it.each(['daylight', 'moon', 'sand', 'xuanji', 'spectra', 'starward'])('retains current %s while browsing an older snapshot', (style) => {
     saveSystemConfig({ liquidGlassStyle: style })
     session.historical = { bundle: { system_config: { liquidGlassStyle: 'hongguo', initialCapital: 500 } } }
     expect(getSystemConfig()).toMatchObject({ liquidGlassStyle: style, initialCapital: 500 })

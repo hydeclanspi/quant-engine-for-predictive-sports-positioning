@@ -1,0 +1,388 @@
+/* ============================================================
+ * 旗舰深色皮肤系统 — 璇玑 XUANJI / 光谱 SPECTRA / 牵星 STARWARD
+ * 作用域：html.liquid-glass-on.liquid-glass-dark（App.jsx 按主题挂载）
+ * 结构：① 每主题一段 --fx-* token；② 共享 remap 全部引用 token。
+ * 模糊红线：单面 ≤ blur(18px) saturate(170%)（composed 真机事故教训）。
+ * ========================================================== */
+
+/* ── ① 主题 token ─────────────────────────────────────────── */
+html.liquid-glass-dark[data-liquid-glass-style='xuanji'] {
+  --fx-deep: #060d0a;            /* 最深处底色（顶栏凝结 / 浮层底） */
+  --fx-ink: #ece6d8;             /* 主文字 · 玉白 */
+  --fx-ink-2: #a9b8ab;
+  --fx-ink-3: #74867a;
+  --fx-accent: #8fc7ae;          /* 主强调 · 玉青 */
+  --fx-accent-2: #c9a96a;        /* 副强调 · 鎏金 */
+  --fx-card: rgba(226, 236, 228, 0.06);
+  --fx-elev: rgba(226, 236, 228, 0.095);
+  --fx-well: rgba(6, 13, 10, 0.38);
+  --fx-solid: rgba(13, 23, 18, 0.94);
+  --fx-line: rgba(226, 236, 228, 0.13);
+  --fx-line-strong: rgba(201, 169, 106, 0.42);
+  --fx-grad: rgba(18, 30, 24, 0.72);
+  --fx-grad-via: rgba(18, 30, 24, 0.55);
+  --fx-grad-to: rgba(18, 30, 24, 0.38);
+  --fx-accent-wash: rgba(143, 199, 174, 0.15);
+  --fx-pos: #5fd6a4; --fx-neg: #fb8a9b; --fx-warn: #f0c26e;
+  --fx-on-accent: #08120d;
+  --fx-bar: rgba(6, 13, 10, 0.74);   /* 顶栏凝结 / 底栏用的确定值（不用 color-mix，避免兼容歧义） */
+  color-scheme: dark;
+}
+html.liquid-glass-dark[data-liquid-glass-style='spectra'] {
+  --fx-deep: #04070f;
+  --fx-ink: #e6eaf4;
+  --fx-ink-2: #a7b2c6;
+  --fx-ink-3: #6e7a92;
+  --fx-accent: #679efe;
+  --fx-accent-2: #b18cff;
+  --fx-card: rgba(150, 175, 220, 0.065);
+  --fx-elev: rgba(150, 175, 220, 0.1);
+  --fx-well: rgba(4, 7, 15, 0.42);
+  --fx-solid: rgba(9, 14, 26, 0.94);
+  --fx-line: rgba(160, 185, 230, 0.14);
+  --fx-line-strong: rgba(103, 158, 254, 0.45);
+  --fx-grad: rgba(13, 22, 42, 0.72);
+  --fx-grad-via: rgba(13, 22, 42, 0.55);
+  --fx-grad-to: rgba(13, 22, 42, 0.38);
+  --fx-accent-wash: rgba(103, 158, 254, 0.16);
+  --fx-pos: #4ade9c; --fx-neg: #fb8a9b; --fx-warn: #f0c26e;
+  --fx-on-accent: #04070f;
+  --fx-bar: rgba(4, 7, 15, 0.76);
+  color-scheme: dark;
+}
+html.liquid-glass-dark[data-liquid-glass-style='starward'] {
+  --fx-deep: #040b1c;
+  --fx-ink: #dcebff;
+  --fx-ink-2: #9db4d6;
+  --fx-ink-3: #6b83a8;
+  --fx-accent: #8fc7ff;
+  --fx-accent-2: #c9d9ff;
+  --fx-card: rgba(150, 190, 240, 0.06);
+  --fx-elev: rgba(150, 190, 240, 0.095);
+  --fx-well: rgba(4, 11, 28, 0.42);
+  --fx-solid: rgba(7, 15, 33, 0.94);
+  --fx-line: rgba(160, 195, 245, 0.13);
+  --fx-line-strong: rgba(143, 199, 255, 0.42);
+  --fx-grad: rgba(10, 22, 48, 0.72);
+  --fx-grad-via: rgba(10, 22, 48, 0.55);
+  --fx-grad-to: rgba(10, 22, 48, 0.38);
+  --fx-accent-wash: rgba(143, 199, 255, 0.15);
+  --fx-pos: #4ade9c; --fx-neg: #fb8a9b; --fx-warn: #f0c26e;
+  --fx-on-accent: #050b1c;
+  --fx-bar: rgba(4, 11, 28, 0.74);
+  color-scheme: dark;
+}
+
+/* ── ② 共享 remap ─────────────────────────────────────────── */
+
+/* 页面基底文字色（背景透明化由 liquid-glass-on 基础层完成） */
+html.liquid-glass-dark .theme-modern { color: var(--fx-ink); }
+
+/* 玻璃表面：压过基础层白玻璃（html.liquid-glass-on .x = 0-2-1），此处 0-3-1 */
+html.liquid-glass-on.liquid-glass-dark .glow-card,
+html.liquid-glass-on.liquid-glass-dark .console-interactive-surface,
+html.liquid-glass-on.liquid-glass-dark .theme-modern .app-main-content .motion-v2-surface {
+  /* shorthand：连 ambient-tone 规则留下的浅色渐变 background-image 一起压掉 */
+  background: var(--fx-card);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  border-color: var(--fx-line);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent),
+    0 18px 44px rgba(0, 0, 0, 0.38);
+}
+
+/* 文字层级 */
+html.liquid-glass-dark :is(.text-stone-900, .text-stone-800, .text-stone-700) { color: var(--fx-ink); }
+html.liquid-glass-dark :is(.text-stone-600, .text-slate-700) { color: var(--fx-ink-2); }
+html.liquid-glass-dark :is(.text-stone-500, .text-stone-400, .text-slate-600, .text-slate-500, .text-slate-400) { color: var(--fx-ink-3); }
+html.liquid-glass-dark :is(.text-sky-800, .text-sky-700, .text-sky-600, .text-sky-500, .text-cyan-700, .text-cyan-600, .text-teal-700, .text-teal-600) { color: var(--fx-accent); }
+html.liquid-glass-dark :is(.text-indigo-700, .text-indigo-600, .text-indigo-500, .text-violet-700, .text-violet-600) { color: var(--fx-accent-2); }
+html.liquid-glass-dark :is(.text-amber-700, .text-amber-600, .text-amber-500, .text-orange-600, .text-orange-500) { color: var(--fx-warn); }
+html.liquid-glass-dark :is(.text-emerald-700, .text-emerald-600, .text-emerald-500, .text-green-600) { color: var(--fx-pos); }
+html.liquid-glass-dark :is(.text-rose-700, .text-rose-600, .text-rose-500, .text-red-700, .text-red-600, .text-red-500) { color: var(--fx-neg); }
+
+/* 实体表面（bg-white 多为小控件与浮层：取近不透明深面，保证无 blur 时可读） */
+html.liquid-glass-dark .bg-white { background-color: var(--fx-solid); }
+html.liquid-glass-dark .bg-stone-50 { background-color: var(--fx-well); }
+html.liquid-glass-dark :is(.bg-stone-100, .bg-stone-200) { background-color: var(--fx-elev); }
+html.liquid-glass-dark :is(.bg-sky-50, .bg-sky-100, .bg-cyan-50, .bg-teal-50) { background-color: var(--fx-accent-wash); }
+html.liquid-glass-dark :is(.bg-indigo-50, .bg-indigo-100, .bg-violet-50, .bg-violet-100) { background-color: color-mix(in srgb, var(--fx-accent-2) 14%, transparent); }
+html.liquid-glass-dark :is(.bg-amber-50, .bg-amber-100, .bg-orange-50) { background-color: rgba(240, 194, 110, 0.13); }
+html.liquid-glass-dark :is(.bg-emerald-50, .bg-emerald-100) { background-color: rgba(74, 222, 156, 0.12); }
+html.liquid-glass-dark :is(.bg-rose-50, .bg-rose-100, .bg-red-50) { background-color: rgba(251, 113, 133, 0.12); }
+
+/* hover 变体（Tailwind hover: 是独立类，需单独映射） */
+html.liquid-glass-dark :is(.hover\:bg-stone-50:hover, .hover\:bg-stone-100:hover, .hover\:bg-white:hover, .hover\:bg-stone-200:hover) { background-color: var(--fx-elev); }
+html.liquid-glass-dark .hover\:bg-sky-50:hover { background-color: var(--fx-accent-wash); }
+html.liquid-glass-dark :is(.hover\:text-stone-700:hover, .hover\:text-stone-800:hover, .hover\:text-stone-900:hover) { color: var(--fx-ink); }
+html.liquid-glass-dark :is(.hover\:text-sky-700:hover, .hover\:text-sky-600:hover) { color: var(--fx-accent); }
+
+/* 边框与分隔线 */
+html.liquid-glass-dark :is(.border-stone-50, .border-stone-100, .border-stone-200, .border-stone-300, .border-slate-200, .border-slate-100) { border-color: var(--fx-line); }
+html.liquid-glass-dark :is(.border-sky-100, .border-sky-200, .border-sky-300, .border-cyan-200, .border-teal-200) { border-color: color-mix(in srgb, var(--fx-accent) 38%, transparent); }
+html.liquid-glass-dark :is(.border-amber-100, .border-amber-200, .border-amber-300) { border-color: color-mix(in srgb, var(--fx-warn) 36%, transparent); }
+html.liquid-glass-dark :is(.border-emerald-100, .border-emerald-200) { border-color: color-mix(in srgb, var(--fx-pos) 36%, transparent); }
+html.liquid-glass-dark :is(.border-rose-100, .border-rose-200, .border-red-200) { border-color: color-mix(in srgb, var(--fx-neg) 36%, transparent); }
+html.liquid-glass-dark :is(.border-indigo-100, .border-indigo-200, .border-violet-100, .border-violet-200) { border-color: color-mix(in srgb, var(--fx-accent-2) 36%, transparent); }
+html.liquid-glass-dark :is(.divide-stone-100, .divide-stone-200, .divide-slate-200) > :not([hidden]) ~ :not([hidden]) { border-color: var(--fx-line); }
+
+/* 浅色渐变洗涤 → 深色暗面（直接熄灭 background-image：渐变 CSS 变量手术在
+ * Tailwind 层叠模型下不可靠；深色主题的卡片本来就是平色玻璃 + 发丝边）。
+ * 只需匹配 from-*（有渐变必有 from）；300-600 中调装饰渐变与 from-amber-100
+ * （Logo 陈列灯箱）刻意保留。 */
+html.liquid-glass-dark :is(
+  .from-stone-50, .from-sky-50, .from-sky-50\/90, .from-sky-50\/85, .from-sky-50\/60,
+  .from-amber-50, .from-amber-50\/85, .from-violet-50, .from-indigo-50, .from-indigo-50\/50,
+  .from-emerald-50, .from-emerald-50\/85, .from-fuchsia-50, .from-cyan-50, .from-teal-50,
+  .from-orange-50, .from-rose-50, .from-red-50, .from-white
+  , [class*='from-white/'], [class*='from-stone-50/'], [class*='from-sky-50/']
+) { background-image: none !important; background-color: var(--fx-elev); }
+
+/* 顶栏：页顶融入背景（基础层已处理），下滚凝结为深色玻璃条 */
+html.liquid-glass-dark .mn-bar { color: var(--fx-ink); }
+html.liquid-glass-dark .mn-brand { color: var(--fx-ink); }
+html.liquid-glass-dark .mn-brand:hover { background: var(--fx-elev); }
+html.liquid-glass-on.liquid-glass-dark.lg-scrolled .mn-bar {
+  border-color: var(--fx-line-strong);
+  background: var(--fx-bar);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent),
+    0 14px 40px rgba(0, 0, 0, 0.45);
+}
+/* 光谱签名：凝结顶栏的 1px 色散描边 */
+html.liquid-glass-on.liquid-glass-dark[data-liquid-glass-style='spectra'].lg-scrolled .mn-bar {
+  border: 1px solid transparent;
+  background:
+    linear-gradient(var(--fx-bar), var(--fx-bar)) padding-box,
+    conic-gradient(from 210deg, rgba(103, 158, 254, 0.75), rgba(177, 140, 255, 0.45), rgba(110, 231, 183, 0.3), rgba(255, 255, 255, 0.14), rgba(103, 158, 254, 0.75)) border-box;
+}
+
+/* 底栏：深色玻璃（基础层 28px/210% 超红线，一并降配） */
+html.liquid-glass-dark .app-bottom-bar {
+  border-top-color: var(--fx-line);
+  background: var(--fx-bar);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 10%, transparent);
+}
+html.liquid-glass-dark .app-bottom-bar::before { opacity: 0.18; }
+html.liquid-glass-dark .app-bottom-bar::after { opacity: 0.3; }
+html.liquid-glass-dark .app-bottom-bar__text { color: var(--fx-ink-3); text-shadow: none; }
+
+/* 主题选择器自身也进入深色语境 */
+html.liquid-glass-dark .glass-theme-option {
+  background: var(--fx-well);
+  border-color: var(--fx-line);
+  color: var(--fx-ink);
+}
+html.liquid-glass-dark .glass-theme-option:hover { border-color: color-mix(in srgb, var(--fx-accent) 45%, transparent); background: var(--fx-card); }
+html.liquid-glass-dark .glass-theme-option[aria-pressed='true'] {
+  border-color: var(--fx-accent);
+  box-shadow: 0 0 0 1px var(--fx-accent);
+  background: var(--fx-accent-wash);
+}
+html.liquid-glass-dark .glass-theme-option:focus-visible { outline-color: var(--fx-accent); }
+html.liquid-glass-dark .glass-theme-option__preview { border: 1px solid var(--fx-line); }
+html.liquid-glass-dark .glass-theme-option__sample {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: none;
+}
+html.liquid-glass-dark .glass-theme-option__description { color: var(--fx-ink-3); }
+html.liquid-glass-dark .glass-theme-option__selected { color: var(--fx-accent); }
+
+/* 表单与可访问性 */
+html.liquid-glass-dark :is(input, select, textarea) { color: var(--fx-ink); }
+html.liquid-glass-dark :is(input, textarea)::placeholder { color: var(--fx-ink-3); opacity: 1; }
+html.liquid-glass-dark ::selection { background: color-mix(in srgb, var(--fx-accent) 32%, transparent); color: var(--fx-ink); }
+html.liquid-glass-dark .app-main-scroll { scrollbar-color: color-mix(in srgb, var(--fx-ink) 22%, transparent) transparent; }
+
+/* ── ②.5 后缀变体与任意值兜底 ────────────────────────────────
+ * console 大量精修面使用 Tailwind 任意值与透明度后缀（bg-white/90、
+ * border-stone-200/85、bg-[linear-gradient(...rgba(255...)]），逐一枚举不可维护，
+ * 用属性子串规则整体兜住。带 rgba(255 的任意值背景一律视为浅色面换成暗面。
+ */
+html.liquid-glass-dark [class*='rgba(255'] { background-image: none; background-color: var(--fx-elev); }
+html.liquid-glass-dark [class*='bg-white/'] { background-color: var(--fx-elev); }
+html.liquid-glass-dark :is([class*='bg-stone-50/'], [class*='bg-stone-100/'], [class*='bg-stone-200/']) { background-color: var(--fx-well); }
+html.liquid-glass-dark [class*='border-stone-'] { border-color: var(--fx-line); }
+html.liquid-glass-dark [class*='border-slate-'] { border-color: var(--fx-line); }
+html.liquid-glass-dark [class*='border-sky-'] { border-color: color-mix(in srgb, var(--fx-accent) 38%, transparent); }
+html.liquid-glass-dark [class*='border-amber-'] { border-color: color-mix(in srgb, var(--fx-warn) 36%, transparent); }
+html.liquid-glass-dark [class*='border-emerald-'] { border-color: color-mix(in srgb, var(--fx-pos) 36%, transparent); }
+html.liquid-glass-dark :is([class*='border-rose-'], [class*='border-red-']) { border-color: color-mix(in srgb, var(--fx-neg) 36%, transparent); }
+html.liquid-glass-dark :is([class*='border-indigo-'], [class*='border-violet-']) { border-color: color-mix(in srgb, var(--fx-accent-2) 36%, transparent); }
+
+/* ── ③ console 精修层的深色镜像 ─────────────────────────────
+ * index.css 6100-6700 存在一层 console 精修规则（浅色 shorthand / !important），
+ * 普通 remap 压不住，逐条镜像为深色版本。彩条按钮的恢复规则 (0-4-0) 优先级更高，不受影响。 */
+
+/* 画廊 / 证据条等 backdrop-blur-sm 面（原 rgba(255,255,255,.9) !important） */
+html.liquid-glass-dark .theme-modern .backdrop-blur-sm {
+  background: var(--fx-card) !important;
+  border-color: var(--fx-line) !important;
+}
+/* 浅色 section bar（原 bg-gradient-to-r → #f8f9fb→#fef7ee !important） */
+html.liquid-glass-dark .theme-modern .bg-gradient-to-r {
+  background: linear-gradient(to right, var(--fx-grad), var(--fx-grad-to)) !important;
+}
+/* 内层 section 卡（原 rounded-xl.bg-stone-50 → #f8f9fb，0-4-0） */
+html.liquid-glass-dark .theme-modern :is(.rounded-xl.bg-stone-50, .p-4.rounded-xl.bg-stone-50, .p-3.rounded-xl.bg-stone-50) {
+  background: var(--fx-well);
+  border-color: var(--fx-line);
+}
+html.liquid-glass-dark .theme-modern .rounded-xl.bg-stone-50:hover { background: var(--fx-elev); }
+/* 表格 */
+html.liquid-glass-dark .theme-modern tbody tr:hover { background: var(--fx-elev) !important; }
+html.liquid-glass-dark .theme-modern :is(thead tr, tbody tr) { border-bottom-color: var(--fx-line) !important; }
+/* Tabs（原为琥珀→靛蓝镜像） */
+html.liquid-glass-dark .theme-modern :is(.bg-amber-100.text-amber-700.font-medium, .border-amber-300.bg-amber-100.text-amber-700) {
+  background: var(--fx-accent-wash) !important;
+  color: var(--fx-accent) !important;
+  border-color: color-mix(in srgb, var(--fx-accent) 40%, transparent) !important;
+  box-shadow: none;
+}
+html.liquid-glass-dark .theme-modern .bg-stone-100.text-stone-500 { background: var(--fx-elev); color: var(--fx-ink-3); }
+/* 实心强调按钮（原强制靛蓝 #6366f1）：回到主题强调色，配深色文字 */
+html.liquid-glass-dark .theme-modern .bg-amber-500 { background: var(--fx-accent); color: var(--fx-on-accent); }
+html.liquid-glass-dark .theme-modern .bg-amber-500:hover {
+  background: color-mix(in srgb, var(--fx-accent) 84%, #ffffff);
+  color: var(--fx-on-accent);
+}
+/* 60% 透明彩面板（combo 面板等） */
+html.liquid-glass-dark [class*='bg-teal-50'] { background-color: var(--fx-accent-wash) !important; }
+html.liquid-glass-dark [class*='bg-sky-50/'] { background-color: var(--fx-accent-wash) !important; }
+html.liquid-glass-dark [class*='bg-violet-50/'] { background-color: color-mix(in srgb, var(--fx-accent-2) 14%, transparent) !important; }
+/* hover 链接 / 边框强调 */
+html.liquid-glass-dark .theme-modern .hover\:bg-amber-50:hover { background: var(--fx-accent-wash); }
+html.liquid-glass-dark .theme-modern :is(.hover\:border-amber-300:hover, .hover\:border-amber-200:hover) {
+  border-color: color-mix(in srgb, var(--fx-accent) 45%, transparent);
+}
+/* 输入聚焦环：琥珀 → 主题强调色 */
+html.liquid-glass-dark .theme-modern .input-glow:focus {
+  border-color: var(--fx-accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx-accent) 25%, transparent);
+}
+
+/* ── ④ 透明度后缀的文字变体（text-sky-700/90 等，精确类名匹配不到） ── */
+html.liquid-glass-dark :is([class*='text-stone-800'], [class*='text-stone-700']) { color: var(--fx-ink); }
+html.liquid-glass-dark [class*='text-stone-600'] { color: var(--fx-ink-2); }
+html.liquid-glass-dark :is([class*='text-stone-500'], [class*='text-stone-400']) { color: var(--fx-ink-3); }
+html.liquid-glass-dark :is([class*='text-sky-'], [class*='text-cyan-'], [class*='text-teal-']) { color: var(--fx-accent); }
+html.liquid-glass-dark :is([class*='text-indigo-'], [class*='text-violet-']) { color: var(--fx-accent-2); }
+html.liquid-glass-dark :is([class*='text-amber-'], [class*='text-orange-']) { color: var(--fx-warn); }
+html.liquid-glass-dark [class*='text-emerald-'] { color: var(--fx-pos); }
+html.liquid-glass-dark :is([class*='text-rose-'], [class*='text-red-']) { color: var(--fx-neg); }
+
+/* ── ⑤ 顶栏（ModernTopBar）深色镜像 ── */
+html.liquid-glass-dark .mn-page-title { color: var(--fx-ink-2); }
+html.liquid-glass-dark .mn-sep { color: color-mix(in srgb, var(--fx-ink) 30%, transparent); }
+html.liquid-glass-dark .mn-nav-item { color: var(--fx-ink-3); }
+html.liquid-glass-dark .mn-nav-item:hover { color: var(--fx-ink); background: var(--fx-elev); }
+html.liquid-glass-dark .mn-nav-active { color: var(--fx-ink); }
+html.liquid-glass-dark .mn-nav-active::after { background: linear-gradient(90deg, var(--fx-accent), var(--fx-accent-2)); }
+html.liquid-glass-dark .mn-layout-choice { color: var(--fx-ink-3); }
+html.liquid-glass-dark .mn-layout-choice:hover { color: var(--fx-ink); background: var(--fx-elev); }
+html.liquid-glass-dark .mn-layout-choice.is-active {
+  color: var(--fx-ink);
+  border-color: var(--fx-line);
+  background: var(--fx-elev);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 14%, transparent);
+}
+html.liquid-glass-dark .mn-layout-choice--inpiration.is-active,
+html.liquid-glass-dark .mn-layout-choice--inspiration.is-active {
+  color: var(--fx-accent);
+  border-color: color-mix(in srgb, var(--fx-accent) 38%, transparent);
+  background: var(--fx-accent-wash);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent);
+}
+html.liquid-glass-dark .mn-dropdown {
+  background: var(--fx-solid);
+  border-color: var(--fx-line);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5);
+}
+html.liquid-glass-dark .mn-dropdown-item { color: var(--fx-ink-2); }
+html.liquid-glass-dark .mn-dropdown-item:hover { background: var(--fx-elev); color: var(--fx-ink); }
+html.liquid-glass-dark .mn-dropdown-active { color: var(--fx-accent); background: var(--fx-accent-wash); }
+html.liquid-glass-dark .mn-dropdown-featured {
+  color: var(--fx-accent);
+  background: var(--fx-accent-wash);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fx-accent) 25%, transparent);
+}
+
+/* ambient-tone 的浅色氛围伪层在深色主题下退场（composed 主题同款处理） */
+html.liquid-glass-dark .app-main-content::before,
+html.liquid-glass-dark .app-main-content::after { display: none; }
+
+/* ── ⑥ 品牌字 / 按钮 / 浅色 wash 后缀变体 ── */
+html.liquid-glass-dark :is(.mn-brand-name, .mn-brand-mark) { color: var(--fx-ink); }
+
+/* btn-secondary / btn-primary（index.css 6134-6165 的浅色/靛蓝覆盖，深色下镜像） */
+html.liquid-glass-dark .theme-modern .btn-secondary {
+  background: var(--fx-elev);
+  border-color: var(--fx-line);
+  color: var(--fx-ink-2);
+}
+html.liquid-glass-dark .theme-modern .btn-secondary:hover {
+  background: var(--fx-card);
+  border-color: var(--fx-line-strong);
+  color: var(--fx-ink);
+  box-shadow: 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+}
+html.liquid-glass-dark .theme-modern .btn-primary {
+  background: linear-gradient(135deg, var(--fx-accent), var(--fx-accent-2));
+  color: var(--fx-on-accent);
+  box-shadow: 0 6px 20px -8px color-mix(in srgb, var(--fx-accent) 55%, transparent);
+}
+html.liquid-glass-dark .theme-modern .btn-primary:hover {
+  background: linear-gradient(135deg, var(--fx-accent), var(--fx-accent-2));
+  filter: brightness(1.08);
+  color: var(--fx-on-accent);
+}
+html.liquid-glass-dark .theme-modern .input-glow { border-color: var(--fx-line); }
+
+/* 浅色 wash 的透明度后缀变体（bg-emerald-50/70 等，精确类名匹配不到） */
+html.liquid-glass-dark :is([class*='bg-emerald-50'], [class*='bg-emerald-100']) { background-color: rgba(94, 234, 170, 0.13); }
+html.liquid-glass-dark :is([class*='bg-rose-50'], [class*='bg-rose-100'], [class*='bg-red-50'], [class*='bg-red-100']) { background-color: rgba(251, 113, 133, 0.13); }
+html.liquid-glass-dark :is([class*='bg-amber-50'], [class*='bg-amber-100'], [class*='bg-orange-50'], [class*='bg-orange-100']) { background-color: rgba(240, 194, 110, 0.13); }
+html.liquid-glass-dark :is([class*='bg-indigo-50'], [class*='bg-indigo-100'], [class*='bg-violet-100']) { background-color: color-mix(in srgb, var(--fx-accent-2) 14%, transparent); }
+html.liquid-glass-dark :is([class*='bg-cyan-50'], [class*='bg-cyan-100'], [class*='bg-sky-100']) { background-color: var(--fx-accent-wash); }
+
+/* ── ⑦ lab editions（灵感布局材质系统）深色 token ──
+ * 灵感页（/new、/combo 等）的卡片/文字全部从 --lab-* 取色，token 级镜像一处生效。
+ * 压过 .theme-modern.lab-editions（0-2-0）与各 edition 变体（0-2-0），深色下 edition 差异统一收敛。 */
+html.liquid-glass-dark .theme-modern.lab-editions {
+  --lab-ink: var(--fx-ink);
+  --lab-muted: var(--fx-ink-2);
+  --lab-accent: var(--fx-accent);
+  --lab-line: var(--fx-line);
+  --lab-card: color-mix(in srgb, var(--fx-ink) 9%, transparent);
+  --lab-glass: color-mix(in srgb, var(--fx-ink) 11%, transparent);
+  --lab-well: color-mix(in srgb, var(--fx-deep) 52%, transparent);
+  --lab-rim: var(--fx-line-strong);
+  --lab-edge: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 16%, transparent);
+  --lab-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  color: var(--fx-ink);
+}
+
+/* WebGL2 不可用时的静态深底兜底（默认隐藏，GL 失败时浮现） */
+.flagship-glass-fallback { transition: opacity 0.8s ease; }
+
+/* 通透不可用 / 用户要求更高对比时的深色兜底（与 composed 同款策略） */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  html.liquid-glass-on.liquid-glass-dark :is(.glow-card, .console-interactive-surface, .motion-v2-surface) {
+    background: var(--fx-solid) !important;
+    border-color: var(--fx-line);
+  }
+}
+@media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+  html.liquid-glass-on.liquid-glass-dark :is(.glow-card, .console-interactive-surface, .motion-v2-surface) {
+    background: var(--fx-solid) !important;
+    border-color: var(--fx-line-strong);
+  }
+}

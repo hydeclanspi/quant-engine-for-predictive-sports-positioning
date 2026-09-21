@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import ComposedGlassScene from './ComposedGlassScene'
 import { isComposedGlassStyle } from '../design/liquidGlassThemes'
@@ -91,6 +91,66 @@ const HONGGUO_PARAMS = {
   calmA: 0.22,
   breath: 0.55,
   roam: 1.0,
+}
+
+/* ── 旗舰深色三主题（璇玑 / 光谱 / 牵星）参数 ──
+ * 共用同一支 MAIN_FRAG_SRC_FLAGSHIP，差异全部由 uniform 驱动：
+ * base/baseB     深底垂直渐变（base=顶，baseB=底）
+ * glowA/glowB    两团漂移辉光：颜色 / 位置（uv，y 向上）/ 衰减指数 / 强度
+ * beam           对角光束 + 色散边强度（光谱）
+ * rings          同心刻度环强度（璇玑）；ringColor / ringPos
+ * stars          星场密度（牵星）
+ * grain          胶片颗粒（深色渐变去色带）
+ */
+/* 旗舰 shader 不消费、但 renderFrame 会无条件读取的公共字段（c1..c5 必须存在：uniform3fv 对 undefined 直接抛错，null location 也救不了） */
+const FLAGSHIP_DEFAULTS = {
+  scale: 1, offset: [0, 0], lightPos: [0.78, 0.82], lightCore: 0, lightHalo: 0,
+  c1: hexToRgb('#000000'), c2: hexToRgb('#000000'), c3: hexToRgb('#000000'), c4: hexToRgb('#000000'), c5: hexToRgb('#000000'),
+}
+
+const FLAGSHIP_PARAMS = {
+  xuanji: {
+    flagship: true, ...FLAGSHIP_DEFAULTS,
+    base: hexToRgb('#0d1713'), baseB: hexToRgb('#060d0a'),
+    glowA: hexToRgb('#e8dfc8'), glowAPos: [0.78, 0.86], glowAR: 2.4, glowAAmp: 0.16,
+    glowB: hexToRgb('#3f6b58'), glowBPos: [0.14, 0.08], glowBR: 2.0, glowBAmp: 0.5,
+    beam: 0, beamColor: hexToRgb('#a8c4ff'),
+    rings: 0.42, ringColor: hexToRgb('#c9a96a'), ringPos: [0.84, 0.88],
+    stars: 0,
+    glowColor1: hexToRgb('#ffffff'), glowColor2: hexToRgb('#bfe3d2'), glowColor3: hexToRgb('#e4cd9c'),
+    glowIntensity: 0.14,
+    mouseRadius: 0.22, mouseStrength: 0.6, decay: 0.965,
+    timeScale: 0.8, vignette: 0.32, grain: 0.014,
+    fallback: 'radial-gradient(circle at 78% 14%, rgba(232,223,200,.14), transparent 52%), radial-gradient(circle at 14% 92%, rgba(63,107,88,.5), transparent 60%), linear-gradient(160deg, #0d1713, #060d0a)',
+  },
+  spectra: {
+    flagship: true, ...FLAGSHIP_DEFAULTS,
+    base: hexToRgb('#0a1122'), baseB: hexToRgb('#04070f'),
+    glowA: hexToRgb('#16336b'), glowAPos: [0.22, 0.8], glowAR: 2.2, glowAAmp: 0.55,
+    glowB: hexToRgb('#2a1e5c'), glowBPos: [0.9, 0.06], glowBR: 2.6, glowBAmp: 0.5,
+    beam: 1.0, beamColor: hexToRgb('#a8c4ff'),
+    rings: 0, ringColor: hexToRgb('#c9a96a'), ringPos: [0.84, 0.88],
+    stars: 0,
+    glowColor1: hexToRgb('#ffffff'), glowColor2: hexToRgb('#9dbcff'), glowColor3: hexToRgb('#b18cff'),
+    glowIntensity: 0.12,
+    mouseRadius: 0.22, mouseStrength: 0.55, decay: 0.965,
+    timeScale: 0.8, vignette: 0.3, grain: 0.014,
+    fallback: 'linear-gradient(115deg, transparent 40%, rgba(168,196,255,.22) 47%, rgba(255,255,255,.30) 50%, rgba(177,140,255,.2) 53%, transparent 60%), radial-gradient(circle at 20% 18%, rgba(22,51,107,.6), transparent 55%), linear-gradient(160deg, #0a1122, #04070f)',
+  },
+  starward: {
+    flagship: true, ...FLAGSHIP_DEFAULTS,
+    base: hexToRgb('#040b1c'), baseB: hexToRgb('#0c2148'),
+    glowA: hexToRgb('#123a6e'), glowAPos: [0.5, 0.02], glowAR: 1.5, glowAAmp: 0.42,
+    glowB: hexToRgb('#0a1b3a'), glowBPos: [0.82, 0.32], glowBR: 2.4, glowBAmp: 0.4,
+    beam: 0, beamColor: hexToRgb('#a8c4ff'),
+    rings: 0, ringColor: hexToRgb('#c9a96a'), ringPos: [0.84, 0.88],
+    stars: 0.9,
+    glowColor1: hexToRgb('#ffffff'), glowColor2: hexToRgb('#b9d9ff'), glowColor3: hexToRgb('#7fa8e8'),
+    glowIntensity: 0.1,
+    mouseRadius: 0.22, mouseStrength: 0.5, decay: 0.965,
+    timeScale: 0.7, vignette: 0.3, grain: 0.012,
+    fallback: 'radial-gradient(1.5px 1.5px at 22% 18%, rgba(255,255,255,.9), transparent 60%), radial-gradient(1px 1px at 64% 12%, rgba(255,255,255,.65), transparent 60%), radial-gradient(1.2px 1.2px at 82% 34%, rgba(255,255,255,.75), transparent 60%), radial-gradient(1px 1px at 38% 48%, rgba(255,255,255,.5), transparent 60%), radial-gradient(ellipse 120% 60% at 50% 108%, rgba(18,58,110,.55), transparent 62%), linear-gradient(180deg, #040b1c, #0c2148)',
+  },
 }
 
 const VERTEX_SRC = `#version 300 es
@@ -388,6 +448,135 @@ void main(){
 }
 `
 
+/* ── 旗舰深色主 shader（璇玑 / 光谱 / 牵星共用，差异全部由 uniform 驱动）──
+ * 深底渐变 + 两团漂移辉光（滚动视差）+ 可选光束色散 / 刻度环 / 星场 + 颗粒去色带。
+ * 鼠标 flowmap 只做克制提亮，不扭曲画面——旗舰的动是「呼吸」，不是「玩耍」。
+ */
+const MAIN_FRAG_SRC_FLAGSHIP = `#version 300 es
+precision highp float;
+in vec2 vUv;
+uniform float u_time;
+uniform vec2 u_resolution;
+uniform sampler2D u_flowmap;
+uniform vec3 u_base, u_baseB;
+uniform vec3 u_glowA, u_glowB;
+uniform vec2 u_glowAPos, u_glowBPos;
+uniform float u_glowAR, u_glowBR, u_glowAAmp, u_glowBAmp;
+uniform float u_beam;
+uniform vec3 u_beamColor;
+uniform float u_rings;
+uniform vec3 u_ringColor;
+uniform vec2 u_ringPos;
+uniform float u_stars;
+uniform float u_scroll;
+uniform float u_glowIntensity;
+uniform vec3 u_glowColor1, u_glowColor2, u_glowColor3;
+uniform float u_vignette, u_grain;
+out vec4 fragColor;
+vec3 mod289(vec3 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 mod289(vec4 x){ return x - floor(x * (1.0/289.0)) * 289.0; }
+vec4 permute(vec4 x){ return mod289(((x*34.0)+1.0)*x); }
+vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314 * r; }
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+  const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy));
+  vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz);
+  vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy);
+  vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + C.xxx;
+  vec3 x2 = x0 - i2 + C.yyy;
+  vec3 x3 = x0 - D.yyy;
+  i = mod289(i);
+  vec4 p = permute(permute(permute(
+      i.z + vec4(0.0, i1.z, i2.z, 1.0))
+    + i.y + vec4(0.0, i1.y, i2.y, 1.0))
+    + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 0.142857142857;
+  vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+  vec4 x_ = floor(j * ns.z);
+  vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ * ns.x + ns.yyyy;
+  vec4 y = y_ * ns.x + ns.yyyy;
+  vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy);
+  vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0) * 2.0 + 1.0;
+  vec4 s1 = floor(b1) * 2.0 + 1.0;
+  vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw * sh.xxyy;
+  vec4 a1 = b0.zwzw + s1.zwzw * sh.zzww;
+  vec3 p0 = vec3(a0.xy, h.x);
+  vec3 p1 = vec3(a0.zw, h.y);
+  vec3 p2 = vec3(a1.xy, h.z);
+  vec3 p3 = vec3(a1.zw, h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+  m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}
+float hash(vec2 p){ vec3 p3=fract(vec3(p.xyx)*.1031); p3+=dot(p3,p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+void main(){
+  float aspect = u_resolution.x/u_resolution.y;
+  vec2 uv = gl_FragCoord.xy/u_resolution;
+  vec2 p = (uv-.5)*vec2(aspect,1.);
+  float t = u_time;
+  vec3 col = mix(u_baseB, u_base, smoothstep(-.08, 1.06, uv.y));
+  float n = snoise(vec3(p*.7, t*.04))*.5+.5;
+  float n2 = snoise(vec3(p*1.3+4.7, t*.033+2.2))*.5+.5;
+  vec2 drift = vec2(sin(t*.021), cos(t*.017))*.05;
+  vec2 par = vec2(0., u_scroll*.16);
+  float dA = length(p - ((u_glowAPos-.5)*vec2(aspect,1.) + drift + par));
+  float dB = length(p - ((u_glowBPos-.5)*vec2(aspect,1.) - drift*1.3 + par*.6));
+  col += u_glowA * exp(-dA*u_glowAR) * (.72+.28*n) * u_glowAAmp;
+  col += u_glowB * exp(-dB*u_glowBR) * (.68+.32*n2) * u_glowBAmp;
+  if (u_beam > .001) {
+    vec2 bp = (vec2(.30,.80)-.5)*vec2(aspect,1.) + par*.4;
+    vec2 nrm = vec2(.276, .961);
+    float d = dot(p-bp, nrm);
+    float flick = .82+.18*n2;
+    vec3 beam = vec3(1.) * exp(-d*d*320.) * .85;
+    beam += vec3(1.,.58,.38) * exp(-pow((d-.018)*120.,2.)) * .9;
+    beam += vec3(.45,.72,1.) * exp(-pow((d+.018)*120.,2.)) * .9;
+    col += beam * u_beamColor * u_beam * flick;
+    col += u_beamColor * exp(-abs(d)*7.) * .05 * u_beam;
+  }
+  if (u_rings > .001) {
+    vec2 rp = (u_ringPos-.5)*vec2(aspect,1.) + par*.5;
+    float rd = length(p-rp);
+    float fr = fract(rd*7.);
+    float ringLine = smoothstep(.045,.0,min(fr,1.-fr));
+    float fade = exp(-rd*2.05) * smoothstep(.08,.26,rd);
+    col += u_ringColor * ringLine * fade * u_rings;
+  }
+  if (u_stars > .001) {
+    vec2 sg = p*13. + vec2(0., u_scroll*2.4);
+    vec2 cell = floor(sg);
+    float h = hash(cell);
+    if (h > .80) {
+      vec2 f = fract(sg);
+      vec2 sp = vec2(hash(cell+7.13), hash(cell+3.71))*.8+.1;
+      float sd = length(f-sp);
+      float tw = .55+.45*sin(t*(1.1+h*2.6)+h*31.);
+      col += vec3(.86,.92,1.) * smoothstep(.065,.02,sd) * smoothstep(.82,.94,h) * tw * u_stars;
+    }
+  }
+  vec4 flow = texture(u_flowmap, uv);
+  float influence = smoothstep(0.,.8,flow.r);
+  vec3 glowMix = mix(u_glowColor3, u_glowColor2, influence);
+  glowMix = mix(glowMix, u_glowColor1, influence*n);
+  col += glowMix * influence * u_glowIntensity;
+  col += (hash(gl_FragCoord.xy + fract(t)*17.)-.5)*u_grain;
+  float vig = 1.-smoothstep(.35,.78,length(uv-.5));
+  col = mix(col*(1.-u_vignette), col, vig);
+  fragColor = vec4(col,1.);
+}
+`
+
 /**
  * 液态玻璃背景层：WebGL2 流体渐变 + flowmap 鼠标交互。
  * createPortal 到 document.body，fixed 全视口，pointer-events:none，z-index:0
@@ -396,6 +585,8 @@ void main(){
  */
 export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
   const canvasRef = useRef(null)
+  // 旗舰深色主题在 WebGL2 不可用时退化为静态深底渐变（否则深色文字会浮在白页上）
+  const [glDead, setGlDead] = useState(false)
 
   useEffect(() => {
     if (isComposedGlassStyle(variant)) return undefined
@@ -411,11 +602,16 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     })
     if (!gl) {
       if (import.meta.env.DEV) window.__liquidGlassDebug = { failed: 'no-webgl2' }
+      if (FLAGSHIP_PARAMS[variant]) setGlDead(true)
       return undefined // WebGL2 不可用：静默无操作
     }
+    setGlDead(false)
 
-    const P = variant === 'hongguo' ? HONGGUO_PARAMS : LIQUID_PARAMS
-    const mainFragSrc = variant === 'hongguo' ? MAIN_FRAG_SRC_HONGGUO : MAIN_FRAG_SRC
+    const flagshipParams = FLAGSHIP_PARAMS[variant]
+    const P = flagshipParams || (variant === 'hongguo' ? HONGGUO_PARAMS : LIQUID_PARAMS)
+    const mainFragSrc = flagshipParams
+      ? MAIN_FRAG_SRC_FLAGSHIP
+      : variant === 'hongguo' ? MAIN_FRAG_SRC_HONGGUO : MAIN_FRAG_SRC
 
     const compile = (type, src) => {
       const shader = gl.createShader(type)
@@ -458,6 +654,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       }
       if (flowProg) gl.deleteProgram(flowProg)
       if (mainProg) gl.deleteProgram(mainProg)
+      if (FLAGSHIP_PARAMS[variant]) setGlDead(true)
       return undefined
     }
     const flowU = {}
@@ -473,6 +670,10 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       'u_lightPos', 'u_lightCore', 'u_lightHalo', 'u_vignette',
       'u_bloomThreshold', 'u_bloomRange', 'u_bloomStrength',
       'u_sat', 'u_calmR', 'u_calmA', 'u_breath', 'u_roam',
+      'u_base', 'u_baseB', 'u_glowA', 'u_glowB', 'u_glowAPos', 'u_glowBPos',
+      'u_glowAR', 'u_glowBR', 'u_glowAAmp', 'u_glowBAmp',
+      'u_beam', 'u_beamColor', 'u_rings', 'u_ringColor', 'u_ringPos',
+      'u_stars', 'u_scroll', 'u_grain',
     ].forEach((name) => {
       mainU[name] = gl.getUniformLocation(mainProg, name)
     })
@@ -545,9 +746,19 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       }
     }
 
+    let scrollTarget = 0
+    let scrollSmooth = 0
+    const onScroll = (e) => {
+      const el = e.target
+      if (el && typeof el.scrollTop === 'number' && el.scrollHeight > el.clientHeight) {
+        scrollTarget = Math.min(1, Math.max(0, el.scrollTop / (el.scrollHeight - el.clientHeight)))
+      }
+    }
+
     let readIdx = 0
     const renderFrame = (tSec) => {
       sx += (tx - sx) * 0.08
+      scrollSmooth += (scrollTarget - scrollSmooth) * 0.06
       sy += (ty - sy) * 0.08
       svx += ((tx - sx) * 0.5 - svx) * 0.12
       svy += ((ty - sy) * 0.5 - svy) * 0.12
@@ -606,6 +817,27 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       if (P.calmA !== undefined) gl.uniform1f(mainU.u_calmA, P.calmA)
       if (P.breath !== undefined) gl.uniform1f(mainU.u_breath, P.breath)
       if (P.roam !== undefined) gl.uniform1f(mainU.u_roam, P.roam)
+      // 旗舰深色三主题（vivid / 红果无这些 location，静默忽略；故按字段存在性整体守卫）
+      if (P.flagship) {
+        gl.uniform3fv(mainU.u_base, P.base)
+        gl.uniform3fv(mainU.u_baseB, P.baseB)
+        gl.uniform3fv(mainU.u_glowA, P.glowA)
+        gl.uniform3fv(mainU.u_glowB, P.glowB)
+        gl.uniform2f(mainU.u_glowAPos, P.glowAPos[0], P.glowAPos[1])
+        gl.uniform2f(mainU.u_glowBPos, P.glowBPos[0], P.glowBPos[1])
+        gl.uniform1f(mainU.u_glowAR, P.glowAR)
+        gl.uniform1f(mainU.u_glowBR, P.glowBR)
+        gl.uniform1f(mainU.u_glowAAmp, P.glowAAmp)
+        gl.uniform1f(mainU.u_glowBAmp, P.glowBAmp)
+        gl.uniform1f(mainU.u_beam, P.beam)
+        gl.uniform3fv(mainU.u_beamColor, P.beamColor)
+        gl.uniform1f(mainU.u_rings, P.rings)
+        gl.uniform3fv(mainU.u_ringColor, P.ringColor)
+        gl.uniform2f(mainU.u_ringPos, P.ringPos[0], P.ringPos[1])
+        gl.uniform1f(mainU.u_stars, P.stars)
+        gl.uniform1f(mainU.u_scroll, scrollSmooth)
+        gl.uniform1f(mainU.u_grain, P.grain)
+      }
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4)
     }
 
@@ -675,6 +907,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     } else {
       start()
       if (hoverCapable) window.addEventListener('mousemove', onMouseMove, { passive: true })
+      window.addEventListener('scroll', onScroll, { capture: true, passive: true })
       document.addEventListener('visibilitychange', onVisibility)
     }
     window.addEventListener('resize', onResize)
@@ -684,6 +917,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       if (import.meta.env.DEV) delete window.__liquidGlassDebug
       window.removeEventListener('resize', onResize)
       window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('scroll', onScroll, true)
       document.removeEventListener('visibilitychange', onVisibility)
       if (flowTargets) {
         flowTargets.forEach((t) => {
@@ -703,12 +937,21 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     return createPortal(<ComposedGlassScene variant={variant} />, document.body)
   }
   return createPortal(
-    <canvas
-      ref={canvasRef}
-      aria-hidden
-      className="pointer-events-none fixed inset-0 h-full w-full"
-      style={{ zIndex: 0 }}
-    />,
+    <>
+      {FLAGSHIP_PARAMS[variant] ? (
+        <div
+          aria-hidden
+          className="flagship-glass-fallback pointer-events-none fixed inset-0 h-full w-full"
+          style={{ zIndex: 0, background: FLAGSHIP_PARAMS[variant].fallback, opacity: glDead ? 1 : 0 }}
+        />
+      ) : null}
+      <canvas
+        ref={canvasRef}
+        aria-hidden
+        className="pointer-events-none fixed inset-0 h-full w-full"
+        style={{ zIndex: 0 }}
+      />
+    </>,
     document.body,
   )
 }
