@@ -137,15 +137,16 @@ html.liquid-glass-composed .app-main-content::after { display: none; }
 
 html.liquid-glass-composed :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
   /* Some existing Console surfaces use !important background shorthands. */
+  /* 18px/170%：真机上 30px/200% 会在多表面重绘时卡死，降配以保证可用性 */
   background: linear-gradient(135deg, #ffffff14, transparent 65%), #ffffff4d !important;
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
   border-color: #ffffffbf;
   box-shadow: inset 0 1px 0 #ffffffd9, 0 10px 32px #0f172a14;
 }
 html.liquid-glass-composed .theme-modern .app-main-content :is(.glow-card, .console-interactive-surface, .motion-v2-surface):not(.settle-ai-quick-card) {
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
+  -webkit-backdrop-filter: blur(18px) saturate(170%);
+  backdrop-filter: blur(18px) saturate(170%);
 }
 
 /* Give dense reading surfaces a stable tint when translucency is unavailable

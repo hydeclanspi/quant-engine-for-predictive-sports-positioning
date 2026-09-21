@@ -72,8 +72,17 @@ function App() {
   const location = useLocation()
   const displayMode = useDisplayMode()
   // 液态玻璃背景层：默认开启，systemConfig.liquidGlassEnabled === false 时关闭
-  const liquidGlassEnabled = systemConfigSnapshot?.liquidGlassEnabled !== false
-  const liquidGlassStyle = normalizeLiquidGlassStyle(systemConfigSnapshot?.liquidGlassStyle)
+  // URL 逃生开关：?glass=hongguo / ?glass=off —— 即使已保存的主题导致页面卡死也能强行进入
+  const glassOverride = (() => {
+    if (typeof window === 'undefined') return null
+    try {
+      return new URLSearchParams(window.location.search).get('glass')
+    } catch {
+      return null
+    }
+  })()
+  const liquidGlassEnabled = glassOverride === 'off' ? false : systemConfigSnapshot?.liquidGlassEnabled !== false
+  const liquidGlassStyle = normalizeLiquidGlassStyle(glassOverride && glassOverride !== 'off' ? glassOverride : systemConfigSnapshot?.liquidGlassStyle)
   const liquidGlass = liquidGlassEnabled ? <LiquidGlassBackdrop variant={liquidGlassStyle} /> : null
 
   // Listen for layout mode changes from ParamsPage
