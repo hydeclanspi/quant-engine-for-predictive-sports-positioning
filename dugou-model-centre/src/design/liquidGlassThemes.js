@@ -3,7 +3,6 @@
 export const DEFAULT_LIQUID_GLASS_STYLE = 'hongguo'
 
 export const LIQUID_GLASS_THEMES = [
-  { key: 'temp', label: 'temp', description: '青橙流光', preview: 'linear-gradient(135deg, #b4e7dd, #75bfdb 35%, #b2b7ed 65%, #efbf8e)' },
   { key: 'vivid', label: '流光溢彩', description: '多彩流动', preview: 'linear-gradient(135deg, #84b7ec, #b1a0ee 36%, #f4c174 68%, #84d9bd)' },
   { key: 'hongguo', label: '红果', description: '青橙色场', preview: 'linear-gradient(135deg, #d7e8d4, #74cfc2 30%, #f4f7f8 58%, #edac79)' },
   { key: 'daylight', label: '晴光', description: '银白 · 雾青 · 杏暖', composed: true },

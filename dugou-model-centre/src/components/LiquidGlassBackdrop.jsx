@@ -93,38 +93,6 @@ const HONGGUO_PARAMS = {
   roam: 1.0,
 }
 
-/* ── temp：流光溢彩引擎 × 红果配色 ──
- * 使用与原版流光溢彩完全相同的湍流大理纹 shader；只把色板换成品牌色对
- * （青 / 橙 为主、蓝→青蓝、紫→冷紫、青碧加深），保留原版的饱和度与流动性——
- * 玻璃质感最好的一套底 + 红果品牌色。
- */
-const TEMP_PARAMS = {
-  c1: hexToRgb('#e3ebe9'), // 冷白基底（微微偏青）
-  c2: hexToRgb('#4bb2d4'), // 青蓝（原版蓝 × 红果青 的融合）
-  c3: hexToRgb('#f2954d'), // 橙（原版琥珀 × 红果橙 的融合）
-  c4: hexToRgb('#8f96e6'), // 冷紫（原版紫罗兰收敛为蓝紫）
-  c5: hexToRgb('#3fc5ad'), // 青碧（原版青碧 × 红果青）
-  glowColor1: hexToRgb('#ffffff'),
-  glowColor2: hexToRgb('#6fc8d8'),
-  glowColor3: hexToRgb('#ffa95c'),
-  glowIntensity: 0.95,
-  scale: 1.9,
-  offset: [0, 0],
-  timeScale: 1.35,
-  distortBoost: 1.5,
-  swirlBoost: 1.5,
-  mouseRadius: 0.22,
-  mouseStrength: 0.85,
-  decay: 0.972,
-  lightPos: [0.75, 0.8],
-  lightCore: 0.06,
-  lightHalo: 0.035,
-  vignette: 0.1,
-  bloomThreshold: 0.93,
-  bloomRange: 0.08,
-  bloomStrength: 0.2,
-}
-
 const VERTEX_SRC = `#version 300 es
 in vec4 a_position;
 out vec2 vUv;
@@ -446,7 +414,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       return undefined // WebGL2 不可用：静默无操作
     }
 
-    const P = variant === 'hongguo' ? HONGGUO_PARAMS : variant === 'temp' ? TEMP_PARAMS : LIQUID_PARAMS
+    const P = variant === 'hongguo' ? HONGGUO_PARAMS : LIQUID_PARAMS
     const mainFragSrc = variant === 'hongguo' ? MAIN_FRAG_SRC_HONGGUO : MAIN_FRAG_SRC
 
     const compile = (type, src) => {

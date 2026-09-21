@@ -52,7 +52,7 @@ beforeEach(() => {
 afterAll(() => vi.unstubAllGlobals())
 
 describe('liquid glass UI preferences', () => {
-  it.each(['temp', 'vivid', 'hongguo', 'daylight', 'moon', 'sand'])('persists and reads %s without changing other settings', (style) => {
+  it.each(['vivid', 'hongguo', 'daylight', 'moon', 'sand'])('persists and reads %s without changing other settings', (style) => {
     saveSystemConfig({ liquidGlassStyle: style })
     expect(JSON.parse(storage.get(key))).toMatchObject({ liquidGlassStyle: style, initialCapital: 12345, liquidGlassEnabled: true })
     expect(getSystemConfig().liquidGlassStyle).toBe(style)
