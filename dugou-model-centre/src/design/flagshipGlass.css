@@ -14,7 +14,7 @@ html.liquid-glass-dark[data-liquid-glass-style='xuanji'] {
   --fx-accent: #8fc7ae;          /* 主强调 · 玉青 */
   --fx-accent-2: #c9a96a;        /* 副强调 · 鎏金 */
   --fx-card: rgba(226, 236, 228, 0.08);
-  --fx-panel: rgba(16, 28, 22, 0.96);   /* 内容层：近实磨砂金属板（玻璃只给功能层） */
+  --fx-panel: rgba(14, 26, 21, 0.78);   /* 液态玻璃：中等透明度 + 重模糊，透光不伤字 */
   --fx-elev: rgba(226, 236, 228, 0.12);
   --fx-well: rgba(238, 233, 220, 0.13);
   --fx-solid: rgba(13, 23, 18, 0.94);
@@ -37,7 +37,7 @@ html.liquid-glass-dark[data-liquid-glass-style='spectra'] {
   --fx-accent: #679efe;
   --fx-accent-2: #b18cff;
   --fx-card: rgba(150, 175, 220, 0.085);
-  --fx-panel: rgba(12, 20, 38, 0.96);
+  --fx-panel: rgba(12, 20, 38, 0.78);
   --fx-elev: rgba(150, 175, 220, 0.13);
   --fx-well: rgba(190, 205, 235, 0.14);
   --fx-solid: rgba(9, 14, 26, 0.94);
@@ -60,6 +60,7 @@ html.liquid-glass-dark[data-liquid-glass-style='starward'] {
   --fx-accent: #8fc7ff;
   --fx-accent-2: #c9d9ff;
   --fx-card: rgba(150, 190, 240, 0.08);
+  --fx-panel: rgba(10, 19, 40, 0.78);
   --fx-elev: rgba(150, 190, 240, 0.125);
   --fx-well: rgba(190, 215, 245, 0.135);
   --fx-solid: rgba(7, 15, 33, 0.94);
@@ -81,17 +82,20 @@ html.liquid-glass-dark[data-liquid-glass-style='starward'] {
 html.liquid-glass-dark .theme-modern { color: var(--fx-ink); }
 
 /* 玻璃表面：压过基础层白玻璃（html.liquid-glass-on .x = 0-2-1），此处 0-3-1 */
+/* 玻璃表面：液态玻璃配方 —— 中等透明度 + 18px 重模糊（背景光变柔色晕透入，不伤文字）
+ * + 135° 内斜高光，玻璃的"湿润厚度"（压过基础层白玻璃 0-2-1，此处 0-3-1） */
 html.liquid-glass-on.liquid-glass-dark .glow-card,
 html.liquid-glass-on.liquid-glass-dark .console-interactive-surface,
 html.liquid-glass-on.liquid-glass-dark .theme-modern .app-main-content .motion-v2-surface {
-  /* 内容层 = 近实磨砂金属板（v2 纠偏：液态玻璃只给功能层），描边由逐主题 inset 发丝线承担 */
-  background: var(--fx-panel);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--fx-ink) 5%, transparent), transparent 44%),
+    var(--fx-panel);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  backdrop-filter: blur(18px) saturate(140%);
   border-color: var(--fx-line);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 10%, transparent),
-    0 20px 48px rgba(0, 0, 0, 0.45);
+    inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent),
+    0 20px 48px rgba(0, 0, 0, 0.42);
 }
 
 /* 嵌套玻璃不再二次模糊（叠在已模糊的父面片上，纯色半透明视觉等价，省一半模糊开销） */
@@ -466,7 +470,9 @@ html.liquid-glass-on.liquid-glass-dark[data-liquid-glass-style='spectra'] .theme
   border-radius: 0;
   border-color: transparent;
   clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
-  background: var(--fx-panel);
+  background:
+    linear-gradient(135deg, color-mix(in srgb, var(--fx-ink) 5%, transparent), transparent 44%),
+    var(--fx-panel);
   box-shadow:
     inset 0 1px 0 rgba(230, 234, 244, 0.12),
     inset 1px 0 0 rgba(103, 158, 254, 0.34),
