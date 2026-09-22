@@ -84,12 +84,23 @@ html.liquid-glass-on.liquid-glass-dark .console-interactive-surface,
 html.liquid-glass-on.liquid-glass-dark .theme-modern .app-main-content .motion-v2-surface {
   /* shorthand：连 ambient-tone 规则留下的浅色渐变 background-image 一起压掉 */
   background: var(--fx-card);
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
+  /* 深色低对比下 12px/140% 与 18px/170% 肉眼几乎无差；动画画布上每帧少一道模糊税 */
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
   border-color: var(--fx-line);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent),
     0 18px 44px rgba(0, 0, 0, 0.38);
+}
+
+/* 嵌套玻璃不再二次模糊（叠在已模糊的父面片上，纯色半透明视觉等价，省一半模糊开销） */
+html.liquid-glass-on.liquid-glass-dark .theme-modern
+  :is(.glow-card, .console-interactive-surface, .motion-v2-surface)
+  :is(.glow-card, .console-interactive-surface, .motion-v2-surface) {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background: color-mix(in srgb, var(--fx-ink) 7%, transparent);
+  box-shadow: none;
 }
 
 /* 文字层级 */
@@ -146,8 +157,8 @@ html.liquid-glass-dark .mn-brand:hover { background: var(--fx-elev); }
 html.liquid-glass-on.liquid-glass-dark.lg-scrolled .mn-bar {
   border-color: var(--fx-line-strong);
   background: var(--fx-bar);
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(14px) saturate(150%);
+  backdrop-filter: blur(14px) saturate(150%);
   box-shadow:
     inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent),
     0 14px 40px rgba(0, 0, 0, 0.45);
@@ -164,8 +175,8 @@ html.liquid-glass-on.liquid-glass-dark[data-liquid-glass-style='spectra'].lg-scr
 html.liquid-glass-dark .app-bottom-bar {
   border-top-color: var(--fx-line);
   background: var(--fx-bar);
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  backdrop-filter: blur(12px) saturate(140%);
   box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 10%, transparent);
 }
 html.liquid-glass-dark .app-bottom-bar::before { opacity: 0.18; }

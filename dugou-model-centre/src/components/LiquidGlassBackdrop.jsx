@@ -59,6 +59,17 @@ const FLOWMAP_SCALE = 0.25 // flowmap 渲染分辨率为画布的 1/4
 const FRAME_MS = 1000 / 30 // 30fps 节流
 const REDUCED_MOTION_TIME = 12 // prefers-reduced-motion 时只渲染这一帧静态画面
 
+/* ── 旗舰主题的性能纪律（视觉规格不变）──
+ * 旗舰的环境动效周期是 20~300s 级的"呼吸"，30fps 是纯浪费：
+ *   · 待机 12fps，鼠标移动 / 滚动后 1.6s 内升回 30fps（交互永远满帧）
+ *   · 画布按 0.75 倍分辨率渲染（背景本质是柔光渐变场，肉眼无差）
+ * 这两项把「面片数 × 帧率 × 面积」的合成税降掉约 5-8 倍。
+ */
+const FLAGSHIP_IDLE_FRAME_MS = 1000 / 12
+const FLAGSHIP_INTERACTIVE_WINDOW_MS = 1600
+const FLAGSHIP_DPR_CAP = 1.2
+const FLAGSHIP_RES_SCALE = 0.75
+
 /* ── 红果（构图化色场）参数：品牌色对 青 × 橙 ──
  * 额外字段：sat 全局饱和度 / calmR+calmA 中央静区 / breath 呼吸幅度 / roam 环游幅度
  * 画布以视口 89% 内部分辨率渲染（CSS 拉伸），兼顾细腻与开销
@@ -561,7 +572,7 @@ void main(){
       vec2 f = fract(sg);
       vec2 sp = vec2(hash(cell+7.13), hash(cell+3.71))*.8+.1;
       float sd = length(f-sp);
-      float tw = .55+.45*sin(t*(1.1+h*2.6)+h*31.);
+      float tw = .6+.4*sin(t*(.75+h*1.8)+h*31.);
       col += vec3(.86,.92,1.) * smoothstep(.065,.02,sd) * smoothstep(.82,.94,h) * tw * u_stars;
     }
   }
@@ -719,8 +730,10 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
       flowTargets = [createFlowTarget(fw, fh), createFlowTarget(fw, fh)]
     }
     const resize = () => {
-      // vivid：全分辨率（DPR ≤ 1.5）；红果：视口 89% 内部分辨率（CSS 拉伸，柔而省）
-      const scale = variant === 'hongguo' ? HONGGUO_SCALE : Math.min(window.devicePixelRatio || 1, MAX_DPR)
+      // vivid：全分辨率（DPR ≤ 1.5）；红果：视口 89%；旗舰：DPR ≤ 1.2 × 0.75（柔光场，肉眼无差）
+      const scale = flagshipParams
+        ? Math.min(window.devicePixelRatio || 1, FLAGSHIP_DPR_CAP) * FLAGSHIP_RES_SCALE
+        : variant === 'hongguo' ? HONGGUO_SCALE : Math.min(window.devicePixelRatio || 1, MAX_DPR)
       canvas.width = Math.max(1, Math.round(window.innerWidth * scale))
       canvas.height = Math.max(1, Math.round(window.innerHeight * scale))
       setupFlowTargets() // 跟随画布按 1/4 比例重建（内容重置为中性）
@@ -736,7 +749,12 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     let sy = 0.5
     let svx = 0
     let svy = 0
+    let lastInteraction = -Infinity
+    const markInteraction = () => {
+      lastInteraction = performance.now()
+    }
     const onMouseMove = (e) => {
+      markInteraction()
       tx = e.clientX / window.innerWidth
       ty = 1 - e.clientY / window.innerHeight // y 翻转到 GL 坐标
       if (!mouseInit) {
@@ -749,6 +767,7 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     let scrollTarget = 0
     let scrollSmooth = 0
     const onScroll = (e) => {
+      markInteraction()
       const el = e.target
       if (el && typeof el.scrollTop === 'number' && el.scrollHeight > el.clientHeight) {
         scrollTarget = Math.min(1, Math.max(0, el.scrollTop / (el.scrollHeight - el.clientHeight)))
@@ -848,7 +867,11 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
     const tick = (now) => {
       if (!running) return
       rafId = window.requestAnimationFrame(tick)
-      if (now - last < FRAME_MS) return
+      // 旗舰：待机 12fps，交互窗口内 30fps；其余主题恒定 30fps
+      const frameMs = flagshipParams
+        ? (now - lastInteraction < FLAGSHIP_INTERACTIVE_WINDOW_MS ? FRAME_MS : FLAGSHIP_IDLE_FRAME_MS)
+        : FRAME_MS
+      if (now - last < frameMs) return
       last = now
       renderFrame(((now - startTime) / 1000) * P.timeScale)
     }
@@ -938,11 +961,11 @@ export default function LiquidGlassBackdrop({ variant = 'vivid' }) {
   }
   return createPortal(
     <>
-      {FLAGSHIP_PARAMS[variant] ? (
+      {FLAGSHIP_PARAMS[variant] && glDead ? (
         <div
           aria-hidden
           className="flagship-glass-fallback pointer-events-none fixed inset-0 h-full w-full"
-          style={{ zIndex: 0, background: FLAGSHIP_PARAMS[variant].fallback, opacity: glDead ? 1 : 0 }}
+          style={{ zIndex: 0, background: FLAGSHIP_PARAMS[variant].fallback }}
         />
       ) : null}
       <canvas
