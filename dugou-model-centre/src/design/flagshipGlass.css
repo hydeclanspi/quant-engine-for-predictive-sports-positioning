@@ -423,6 +423,13 @@ html.liquid-glass-dark .pm-toggle-preview {
   color: var(--fx-accent);
 }
 html.liquid-glass-dark .pm-toggle-preview-hint { color: var(--fx-accent); }
+/* Live 胶囊（full 模式） */
+html.liquid-glass-dark .pm-toggle-full {
+  background: var(--fx-elev);
+  border-color: color-mix(in srgb, var(--fx-accent) 30%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--fx-ink) 12%, transparent);
+  color: var(--fx-accent);
+}
 /* 演示模式 toast */
 html.liquid-glass-dark .demo-bubble {
   background: var(--fx-solid);

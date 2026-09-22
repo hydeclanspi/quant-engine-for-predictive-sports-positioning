@@ -4338,7 +4338,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
   }
   const liquidGlassStyle = normalizeLiquidGlassStyle(config.liquidGlassStyle)
   const setLiquidGlassStyle = (style) => {
-    saveSystemConfig({ liquidGlassStyle: style })
+    saveSystemConfig({ liquidGlassStyle: style, liquidGlassStylePinned: true })
     setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
   }
 

@@ -81,13 +81,18 @@ describe('liquid glass UI preferences', () => {
     }
   })
 
-  it('migrates existing light themes to the flagship default exactly once', () => {
+  it('self-heals legacy light themes to the flagship default until the user pins a choice', () => {
     initializeFlagshipGlassDefault()
     expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
     expect(JSON.parse(storage.get(key))).toMatchObject({ initialCapital: 12345, liquidGlassEnabled: true })
 
-    // 迁移后用户手动换回浅色主题 → 不再被强制拉回
-    saveSystemConfig({ liquidGlassStyle: 'moon' })
+    // 云端快照把旧值打回来后（无 pinned），下次启动再次自愈
+    storage.set(key, JSON.stringify({ liquidGlassStyle: 'hongguo', initialCapital: 12345 }))
+    initializeFlagshipGlassDefault()
+    expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
+
+    // 用户在选择器里手动钉选浅色主题 → 永久尊重，不再拉回
+    saveSystemConfig({ liquidGlassStyle: 'moon', liquidGlassStylePinned: true })
     initializeFlagshipGlassDefault()
     expect(getSystemConfig().liquidGlassStyle).toBe('moon')
   })

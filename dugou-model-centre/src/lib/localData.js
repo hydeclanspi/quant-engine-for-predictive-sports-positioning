@@ -526,17 +526,17 @@ export const getSystemConfig = () => {
   return merged
 }
 
-/* 一次性迁移：把存量用户（非旗舰主题）切到旗舰默认「光谱」，此后尊重任何手动选择。
- * 与 layoutMode 的 initializeLayoutMode 同款模式；在首次渲染前调用。 */
-const FLAGSHIP_GLASS_MIGRATION_KEY = 'dugou:glass-flagship-spectra.v1'
+/* 旗舰默认自愈迁移：旧世界的浅色主题（vivid/红果/晴光/月汐/暖砂）在用户
+ * 未手动钉选前，每次启动都纠正回旗舰「光谱」——因为云端/Git 快照导入会用
+ * 快照里的旧值覆盖本地（mergeSystemConfig 后写者胜），一次性迁移会被打回。
+ * 用户在主题选择器里手动选过任何主题后（liquidGlassStylePinned）即永久尊重。 */
 export const initializeFlagshipGlassDefault = () => {
   try {
-    const storage = window.localStorage
-    if (storage.getItem(FLAGSHIP_GLASS_MIGRATION_KEY)) return
-    storage.setItem(FLAGSHIP_GLASS_MIGRATION_KEY, '1')
     const saved = readJSON(STORAGE_KEYS.systemConfig, null)
     if (!saved) return // 全新安装：normalize 即走 DEFAULT（spectra）
-    if (isDarkGlassStyle(saved.liquidGlassStyle)) return // 已在使用旗舰主题
+    if (saved.liquidGlassStylePinned) return // 用户手动钉选过
+    if (isDarkGlassStyle(saved.liquidGlassStyle)) return // 已在旗舰主题上
+    if (saved.liquidGlassStyle !== undefined && !isLiquidGlassStyle(saved.liquidGlassStyle)) return // 未知值不动
     saveSystemConfig({ liquidGlassStyle: DEFAULT_LIQUID_GLASS_STYLE })
   } catch {
     // 存储不可用时静默跳过，交给 normalize 兜底
@@ -554,7 +554,7 @@ export const saveSystemConfig = (configPatch) => {
   }
 
   // 如果只是改变UI偏好（pageAmbientThemes / liquidGlassEnabled / liquidGlassStyle），即使在时光穿越中也允许
-  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle']
+  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle', 'liquidGlassStylePinned']
   const isOnlyUIConfig = Object.keys(configPatch).every(key => UI_CONFIG_KEYS.includes(key))
   if (!isOnlyUIConfig && !checkReadOnlyMode('Update System Config')) {
     // 返回当前配置但不保存
