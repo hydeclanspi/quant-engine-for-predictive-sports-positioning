@@ -73,10 +73,10 @@ describe('liquid glass UI preferences', () => {
     expect(storage.get(key)).toBe(storedBefore)
   })
 
-  it('uses the existing default for missing or unrecognized saved themes', () => {
+  it('uses the flagship default for missing or unrecognized saved themes', () => {
     for (const style of [undefined, 'unrecognized']) {
       storage.set(key, JSON.stringify({ liquidGlassStyle: style }))
-      expect(getSystemConfig().liquidGlassStyle).toBe('daylight')
+      expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
     }
   })
 })
