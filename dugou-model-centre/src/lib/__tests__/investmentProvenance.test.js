@@ -54,6 +54,16 @@ describe('prediction snapshot contract', () => {
     expect(snapshot.legs[0].raw_conf).toBe(0.55)
     expect(snapshot.legs[0].entries[0].odds).toBe(2)
   })
+  it('records the fitted internals and isolates them from later mutation', () => {
+    const profile = buildAtomicMatchProfile({ entries: match.entries, unionProbability: 0.6 })
+    const metadata = { stage: 'full', pipeline_version: 'test', fitted: { confMultiplier: 1.02, marketLean: 0.31 } }
+    const snapshot = buildForecastSnapshot({ combinedProfile: profile, generatedAt: date, calibrationMetadata: metadata, legs: [{ match: { ...match, conf: 0.55 }, profile }] })
+    expect(snapshot.calibration.fitted.confMultiplier).toBe(1.02)
+    metadata.fitted.confMultiplier = 9
+    metadata.stage = 'other'
+    expect(snapshot.calibration.fitted.confMultiplier).toBe(1.02)
+    expect(snapshot.calibration.stage).toBe('full')
+  })
   it('records exhaustive coverage as probability one, not the pre-model subjective input', () => {
     const profile = { ...buildAtomicMatchProfile({ entries: ['win', 'draw', 'lose'].map((name) => ({ name, odds: 3 })), unionProbability: 0.6 }), unionProbability: 0.6 }
     const snapshot = buildForecastSnapshot({ combinedProfile: combineAtomicMatchProfiles([profile]), generatedAt: date, legs: [{ match, profile }] })

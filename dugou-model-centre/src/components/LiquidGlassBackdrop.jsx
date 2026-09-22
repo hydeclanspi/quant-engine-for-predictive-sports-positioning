@@ -139,7 +139,7 @@ const FLAGSHIP_PARAMS = {
     base: hexToRgb('#0a1122'), baseB: hexToRgb('#04070f'),
     glowA: hexToRgb('#16336b'), glowAPos: [0.22, 0.8], glowAR: 2.2, glowAAmp: 0.55,
     glowB: hexToRgb('#2a1e5c'), glowBPos: [0.9, 0.06], glowBR: 2.6, glowBAmp: 0.5,
-    beam: 1.0, beamColor: hexToRgb('#a8c4ff'),
+    beam: 0.88, beamColor: hexToRgb('#a8c4ff'),
     rings: 0, ringColor: hexToRgb('#c9a96a'), ringPos: [0.84, 0.88],
     stars: 0,
     glowColor1: hexToRgb('#ffffff'), glowColor2: hexToRgb('#9dbcff'), glowColor3: hexToRgb('#b18cff'),
@@ -546,7 +546,7 @@ void main(){
   col += u_glowA * exp(-dA*u_glowAR) * (.72+.28*n) * u_glowAAmp;
   col += u_glowB * exp(-dB*u_glowBR) * (.68+.32*n2) * u_glowBAmp;
   if (u_beam > .001) {
-    vec2 bp = (vec2(.30,.80)-.5)*vec2(aspect,1.) + par*.4;
+    vec2 bp = (vec2(.55,1.05)-.5)*vec2(aspect,1.) + par*.4;
     vec2 nrm = vec2(.276, .961);
     float d = dot(p-bp, nrm);
     float flick = .82+.18*n2;
@@ -554,7 +554,7 @@ void main(){
     beam += vec3(1.,.58,.38) * exp(-pow((d-.018)*120.,2.)) * .9;
     beam += vec3(.45,.72,1.) * exp(-pow((d+.018)*120.,2.)) * .9;
     col += beam * u_beamColor * u_beam * flick;
-    col += u_beamColor * exp(-abs(d)*7.) * .05 * u_beam;
+    col += u_beamColor * exp(-abs(d)*7.) * .035 * u_beam;
   }
   if (u_rings > .001) {
     vec2 rp = (u_ringPos-.5)*vec2(aspect,1.) + par*.5;

@@ -35,9 +35,9 @@ export const buildForecastSnapshot = ({ combinedProfile, legs = [], generatedAt,
     schema_version: FORECAST_SCHEMA_VERSION,
     model_version: modelVersion,
     generated_at: generatedAt,
-    calibration: calibrationMetadata ? { ...calibrationMetadata,
-      parameters: calibrationMetadata.parameters ? { ...calibrationMetadata.parameters } : undefined,
-    } : { stage: 'unknown' },
+    calibration: calibrationMetadata
+      ? JSON.parse(JSON.stringify(calibrationMetadata))
+      : { stage: 'unknown' },
     expected_rating_semantics: MEAN_LEG_RATING_SEMANTICS,
     model_status: combinedProfile.modelStatus || 'unspecified',
     states,

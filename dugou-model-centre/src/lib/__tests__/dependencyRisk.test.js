@@ -147,6 +147,20 @@ describe('Dependency Risk Premium Analysis', () => {
       expect(observed.failedTogether).toBeCloseTo(observed.totalWeight, 6)
       expect(observed.partialMiss).toBeCloseTo(0, 6)
     })
+
+    it('赔率差距过远的历史对不构成证据，返回无可比历史', () => {
+      const now = new Date().toISOString()
+      const historicalData = [
+        { matches: [{ odds: 1.2, result: true }, { odds: 1.2, result: false }], createdAt: now },
+        { matches: [{ odds: 1.2, result: false }, { odds: 1.2, result: true }], createdAt: now },
+        { matches: [{ odds: 1.2, result: true }, { odds: 1.2, result: true }], createdAt: now },
+      ]
+      // 历史全是 1.2 的腿；目标 8.0×8.0 的最优核权重远低于可比性下限。
+      const observed = getWeightedObservedFailure(historicalData, 8.0, 8.0)
+      expect(observed.totalWeight).toBe(0)
+      expect(observed.rawPairCount).toBe(0)
+      expect(observed.effectiveSampleSize).toBe(0)
+    })
   })
 
   // ==========================================================================
@@ -288,6 +302,18 @@ describe('Dependency Risk Premium Analysis', () => {
       expect(Number.isNaN(result.fragilityScore)).toBe(true)
       expect(result.riskLevel).toBe('insufficient_data')
       expect(result.confidence).toBe(0)
+    })
+
+    it('有可结算历史但与目标赔率差距过远时仍不给出数值风险分数', () => {
+      const now = new Date().toISOString()
+      const historicalData = [
+        { matches: [{ odds: 1.2, result: true }, { odds: 1.2, result: false }], createdAt: now },
+        { matches: [{ odds: 1.2, result: false }, { odds: 1.2, result: true }], createdAt: now },
+      ]
+      const result = assessFragilityScore({ odds: 8.0 }, { odds: 8.0 }, historicalData)
+
+      expect(result.riskLevel).toBe('insufficient_data')
+      expect(Number.isNaN(result.fragilityScore)).toBe(true)
     })
 
     it('应该包含风险等级', () => {

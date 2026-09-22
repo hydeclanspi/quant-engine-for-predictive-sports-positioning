@@ -23,6 +23,7 @@ import {
   computeAdaptiveWeightSuggestions,
   __testables,
 } from '../analytics'
+import { predictMatchProbability } from '../matchPrediction'
 
 const makeMatch = (extra = {}) => ({
   id: 'match', home_team: 'Home', away_team: 'Away', entry_market_type: 'moneyline',
@@ -237,5 +238,61 @@ describe('adaptive auto-apply permissions and revision cadence', () => {
     state.investments[0].matches[0].fid_base_home = 0.7
     expect(autoApplyAdaptiveWeights().applied).toBe(true)
     expect(autoApplyAdaptiveWeights().reason).toBe('unchanged_data')
+  })
+})
+
+describe('production weight sensitivity', () => {
+  // 先验全部 > 1（保险产品 1.08、TYS H 1.08、FID 0.75 1.1、FSE 1.12），
+  // 所以任一有效权重调高都应把概率推高；落在 0.95 上限前可区分。
+  const baseConfig = { weightMode: 0.16, weightTys: 0.12, weightFid: 0.14, weightFse: 0.07, defaultOdds: 2.5 }
+  const match = {
+    conf: 0.7, odds: 2, mode: '保险产品', tys_home: 'H', tys_away: 'H', fid: 0.75,
+    fse_home: 1, fse_away: 1, entries: [{ name: 'win', odds: 2 }],
+  }
+
+  it.each([
+    ['weightMode', 0.16, 1.5],
+    ['weightTys', 0.12, 1.5],
+    ['weightFid', 0.14, 1.5],
+    ['weightFse', 0.07, 1.5],
+  ])('%s demonstrably moves the production probability', (key, low, high) => {
+    const lowP = predictMatchProbability(match, { ...baseConfig, [key]: low }, {})
+    const highP = predictMatchProbability(match, { ...baseConfig, [key]: high }, {})
+    expect(Number.isFinite(lowP)).toBe(true)
+    expect(highP).toBeGreaterThan(lowP)
+  })
+
+  it('keeps weightConf out of the production probability', () => {
+    const a = predictMatchProbability(match, { ...baseConfig, weightConf: 0.25 }, {})
+    const b = predictMatchProbability(match, { ...baseConfig, weightConf: 0.65 }, {})
+    expect(a).toBe(b)
+  })
+})
+
+describe('isotonic regression fixed fixture', () => {
+  const rows = (entries) =>
+    entries.flatMap(([conf, hits, n]) => Array.from({ length: n }, (_, i) => ({ conf, actual: i < hits ? 1 : 0 })))
+
+  it('passes through a monotone fit unchanged', () => {
+    // 各 10 条、命中率与 conf 完全同序，无需合并：节点 x=conf、y=命中率、n=10。
+    const model = buildIsotonicRegression(rows([[0.2, 2, 10], [0.4, 4, 10], [0.6, 6, 10], [0.8, 8, 10]]))
+    expect(model.ready).toBe(true)
+    expect(model.nodes.map((node) => [node.x, node.y, node.n])).toEqual([
+      [0.2, 0.2, 10], [0.4, 0.4, 10], [0.6, 0.6, 10], [0.8, 0.8, 10],
+    ])
+    // 分段线性：0.5 落在 0.4→0.6 段中点 → 0.5。
+    expect(model.calibrate(0.5)).toBeCloseTo(0.5, 10)
+  })
+
+  it('pools equal conf values and merges adjacent violators', () => {
+    // 0.5 桶 3/10、0.7 桶 2/10 构成违序，PAV 合并为 5/20=0.25，节点 x 取桶中点 0.6。
+    const model = buildIsotonicRegression(rows([[0.2, 2, 10], [0.5, 3, 10], [0.7, 2, 10], [0.9, 9, 10]]))
+    expect(model.ready).toBe(true)
+    expect(model.nodes.map((node) => [node.x, node.y, node.n])).toEqual([
+      [0.2, 0.2, 10], [0.6, 0.25, 20], [0.9, 0.9, 10],
+    ])
+    expect(model.calibrate(0.6)).toBeCloseTo(0.25, 10)
+    // 分段线性：0.4 落在 0.2→0.6 段，t=(0.4-0.2)/0.4=0.5 → 0.2 + 0.5*(0.25-0.2)=0.225。
+    expect(model.calibrate(0.4)).toBeCloseTo(0.225, 10)
   })
 })

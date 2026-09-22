@@ -2213,95 +2213,6 @@ const buildTeamCalibrationModelFromMatchRows = (matchRows, teamProfiles, baseCal
   }
 }
 
-const buildTeamCalibrationModelFromBinaryRows = (rows, teamProfiles, calibrateFn) => {
-  const sortedRows = [...rows].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  const n = Math.max(1, Math.floor(sortedRows.length / 50))
-  const teamStats = new Map()
-  const ensureTeam = (teamName) => {
-    if (!teamStats.has(teamName)) {
-      teamStats.set(teamName, {
-        teamName,
-        samples: 0,
-        weight: 0,
-        weightedResidual: 0,
-        weightedResidualSq: 0,
-      })
-    }
-    return teamStats.get(teamName)
-  }
-
-  sortedRows.forEach((row, index) => {
-    const conf = toNumber(row.conf, Number.NaN)
-    const actual = toNumber(row.actual, Number.NaN)
-    if (!Number.isFinite(conf) || !Number.isFinite(actual)) return
-    const calibrated = clamp(calibrateFn(conf), 0.02, 0.98)
-    const residual = actual - calibrated
-
-    let recencyWeight = 1.0
-    if (index < 6 * n) recencyWeight = 1.4
-    else if (index < 11 * n) recencyWeight = 1.15
-    const repWeight = getRepDirectionWeight(toNumber(row.rep, Number.NaN))
-    const sampleWeight = recencyWeight * repWeight
-
-    const homeTeam = resolveTeamNameForCalibration(row.homeTeam, teamProfiles)
-    const awayTeam = resolveTeamNameForCalibration(row.awayTeam, teamProfiles)
-    const teams = [homeTeam, awayTeam].filter(Boolean)
-    if (teams.length === 0) return
-    const teamWeight = sampleWeight / teams.length
-
-    teams.forEach((teamName) => {
-      const bucket = ensureTeam(teamName)
-      bucket.samples += 1 / teams.length
-      bucket.weight += teamWeight
-      bucket.weightedResidual += residual * teamWeight
-      bucket.weightedResidualSq += residual * residual * teamWeight
-    })
-  })
-
-  const teamRows = [...teamStats.values()].map((row) => {
-    const meanResidual = row.weight > 0 ? row.weightedResidual / row.weight : 0
-    const variance = row.weight > 0 ? row.weightedResidualSq / row.weight - meanResidual * meanResidual : 0
-    const residualStd = Math.sqrt(Math.max(variance, 0))
-    const sampleReliability = clamp((row.weight - 2.5) / 24, 0, 1)
-    const stability = clamp(1 - residualStd / 0.34, 0, 1)
-    const reliability = clamp(sampleReliability * 0.72 + stability * 0.28, 0, 1)
-    const shift = clamp(meanResidual * reliability, -0.18, 0.18)
-    return {
-      teamName: row.teamName,
-      reliability,
-      shift,
-    }
-  })
-
-  const teamMap = new Map(teamRows.map((row) => [normalize(row.teamName), row]))
-  const defaultReliability =
-    teamRows.length > 0
-      ? clamp(teamRows.reduce((sum, row) => sum + row.reliability, 0) / teamRows.length * 0.6, 0.12, 0.35)
-      : 0.2
-
-  return {
-    getMatchAdjustment: (homeTeam, awayTeam) => {
-      const homeKey = normalize(resolveTeamNameForCalibration(homeTeam, teamProfiles))
-      const awayKey = normalize(resolveTeamNameForCalibration(awayTeam, teamProfiles))
-      const homeMeta = homeKey ? teamMap.get(homeKey) : null
-      const awayMeta = awayKey ? teamMap.get(awayKey) : null
-      const parts = [homeMeta, awayMeta].filter(Boolean)
-      if (parts.length === 0) {
-        return {
-          shift: 0,
-          reliability: defaultReliability,
-        }
-      }
-      const shift = parts.reduce((sum, item) => sum + item.shift, 0) / parts.length
-      const reliability = clamp(parts.reduce((sum, item) => sum + item.reliability, 0) / parts.length, 0, 1)
-      return {
-        shift,
-        reliability,
-      }
-    },
-  }
-}
-
 const summarizeBlendWalkForward = (windows) => {
   if (!Array.isArray(windows) || windows.length === 0) {
     return {
@@ -2364,26 +2275,20 @@ const evaluateBlendWalkForward = (rows, config, teamProfiles, includeStrategy = 
 
   return windows.map((window, idx) => {
     const { trainRows, testRows } = window
-    const fit = getConfRegressionCalibration(toCalibrationMatchRows(trainRows))
-    const teamModel = buildTeamCalibrationModelFromBinaryRows(trainRows, teamProfiles, (conf) => fit.calibrate(conf))
+    // Fit the production pipeline on this window's training rows only. detail: 'lite'
+    // skips the walk-forward/feedback layers this function feeds — a full fit would
+    // recurse back into this very function.
+    const windowFit = getPredictionCalibrationContext({ investments: historyFromRows(trainRows), config, detail: 'lite' })
+    const { calibrateProbabilityForMatch: _anchor, ...windowFitNoAnchor } = windowFit
 
-    const predictCalibrated = (row) => {
-      const base = clamp(fit.calibrate(row.conf), 0.02, 0.98)
-      const teamAdj = teamModel.getMatchAdjustment(row.homeTeam, row.awayTeam)
-      return clamp(base + teamAdj.shift, 0.02, 0.98)
-    }
+    // Calibrated = the production pipeline without the market anchor; Blended = the
+    // production pipeline with the anchor exactly as production applies it.
+    const predictCalibrated = (row) => predictMatchProbability(row.match, config, windowFitNoAnchor)
     const predictMarket = (row) => {
       const implied = toImpliedProbability(row.odds, 0.02, 0.98)
       return Number.isFinite(implied) ? implied : clamp(row.conf, 0.02, 0.98)
     }
-    const predictBlended = (row) => {
-      const calibrated = predictCalibrated(row)
-      const implied = predictMarket(row)
-      const teamAdj = teamModel.getMatchAdjustment(row.homeTeam, row.awayTeam)
-      const oddsWeightBase = clamp(0.12 + getWeightFactor(config.weightOdds, 0.06) * 0.95, 0.08, 0.55)
-      const oddsAnchor = clamp(oddsWeightBase + (1 - teamAdj.reliability) * 0.2, 0.08, 0.72)
-      return clamp(calibrated * (1 - oddsAnchor) + implied * oddsAnchor, 0.02, 0.98)
-    }
+    const predictBlended = (row) => predictMatchProbability(row.match, config, windowFit)
 
     const divisor = Math.max(1, toNumber(config.kellyDivisor, 4))
     const strategyCalibrated = includeStrategy ? simulateKellyStrategyByRows(testRows, predictCalibrated, config, divisor) : { roi: null }
@@ -2744,6 +2649,18 @@ export const getPredictionCalibrationContext = (options = {}) => {
       data_revision: isolated ? null : analyticsMemo.revision,
       fitted_at: new Date().toISOString(),
       training_samples: sampleCount,
+      // 拟合后真正生效的标量（不只是顶层配置键），让快照能对照出当时的模型实际取值；
+      // 完整曲线（回归系数、isotonic 节点）可由训练样本重建，此处记录其规模与可靠度。
+      fitted: {
+        confMultiplier: Number(confMultiplier.toFixed(4)),
+        fseMultiplier: Number(fseMultiplier.toFixed(4)),
+        oddsWeightBase: Number(oddsWeightBase.toFixed(4)),
+        marketLean: Number(toNumber(blendSummary.marketLean, 0).toFixed(4)),
+        effectiveRecencyWeight: Number(effectiveRecencyWeight.toFixed(4)),
+        isotonicReliability: Number(toNumber(isotonicModel?.reliability, 0).toFixed(4)),
+        isotonicNodes: Array.isArray(isotonicModel?.nodes) ? isotonicModel.nodes.length : 0,
+        learnedFactorsReliability: Number(toNumber(learnedFactors?.reliability, 0).toFixed(4)),
+      },
     },
     detail,
     sampleCount,
@@ -5603,6 +5520,11 @@ const kernelWeight = (d) => {
   return KERNEL_TABLE[4] * Math.pow(ratio, di - 4)
 }
 
+// 可比性下限：一个历史组合只有当其最接近的一对两条腿都至多隔一个 band（dA=1、dB=1，
+// 权重 0.63×0.63）且密度调节取最小值 0.5 时，才算作"可比的证据"。
+// 否则它的核权重低得只是数值上非零——不等于真见过类似的一对。
+const MIN_COMPARABLE_KERNEL_WEIGHT = KERNEL_TABLE[1] * KERNEL_TABLE[1] * 0.5
+
 /**
  * 计算局部密度调节因子
  * 数据稀疏的 band 位置会"拉宽"核函数的有效覆盖，
@@ -5727,7 +5649,7 @@ export const getWeightedObservedFailure = (historicalData = [], oddsA, oddsB, ba
       }
     }
 
-    if (bestKernelW > 1e-6) {
+    if (bestKernelW >= MIN_COMPARABLE_KERNEL_WEIGHT) {
       if (bestIdentity && seenPairs.has(bestIdentity)) return
       if (bestIdentity) seenPairs.add(bestIdentity)
       const w = bestKernelW * temporalW

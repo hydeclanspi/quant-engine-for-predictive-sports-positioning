@@ -37,7 +37,8 @@ export const matchEventKey = (match, investmentId) => {
 
 export const uniqueMatchRows = (investments) => {
   const selected = new Map()
-  const unknown = []
+  const unknown = new Map()
+  const anonymous = []
   for (const investment of investments) {
     for (const match of investment.matches || []) {
       const identity = getMatchSourceIdentity(match, investment.id)
@@ -48,7 +49,16 @@ export const uniqueMatchRows = (investments) => {
       )
       const row = { investment, match, created_at: investment.created_at, eventKey,
         outcome_available_at: availability.at, outcome_availability_basis: availability.basis }
-      if (!eventKey || !identity.selection_key) { unknown.push(row); continue }
+      if (!eventKey || !identity.selection_key) {
+        // 身份不全：能认出事件的（eventKey）或同一拷贝的（match.id）重复项不算新证据；
+        // 既无事件也无场次 id 的匿名行无法与其它行区分，保留原样、不做合并。
+        const coarseKey = eventKey ? JSON.stringify(['event', eventKey, match.id || ''])
+          : match.id ? JSON.stringify(['match', investment.id, match.id]) : ''
+        if (!coarseKey) { anonymous.push(row); continue }
+        const old = unknown.get(coarseKey)
+        if (!old || validTime(row.created_at) < validTime(old.created_at)) unknown.set(coarseKey, row)
+        continue
+      }
       const key = JSON.stringify([eventKey, identity.selection_key])
       const old = selected.get(key)
       // Duplicating a recommendation is not new evidence. Prefer the earliest
@@ -56,7 +66,7 @@ export const uniqueMatchRows = (investments) => {
       if (!old || validTime(row.created_at) < validTime(old.created_at)) selected.set(key, row)
     }
   }
-  return [...selected.values(), ...unknown]
+  return [...selected.values(), ...unknown.values(), ...anonymous]
 }
 
 export const historyFromRows = (rows) => {

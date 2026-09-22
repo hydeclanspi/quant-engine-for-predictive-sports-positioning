@@ -90,6 +90,22 @@ describe('Portfolio Monte Carlo uses the saved return shape and actual money', (
     expect(mc.maxPnl).toBe(450)
     expect(mc.profitProb).toBeCloseTo(profile.profitWinProbability, 2)
   })
+  it('shares one draw across records that reference the same physical event', () => {
+    const recA = { amount: 100, subset: [{ key: 'recA-0', homeTeam: 'A', awayTeam: 'B', atomicProfile: profile, event_id: 'e1' }] }
+    const recB = { amount: 50, subset: [{ key: 'recB-0', homeTeam: 'A', awayTeam: 'B', atomicProfile: profile, event_id: 'e1' }] }
+    const mc = p.runPortfolioMonteCarlo([recA, recB], 50000)
+    // 共享一次抽取：全灭概率仍是单场 miss（0.2），而不是独立两场的 0.04。
+    expect(mc.allLoseProb).toBeCloseTo(0.2, 2)
+    expect(mc.maxPnl).toBe(450)
+    expect(mc.minPnl).toBe(-150)
+  })
+  it('keeps different physical events independent', () => {
+    const recA = { amount: 100, subset: [{ key: 'recA-0', homeTeam: 'A', awayTeam: 'B', atomicProfile: profile, event_id: 'e1' }] }
+    const recB = { amount: 50, subset: [{ key: 'recB-0', homeTeam: 'C', awayTeam: 'D', atomicProfile: profile, event_id: 'e2' }] }
+    const mc = p.runPortfolioMonteCarlo([recA, recB], 50000)
+    // 独立：全灭概率 ≈ 0.2²。
+    expect(mc.allLoseProb).toBeCloseTo(0.04, 2)
+  })
   it('refuses conflicting profiles rather than silently sampling the first', () => {
     const other = buildAtomicMatchProfile({ entries: [{ name: 'win', odds: 2 }], unionProbability: 0.5 })
     const mc = p.runPortfolioMonteCarlo([item, { ...item, subset: [{ ...item.subset[0], atomicProfile: other }] }])

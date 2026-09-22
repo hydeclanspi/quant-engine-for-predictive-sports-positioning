@@ -390,7 +390,9 @@ const runPortfolioMonteCarlo = (packageItems, iterations = 50000) => {
   const combos = activeItems.map((item) => {
     if (!item.subset?.length) issues.add('存在缺少场次的方案，无法模拟。')
     const legMatchIndices = (item.subset || []).map((m) => {
-      const mk = m.key || `${m.homeTeam}-${m.awayTeam}-${m.entry}`
+      // A leg carrying an explicit physical-event id shares one draw across every
+      // record that references it; the record-scoped key remains the fallback.
+      const mk = m.event_id ? `event:${m.event_id}` : (m.key || `${m.homeTeam}-${m.awayTeam}-${m.entry}`)
       const profile = m.atomicProfile?.modelVersion === 'atomic-v2' ? m.atomicProfile : buildAtomicMatchProfile({
         entries: m.entries?.length ? m.entries : [{ name: m.entry || 'legacy', odds: m.odds }],
         unionProbability: m.calibratedP ?? m.adjustedProb ?? m.conf,
@@ -5366,7 +5368,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
           <p className="font-medium text-stone-700 text-xs mt-2 mb-1">▸ 数值精度与模拟保真度</p>
           <p><strong>46. 相关性乘性修正（已停用）</strong>：Entry 相关性对联合概率的乘性修正已不再施加——概率、EV 与方差统一来自原子收益分布的联乘结果，相关性只保留为诊断值。只改联合概率而不改 EV / 方差，就会让期望与收益分布描述两个不同的随机对象（详见第 21 条）。</p>
-          <p><strong>47. 相关性 Monte Carlo</strong>：MC 模拟中，同一场比赛在多个组合中共享唯一采样结果（per match key → single draw），取代此前各组合独立采样的假设。这使 VaR 与全亏概率准确反映组合间的结构性相关风险。</p>
+          <p><strong>47. 共享抽样 Monte Carlo</strong>：MC 模拟中，同一场比赛在多个组合中共享唯一采样结果（per match key → single draw），取代此前各组合独立采样的假设。这使 VaR 与全亏概率准确反映组合间的结构性相关风险。</p>
           <p><strong>48. 余弦退火优化</strong>：Portfolio 权重优化器的投影梯度上升引入余弦退火学习率调度（<code>lr × (0.1 + 0.9 × cos_schedule)</code>），前期快速探索、后期精细收敛，最终解质量提升约 5–15%。</p>
           <p><strong>49. 数值边界防护</strong>：MC 直方图在 P&L 全同值时自动启用退化区间处理（range {'>'} 1e-9 守卫），消除零区间导致的 NaN 索引风险。</p>
           <p><strong>50. PRNG 种子隔离</strong>：xorshift32 种子初始化采用多层哈希（混合组合数量、仓位、赔率与索引偏移），确保不同 portfolio 的 MC 模拟序列充分独立。</p>

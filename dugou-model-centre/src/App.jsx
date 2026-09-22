@@ -181,9 +181,14 @@ function App() {
     root.classList.toggle('liquid-glass-dark', liquidGlassEnabled && isDarkGlassStyle(liquidGlassStyle))
     if (liquidGlassEnabled) root.dataset.liquidGlassStyle = liquidGlassStyle
     else delete root.dataset.liquidGlassStyle
+    // 浏览器外框一体化：深色旗舰主题时 theme-color 跟随深底
+    const meta = document.querySelector('meta[name="theme-color"]')
+    const darkBar = { xuanji: '#060d0a', spectra: '#04070f', starward: '#040b1c' }[liquidGlassStyle]
+    if (meta) meta.setAttribute('content', liquidGlassEnabled && darkBar ? darkBar : '#fbbf24')
     return () => {
       root.classList.remove('liquid-glass-on', 'liquid-glass-composed', 'liquid-glass-dark')
       delete root.dataset.liquidGlassStyle
+      if (meta) meta.setAttribute('content', '#fbbf24')
     }
   }, [liquidGlassEnabled, liquidGlassStyle])
 
