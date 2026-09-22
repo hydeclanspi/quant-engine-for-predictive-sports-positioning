@@ -16,6 +16,7 @@ let storage
 let dispatchEvent
 let getSystemConfig
 let saveSystemConfig
+let initializeFlagshipGlassDefault
 let resetPreviewStore
 
 beforeAll(async () => {
@@ -32,7 +33,7 @@ beforeAll(async () => {
   vi.stubGlobal('CustomEvent', class {
     constructor(type, options) { this.type = type; this.detail = options.detail }
   })
-  ;({ getSystemConfig, saveSystemConfig } = await import('../localData'))
+  ;({ getSystemConfig, saveSystemConfig, initializeFlagshipGlassDefault } = await import('../localData'))
   ;({ resetPreviewStore } = await import('../previewStore'))
 })
 
@@ -78,5 +79,22 @@ describe('liquid glass UI preferences', () => {
       storage.set(key, JSON.stringify({ liquidGlassStyle: style }))
       expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
     }
+  })
+
+  it('migrates existing light themes to the flagship default exactly once', () => {
+    initializeFlagshipGlassDefault()
+    expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
+    expect(JSON.parse(storage.get(key))).toMatchObject({ initialCapital: 12345, liquidGlassEnabled: true })
+
+    // 迁移后用户手动换回浅色主题 → 不再被强制拉回
+    saveSystemConfig({ liquidGlassStyle: 'moon' })
+    initializeFlagshipGlassDefault()
+    expect(getSystemConfig().liquidGlassStyle).toBe('moon')
+  })
+
+  it('leaves an existing flagship choice untouched during migration', () => {
+    storage.set(key, JSON.stringify({ liquidGlassStyle: 'xuanji', initialCapital: 999 }))
+    initializeFlagshipGlassDefault()
+    expect(getSystemConfig().liquidGlassStyle).toBe('xuanji')
   })
 })

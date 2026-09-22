@@ -24,7 +24,7 @@ import { addSettlementTimestamps, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS 
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
-import { DEFAULT_LIQUID_GLASS_STYLE, isLiquidGlassStyle, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
+import { DEFAULT_LIQUID_GLASS_STYLE, isDarkGlassStyle, isLiquidGlassStyle, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
 
 const STORAGE_KEYS = {
   investments: 'dugou.investments.v1',
@@ -524,6 +524,23 @@ export const getSystemConfig = () => {
   merged.pageAmbientThemes = normalizePageAmbientThemes(saved?.pageAmbientThemes)
   merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
   return merged
+}
+
+/* 一次性迁移：把存量用户（非旗舰主题）切到旗舰默认「光谱」，此后尊重任何手动选择。
+ * 与 layoutMode 的 initializeLayoutMode 同款模式；在首次渲染前调用。 */
+const FLAGSHIP_GLASS_MIGRATION_KEY = 'dugou:glass-flagship-spectra.v1'
+export const initializeFlagshipGlassDefault = () => {
+  try {
+    const storage = window.localStorage
+    if (storage.getItem(FLAGSHIP_GLASS_MIGRATION_KEY)) return
+    storage.setItem(FLAGSHIP_GLASS_MIGRATION_KEY, '1')
+    const saved = readJSON(STORAGE_KEYS.systemConfig, null)
+    if (!saved) return // 全新安装：normalize 即走 DEFAULT（spectra）
+    if (isDarkGlassStyle(saved.liquidGlassStyle)) return // 已在使用旗舰主题
+    saveSystemConfig({ liquidGlassStyle: DEFAULT_LIQUID_GLASS_STYLE })
+  } catch {
+    // 存储不可用时静默跳过，交给 normalize 兜底
+  }
 }
 
 export const saveSystemConfig = (configPatch) => {

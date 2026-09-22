@@ -2,7 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
-import { bootstrapCloudSnapshotOnLoad, ensureCurrentMonthSnapshot } from './lib/localData'
+import { bootstrapCloudSnapshotOnLoad, ensureCurrentMonthSnapshot, initializeFlagshipGlassDefault } from './lib/localData'
 import { isOwnerRoute, OWNER_ROUTE_BASENAME } from './lib/displayMode'
 import { getDesignPreviewBase } from './design/labEditions'
 import './index.css'
@@ -12,6 +12,8 @@ import './design/liquidGlassThemes.css'
 import './design/flagshipGlass.css'
 
 const renderApp = () => {
+  // 存量用户一次性切到旗舰「光谱」（只执行一次；之后尊重手动选择）
+  initializeFlagshipGlassDefault()
   // The hidden owner entry behaves like a complete copy of the app mounted at
   // `/arsenal`: every existing absolute navigation automatically retains the
   // prefix, so `/arsenal/dashboard` never falls back into the public demo.
