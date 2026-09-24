@@ -23,16 +23,8 @@ import {
   X,
   RotateCcw,
 } from 'lucide-react'
-import {
-  computeAdaptiveWeightSuggestions,
-  getExpectedVsActualRows,
-  getKellyDivisorBacktest,
-  getKellyDivisorMatrix,
-  getModeKellyRecommendations,
-  getModelValidationSnapshot,
-  getPredictionCalibrationContext,
-  normalizeAjrForModel,
-} from '../lib/analytics'
+import { normalizeAjrForModel } from '../lib/analytics'
+import { startConsoleAnalytics } from '../lib/consoleAnalyticsClient'
 import {
   PAGE_AMBIENT_THEME_DEFAULTS,
   exportDataBundle,
@@ -40,6 +32,7 @@ import {
   getCloudSyncStatus,
   getInvestments,
   getSystemConfig,
+  getTeamProfiles,
   importDataBundle,
   pullCloudSnapshotNow,
   runCloudSyncNow,
@@ -63,13 +56,14 @@ import {
 } from '../data/futureFeaturesRoadmap'
 import { LogoGalleryExplorer, LogoGalleryPreview } from '../components/LogoGalleryExplorer'
 import TimeMachineModalContent from '../components/TimeMachineModalContent'
+import Modal from '../components/Modal'
 import { LAYOUT_MODES as LAYOUT_MODE_OPTIONS, getPreferredLayoutMode } from '../lib/layoutMode'
 import { isPreviewMode } from '../lib/displayMode'
 import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import InspirationIcon from '../components/InspirationIcon'
 import ComposedGlassScene from '../components/ComposedGlassScene'
-import { LIQUID_GLASS_THEMES, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
+import { LIQUID_GLASS_THEMES, normalizeLiquidGlassStyle, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -2102,7 +2096,7 @@ const DEFAULT_PRIORS = {
   weightFse: 0.07,
 }
 
-function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }) {
+function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, adaptiveSuggestions, analysisError }) {
   const maskText = usePreviewTextMask()
   const [showBoundsEditor, setShowBoundsEditor] = useState(false)
   const [editingWeight, setEditingWeight] = useState(null)
@@ -2110,7 +2104,7 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
   const [tempBounds, setTempBounds] = useState({})
   const [applyStatus, setApplyStatus] = useState('')
 
-  const suggestions = useMemo(() => computeAdaptiveWeightSuggestions(), [dataVersion, config])
+  const suggestions = adaptiveSuggestions || { suggestions: [], sampleCount: null, minSamples: 50, ready: false }
 
   const adaptiveConfig = config.adaptiveWeights || {}
   const bounds = adaptiveConfig.bounds || DEFAULT_BOUNDS
@@ -2247,7 +2241,7 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
       </div>
 
       <p className="text-xs text-stone-500 mb-4">
-        按时间窗口优化完整预测管道的 Brier 误差，再以后置 Brier／LogLoss 检查自动更新。有效样本: {suggestions.sampleCount} / {suggestions.minSamples} 最小
+        按时间窗口优化完整预测管道的 Brier 误差，再以后置 Brier／LogLoss 检查自动更新。{adaptiveSuggestions ? `有效样本: ${suggestions.sampleCount} / ${suggestions.minSamples} 最小` : analysisError ? '权重建议暂不可用' : '权重建议正在后台计算…'}
         {suggestions.lastUpdateAt && <span className="ml-2">· 上次更新: {new Date(suggestions.lastUpdateAt).toLocaleDateString()}</span>}
         {suggestions.updateCount > 0 && <span className="ml-2">· 累计调整: {suggestions.updateCount} 次</span>}
       </p>
@@ -2255,13 +2249,13 @@ function AdaptiveWeightCard({ config, setConfig, saveSystemConfig, dataVersion }
       <ApproximateTimeOrderNote sources={[suggestions]} className="mb-4 text-[11px] leading-relaxed text-amber-700" />
 
       <AdaptiveLoopDiagram
-        sampleCount={suggestions.sampleCount}
-        updateCount={suggestions.updateCount || 0}
+        sampleCount={suggestions.sampleCount ?? '—'}
+        updateCount={suggestions.updateCount ?? adaptiveConfig.updateCount ?? 0}
       />
 
       {!suggestions.ready ? (
         <div className="p-4 bg-stone-50 rounded-xl text-center">
-          <p className="text-sm text-stone-500">暂未满足时间验证条件 ({suggestions.sampleCount}/{suggestions.minSamples})</p>
+          <p className="text-sm text-stone-500">{!adaptiveSuggestions ? (analysisError || '权重建议正在后台计算，可继续调整外观和浏览页面。') : `暂未满足时间验证条件 (${suggestions.sampleCount}/${suggestions.minSamples})`}</p>
           <p className="text-xs text-stone-400 mt-1">需要足够的独立赛事、结果可用时间和前后验证窗口；旧记录若缺少已记录的结算时间，按“创建后 72 小时视为已知”参与排序。</p>
         </div>
       ) : (
@@ -2768,6 +2762,63 @@ function ConsoleCursorTrail() {
   )
 }
 
+function LiquidGlassQualityConfirmation({ onClose, onConfirm }) {
+  const dialogRef = useRef(null)
+  const cancelRef = useRef(null)
+
+  useEffect(() => {
+    const trigger = document.activeElement
+    cancelRef.current?.focus()
+    // Shared Modal supplies Escape/backdrop dismissal; label its icon-only close control.
+    dialogRef.current?.querySelector('button')?.setAttribute('aria-label', '关闭满画质提示')
+    return () => {
+      if (trigger?.isConnected && typeof trigger.focus === 'function') trigger.focus()
+    }
+  }, [])
+
+  const keepFocusInDialog = (event) => {
+    if (event.key !== 'Tab') return
+    const controls = dialogRef.current?.querySelectorAll('button:not([disabled])')
+    if (!controls?.length) return
+    const first = controls[0]
+    const last = controls[controls.length - 1]
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault()
+      last.focus()
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault()
+      first.focus()
+    }
+  }
+
+  return createPortal(
+    <div ref={dialogRef} className="glass-quality-dialog" role="alertdialog" aria-modal="true" aria-label="开启满画质？" aria-describedby="liquid-glass-quality-warning" onKeyDown={keepFocusInDialog}>
+      <Modal
+        onClose={onClose}
+        data={{
+          title: '开启满画质？',
+          content: (
+            <div className="max-w-xl">
+              <div className="flex items-start gap-3">
+                <AlertTriangle size={22} className="shrink-0 text-amber-600 mt-0.5" aria-hidden="true" />
+                <div id="liquid-glass-quality-warning" className="space-y-3 text-sm leading-relaxed">
+                  <p>满画质保留所有主题原有的完整效果，持续渲染成本较高。设备配置不足时，可能出现严重卡顿，甚至页面无响应。</p>
+                  <p>确认后才会启用。你可以随时回到「界面布局」切换为流畅模式。</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap justify-end gap-3 mt-6">
+                <button ref={cancelRef} type="button" onClick={onClose} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 hover:bg-stone-50">取消，保持流畅</button>
+                <button type="button" onClick={onConfirm} className="rounded-xl border border-sky-600 bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700">确认开启满画质</button>
+              </div>
+            </div>
+          ),
+        }}
+      />
+    </div>,
+    document.body,
+  )
+}
+
 export default function ParamsPage({ openModal, previewLayoutMode }) {
   const labels = useLabels()
   const maskText = usePreviewTextMask()
@@ -2775,6 +2826,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
   const [expandedFactor, setExpandedFactor] = useState(null)
   const [factorRange, setFactorRange] = useState('4w')
   const [config, setConfig] = useState(() => getSystemConfig())
+  const [showQualityConfirmation, setShowQualityConfirmation] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
   const [excelStatus, setExcelStatus] = useState('')
   const [excelPreview, setExcelPreview] = useState(null)
@@ -2793,6 +2845,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     kellyMatrix: [],
     kellyBacktest: EMPTY_KELLY_BACKTEST,
     calibrationContext: EMPTY_CALIBRATION_CONTEXT,
+    adaptiveSuggestions: null,
     modelValidation: EMPTY_MODEL_VALIDATION,
   }))
   const [analyticsProgress, setAnalyticsProgress] = useState(() => ({
@@ -2820,7 +2873,9 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
   const [fitTrajectoryWindow, setFitTrajectoryWindow] = useState(120)
 
   useEffect(() => {
-    const refresh = () => {
+    const refresh = (event) => {
+      // 主题/画质改变由各自控件更新；无需重跑四组模型分析或重置未保存参数。
+      if (event?.detail?.uiOnly) return
       setSyncStatus(getCloudSyncStatus())
       setDataVersion((prev) => prev + 1)
       setTmIsInMode(isInTimeMachineMode())
@@ -2874,119 +2929,30 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
   }, [tmPage])
 
   useEffect(() => {
-    let cancelled = false
-    const tasks = []
-    const scheduleTask = (task) => {
-      if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
-        const idleId = window.requestIdleCallback(
-          () => {
-            if (!cancelled) task()
-          },
-          { timeout: 120 },
-        )
-        tasks.push({ type: 'idle', id: idleId })
-        return
-      }
-      const timeoutId = window.setTimeout(() => {
-        if (!cancelled) task()
-      }, 0)
-      tasks.push({ type: 'timeout', id: timeoutId })
-    }
-    const failPhase = (phase, error) => {
-      console.error(`[ParamsPage] ${phase} 计算失败`, error)
-      if (cancelled) return
-      setAnalyticsProgress((prev) => ({ ...prev, phase: `${phase} 失败`, error: `${phase} 计算失败，请刷新重试` }))
-    }
-
-    setAnalyticsProgress({
-      rating: false,
-      kelly: false,
-      calibration: false,
-      validation: false,
-      phase: '基础指标计算中...',
-      error: '',
+    setAnalyticsProgress({ rating: false, kelly: false, calibration: false, validation: false, phase: '基础指标计算中...', error: '' })
+    // Do not leave obsolete suggestions actionable while a new data revision runs.
+    setAnalyticsData({
+      ratingRows: [],
+      modeKellyRows: [],
+      kellyMatrix: [],
+      kellyBacktest: EMPTY_KELLY_BACKTEST,
+      calibrationContext: EMPTY_CALIBRATION_CONTEXT,
+      adaptiveSuggestions: null,
+      modelValidation: EMPTY_MODEL_VALIDATION,
     })
-    setAnalyticsData((prev) => ({
-      ...prev,
-      modelValidation: {
-        ...EMPTY_MODEL_VALIDATION,
-        message: '模型验证计算中...',
+    const preview = isPreviewMode()
+    return startConsoleAnalytics({
+      snapshot: { config: getSystemConfig(), investments: getInvestments(), teamProfiles: getTeamProfiles() },
+      onPhase: (phase, result) => {
+        const next = { ...result }
+        if (preview && phase === 'rating') next.ratingRows = buildPreviewRatingRows(result.ratingRows)
+        if (preview && phase === 'calibration') next.calibrationContext = buildPreviewCalibrationContext(result.calibrationContext)
+        setAnalyticsData((prev) => ({ ...prev, ...next }))
+        const nextLabel = { rating: 'Kelly 回测计算中...', kelly: '时间近因与权重校准计算中...', calibration: '模型收口验证计算中...', validation: '计算完成' }
+        setAnalyticsProgress((prev) => ({ ...prev, [phase]: true, phase: nextLabel[phase] }))
       },
-    }))
-
-    scheduleTask(() => {
-      try {
-        const realRatingRows = getExpectedVsActualRows(240)
-        // Preview/demo replicates the production full-state trajectory (climb
-        // then hold) instead of the sagging curated set — see helper above.
-        const ratingRows = isPreviewMode() ? buildPreviewRatingRows(realRatingRows) : realRatingRows
-        const modeKellyRows = getModeKellyRecommendations()
-        if (cancelled) return
-        setAnalyticsData((prev) => ({ ...prev, ratingRows, modeKellyRows }))
-        setAnalyticsProgress((prev) => ({ ...prev, rating: true, phase: 'Kelly 回测计算中...' }))
-      } catch (error) {
-        failPhase('基础指标', error)
-        return
-      }
-
-      scheduleTask(() => {
-        try {
-          const kellyMatrix = getKellyDivisorMatrix()
-          const kellyBacktest = getKellyDivisorBacktest()
-          if (cancelled) return
-          setAnalyticsData((prev) => ({ ...prev, kellyMatrix, kellyBacktest }))
-          setAnalyticsProgress((prev) => ({ ...prev, kelly: true, phase: '时间近因与校准计算中...' }))
-        } catch (error) {
-          failPhase('Kelly 回测', error)
-          return
-        }
-
-        scheduleTask(() => {
-          try {
-            const calibrationContext = getPredictionCalibrationContext({ detail: 'full' })
-            if (cancelled) return
-            // In preview/demo mode, replay the production (Live) regression +
-            // scatter + calibration multiplier so the 回归分析校准 card mirrors
-            // production, with R² pinned to 34.6% (see buildPreviewCalibrationContext).
-            const previewCalibrationContext = isPreviewMode()
-              ? buildPreviewCalibrationContext(calibrationContext)
-              : calibrationContext
-            setAnalyticsData((prev) => ({ ...prev, calibrationContext: previewCalibrationContext }))
-            setAnalyticsProgress((prev) => ({ ...prev, calibration: true, phase: '模型收口验证计算中...' }))
-          } catch (error) {
-            failPhase('时间近因机制', error)
-            return
-          }
-
-          scheduleTask(() => {
-            try {
-              const modelValidation = getModelValidationSnapshot()
-              if (cancelled) return
-              setAnalyticsData((prev) => ({ ...prev, modelValidation }))
-              setAnalyticsProgress((prev) => ({
-                ...prev,
-                validation: true,
-                phase: '计算完成',
-                error: '',
-              }))
-            } catch (error) {
-              failPhase('模型收口验证', error)
-            }
-          })
-        })
-      })
+      onError: (error) => setAnalyticsProgress((prev) => ({ ...prev, phase: '分析不可用', error })),
     })
-
-    return () => {
-      cancelled = true
-      tasks.forEach((task) => {
-        if (task.type === 'idle' && typeof window !== 'undefined' && typeof window.cancelIdleCallback === 'function') {
-          window.cancelIdleCallback(task.id)
-          return
-        }
-        window.clearTimeout(task.id)
-      })
-    }
   }, [dataVersion])
 
   const { ratingRows, modeKellyRows, kellyMatrix, kellyBacktest, calibrationContext, modelValidation } = analyticsData
@@ -4067,7 +4033,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
       weightFse: normalizeWeight(config.weightFse, 0.07),
     }
     saveSystemConfig(normalized)
-    setConfig(normalized)
+    setConfig((prev) => ({ ...prev, ...normalized }))
     setSaveStatus('已保存')
     setTimeout(() => setSaveStatus(''), 1200)
   }
@@ -4337,6 +4303,21 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     setConfig((prev) => ({ ...prev, liquidGlassEnabled: next }))
   }
   const liquidGlassStyle = normalizeLiquidGlassStyle(config.liquidGlassStyle)
+  const liquidGlassQuality = normalizeLiquidGlassQuality(config.liquidGlassQuality)
+  const applyLiquidGlassQuality = (quality) => {
+    const normalized = normalizeLiquidGlassQuality(quality)
+    saveSystemConfig({ liquidGlassQuality: normalized })
+    setConfig((prev) => ({ ...prev, liquidGlassQuality: normalized }))
+    setShowQualityConfirmation(false)
+  }
+  const selectLiquidGlassQuality = (quality) => {
+    if (quality === liquidGlassQuality) return
+    if (quality === 'full') {
+      setShowQualityConfirmation(true)
+      return
+    }
+    applyLiquidGlassQuality('smooth')
+  }
   const setLiquidGlassStyle = (style) => {
     saveSystemConfig({ liquidGlassStyle: style, liquidGlassStylePinned: true })
     setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
@@ -4344,10 +4325,11 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
 
   return (
     <div className="page-shell page-content-wide console-motion-scope">
+      {showQualityConfirmation && <LiquidGlassQualityConfirmation onClose={() => setShowQualityConfirmation(false)} onConfirm={() => applyLiquidGlassQuality('full')} />}
       {/* demo/preview 专属：右侧分区滚动导航（fixed 定位，DOM 位置不影响布局） */}
       {isPreviewMode() && !isDesignPreview() && <ConsoleAnchorRail />}
       {/* demo/preview 专属：覆盖右半区的光标星点拖尾（fixed 全屏 canvas，pointer-events:none） */}
-      {isPreviewMode() && !isDesignPreview() && <ConsoleCursorTrail />}
+      {liquidGlassQuality === 'full' && isPreviewMode() && !isDesignPreview() && <ConsoleCursorTrail />}
       <div className="mb-6">
         <div className="mb-2.5">
           <span className="inline-flex max-w-[460px] rounded-r-xl rounded-l-none border border-sky-200/90 bg-gradient-to-r from-sky-100/75 via-cyan-50/85 to-blue-100/75 px-3 py-1.5 text-[10.5px] font-semibold leading-4 tracking-[0.03em] text-sky-700/90 backdrop-blur-md">
@@ -4369,6 +4351,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           {analyticsProgress.error && (
             <span className="inline-flex items-center px-2 py-0.5 rounded-full bg-rose-50 text-rose-600 border border-rose-200 text-[11px]">
               {analyticsProgress.error}
+              <button type="button" className="ml-2 underline" onClick={() => setDataVersion((value) => value + 1)}>重试分析</button>
             </span>
           )}
         </div>
@@ -4451,7 +4434,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                       </label>
                     </div>
                   ) : (
-                    <span>样本计算中...</span>
+                    <span>{analyticsProgress.error ? '分析不可用' : '样本计算中...'}</span>
                   )}
                 </div>
                 <div className="mt-2 h-[128px] rounded-xl border border-sky-100/85 bg-[linear-gradient(140deg,rgba(239,246,255,0.68),rgba(255,255,255,0.94)_48%,rgba(245,243,255,0.62))] px-2.5 py-2">
@@ -4528,7 +4511,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 {ratingFitScore !== null ? ratingFitScore.toFixed(2) : '--'}
               </div>
               <p className="mt-1 text-xs text-emerald-600">
-                {analyticsProgress.rating ? `样本 ${ratingRows.length}` : '样本计算中...'}
+                {analyticsProgress.rating ? `样本 ${ratingRows.length}` : analyticsProgress.error ? '分析不可用' : '样本计算中...'}
               </p>
 
               <div className="mt-2.5 flex items-center justify-between gap-1.5">
@@ -4734,7 +4717,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             <div className="flex items-center justify-between mb-2">
               <div className="cursor-pointer" onClick={openKellyModal}>
                 <span className="text-sm text-stone-700">平均 Kelly 分母</span>
-                <span className="text-2xl font-bold text-amber-600 ml-3">{recommendedKellyDivisor}</span>
+                <span className="text-2xl font-bold text-amber-600 ml-3">{analyticsProgress.rating ? recommendedKellyDivisor : '—'}</span>
                 {(config.kellyAdjustment ?? 0) !== 0 && !config.kellyOverrideEnabled && (
                   <span className={`ml-2 text-sm font-medium ${(config.kellyAdjustment ?? 0) >= 0 ? 'text-emerald-600' : 'text-rose-500'}`}>
                     {(config.kellyAdjustment ?? 0) >= 0 ? '+' : ''}{config.kellyAdjustment}
@@ -4744,6 +4727,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
               <button
                 onClick={(e) => {
                   e.stopPropagation()
+                  if (!analyticsProgress.rating) return
                   const newConfig = { ...config, kellyOverrideEnabled: false, kellyDivisor: recommendedKellyDivisor + (config.kellyAdjustment ?? 0) }
                   setConfig(newConfig)
                   saveSystemConfig(newConfig)
@@ -4751,7 +4735,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                   setSaveStatus('已保存')
                   setTimeout(() => setSaveStatus(''), 1200)
                 }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                disabled={!analyticsProgress.rating}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
                   !config.kellyOverrideEnabled
                     ? 'bg-amber-100 text-amber-700 border border-amber-200'
                     : 'bg-stone-100 text-stone-500 border border-stone-200 hover:bg-stone-200'
@@ -4804,6 +4789,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 {pendingKellyAdjustment !== null && pendingKellyAdjustment !== (config.kellyAdjustment ?? 0) && (
                   <button
                     onClick={() => {
+                      if (!analyticsProgress.rating) return
                       const adj = pendingKellyAdjustment
                       const newDivisor = Math.max(1, Number((recommendedKellyDivisor + adj).toFixed(1)))
                       const newConfig = { ...config, kellyAdjustment: adj, kellyDivisor: newDivisor, kellyOverrideEnabled: false }
@@ -4813,7 +4799,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                       setSaveStatus('已保存')
                       setTimeout(() => setSaveStatus(''), 1200)
                     }}
-                    className="ml-2 px-2 py-1 text-[10px] font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-lg hover:bg-emerald-200 transition-colors"
+                    disabled={!analyticsProgress.rating}
+                    className="ml-2 px-2 py-1 text-[10px] font-medium text-emerald-700 bg-emerald-100 border border-emerald-200 rounded-lg hover:bg-emerald-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     确认
                   </button>
@@ -4999,6 +4986,23 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           >
             {liquidGlassEnabled ? '已开启' : '已关闭'}
           </button>
+        </div>
+        <div className="mt-4 pt-4 border-t border-stone-100">
+          <span id="liquid-glass-quality-label" className="text-sm text-stone-700">画质模式</span>
+          <p id="liquid-glass-quality-description" className="text-xs text-stone-500 mt-1">适用于全部背景主题 · 默认流畅，减少持续渲染负担；满画质保留完整效果。</p>
+          <div role="group" aria-labelledby="liquid-glass-quality-label" aria-describedby="liquid-glass-quality-description" className="flex flex-wrap gap-2 mt-3">
+            {[{ key: 'smooth', label: '流畅' }, { key: 'full', label: '满画质' }].map((quality) => (
+              <button
+                key={quality.key}
+                type="button"
+                onClick={() => selectLiquidGlassQuality(quality.key)}
+                aria-pressed={liquidGlassQuality === quality.key}
+                className={`rounded-lg border px-4 py-2 text-sm transition-colors ${liquidGlassQuality === quality.key ? 'border-sky-200 bg-sky-100 text-sky-700' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'}`}
+              >
+                {quality.label}
+              </button>
+            ))}
+          </div>
         </div>
         {liquidGlassEnabled && (
           <div className="mt-4">
@@ -5192,6 +5196,10 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </span>
         </div>
 
+        {!analyticsProgress.calibration ? (
+          <p className="text-sm text-stone-500">{analyticsProgress.error || '回归校准正在后台计算，可继续浏览页面。'}</p>
+        ) : (
+          <>
         <div className="grid grid-cols-2 gap-4 mb-4">
           <div className="p-4 bg-gradient-to-br from-violet-50 to-indigo-50 rounded-xl border border-violet-200">
             <div className="flex items-center justify-between mb-2">
@@ -5360,6 +5368,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         <p className="text-xs text-stone-400 mt-4 text-center">
           回归校准乘数已自动应用于新建投资的建议金额计算。散点在 y=x 线上方表示实际表现优于预期。
         </p>
+          </>
+        )}
       </div>
 
       <div className="order-6 glow-card relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/30 to-cyan-50/30 p-6 mb-6">
@@ -5442,11 +5452,11 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
             <ConsoleCardIcon IconComp={Clock3} /> 时间近因机制
           </h3>
           <span className="text-xs text-stone-400">
-            {analyticsProgress.calibration ? `样本 ${calibrationContext.sampleCount} · n=${calibrationContext.n}` : '计算中...'}
+            {analyticsProgress.calibration ? `样本 ${calibrationContext.sampleCount} · n=${calibrationContext.n}` : analyticsProgress.error ? '不可用' : '计算中...'}
           </span>
         </div>
         {!analyticsProgress.calibration ? (
-          <p className="text-sm text-stone-500">时间近因与球队校准计算中，请稍候...</p>
+          <p className="text-sm text-stone-500">{analyticsProgress.error || '时间近因与球队校准正在后台计算，可继续浏览页面。'}</p>
         ) : (
           <>
             {/* ── 主角：Conf / FSE 近因校准结果 ── */}
@@ -5567,7 +5577,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </div>
           <button
             onClick={() => applyKellyDivisor(kellyBacktest.globalBest?.divisor)}
-            disabled={!kellyBacktest.globalBest}
+            disabled={!analyticsProgress.kelly || !kellyBacktest.globalBest}
             className="px-3 py-2 rounded-xl text-sm bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             一键应用全局建议
@@ -5578,7 +5588,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           <p className="mb-3 text-xs text-amber-700">已排除 {kellyBacktest.excludedSamples} 笔预测口径不明或数据不完整的历史记录；不以平均评分代替整串概率。</p>
         )}
         {!analyticsProgress.kelly ? (
-          <p className="text-sm text-stone-500">Kelly 回测计算中，请稍候...</p>
+          <p className="text-sm text-stone-500">{analyticsProgress.error || 'Kelly 回测正在后台计算，可继续浏览页面。'}</p>
         ) : !hasKellyBacktest ? (
           <p className="text-sm text-stone-500">暂无可回测的正仓位样本，需有明确预测快照（或旧版单场单选概率）及结算数据。</p>
         ) : (
@@ -5664,7 +5674,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         </div>
 
         {!analyticsProgress.validation ? (
-          <p className="text-sm text-stone-500">模型收口验证计算中，请稍候...</p>
+          <p className="text-sm text-stone-500">{analyticsProgress.error || '模型收口验证正在后台计算，可继续浏览页面。'}</p>
         ) : !modelValidation.ready ? (
           <p className="text-sm text-stone-500">{modelValidation.message || '暂无验证结果。'}</p>
         ) : (
@@ -5830,7 +5840,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
       {/* 自适应权重优化 Beta — my-4 widens the gap to the Kelly card above and the
           模型收口 card below from 24px to 40px, a touch above the column's mb-9 rhythm. */}
       <div className="order-2 my-4">
-        <AdaptiveWeightCard config={config} setConfig={setConfig} saveSystemConfig={saveSystemConfig} dataVersion={dataVersion} />
+        <AdaptiveWeightCard config={config} setConfig={setConfig} saveSystemConfig={saveSystemConfig} adaptiveSuggestions={analyticsData.adaptiveSuggestions} analysisError={analyticsProgress.error} />
       </div>
 
       <div className="order-5 glow-card bg-white rounded-2xl border border-stone-100 p-6 mb-9">

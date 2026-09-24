@@ -24,7 +24,7 @@ import { addSettlementTimestamps, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS 
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
-import { DEFAULT_LIQUID_GLASS_STYLE, isDarkGlassStyle, isLiquidGlassStyle, normalizeLiquidGlassStyle } from '../design/liquidGlassThemes'
+import { DEFAULT_LIQUID_GLASS_STYLE, DEFAULT_LIQUID_GLASS_QUALITY, isDarkGlassStyle, isLiquidGlassStyle, normalizeLiquidGlassStyle, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
 
 const STORAGE_KEYS = {
   investments: 'dugou.investments.v1',
@@ -130,6 +130,7 @@ const DEFAULT_SYSTEM_CONFIG = {
   liquidGlassEnabled: true,
   // 背景主题选项统一维护于 design/liquidGlassThemes。
   liquidGlassStyle: DEFAULT_LIQUID_GLASS_STYLE,
+  liquidGlassQuality: DEFAULT_LIQUID_GLASS_QUALITY,
 }
 
 const DEFAULT_TEAM_PROFILES = [
@@ -364,18 +365,18 @@ const readJSON = (key, fallback) => {
   }
 }
 
-const writeJSON = (key, value) => {
+const writeJSON = (key, value, options = {}) => {
   if (!isBrowser) return
   // Preview mode: writes are redirected to an in-memory store so the
   // public-facing demo never persists to the owner's localStorage or
   // syncs to the cloud snapshot bucket.
   if (isPreviewMode()) {
     previewWrite(key, value)
-    window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key, preview: true } }))
+    window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key, ...options, preview: true } }))
     return
   }
   window.localStorage.setItem(key, JSON.stringify(value))
-  window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key } }))
+  window.dispatchEvent(new CustomEvent('dugou:data-changed', { detail: { key, ...options } }))
   if (
     !cloudBootstrapInProgress &&
     (
@@ -515,6 +516,8 @@ export const getSystemConfig = () => {
       merged.liquidGlassStyle = currentConfig.liquidGlassStyle
     }
     merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
+    // 画质属于当前设备偏好；历史快照不能替设备开启满画质。
+    merged.liquidGlassQuality = normalizeLiquidGlassQuality(currentConfig?.liquidGlassQuality)
     return merged
   }
 
@@ -523,6 +526,7 @@ export const getSystemConfig = () => {
   const merged = { ...DEFAULT_SYSTEM_CONFIG, ...(saved || {}) }
   merged.pageAmbientThemes = normalizePageAmbientThemes(saved?.pageAmbientThemes)
   merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
+  merged.liquidGlassQuality = normalizeLiquidGlassQuality(merged.liquidGlassQuality)
   return merged
 }
 
@@ -547,15 +551,19 @@ export const saveSystemConfig = (configPatch) => {
   // 允许保存UI相关配置即使在时光穿越模式中
   if (!configPatch) return getSystemConfig()
 
-  const current = getSystemConfig()
+  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle', 'liquidGlassStylePinned', 'liquidGlassQuality']
+  const isOnlyUIConfig = Object.keys(configPatch).every(key => UI_CONFIG_KEYS.includes(key))
+  // 浏览历史时只把 UI 改动写到当前存储，不能把历史业务参数一起写回。
+  const current = isOnlyUIConfig && isInTimeMachineMode()
+    ? { ...DEFAULT_SYSTEM_CONFIG, ...(readJSON(STORAGE_KEYS.systemConfig, null) || {}) }
+    : getSystemConfig()
   const next = {
     ...current,
     ...(configPatch || {}),
   }
+  next.liquidGlassQuality = normalizeLiquidGlassQuality(next.liquidGlassQuality)
 
-  // 如果只是改变UI偏好（pageAmbientThemes / liquidGlassEnabled / liquidGlassStyle），即使在时光穿越中也允许
-  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle', 'liquidGlassStylePinned']
-  const isOnlyUIConfig = Object.keys(configPatch).every(key => UI_CONFIG_KEYS.includes(key))
+  // 如果只是改变 UI 偏好，即使在时光穿越中也允许。
   if (!isOnlyUIConfig && !checkReadOnlyMode('Update System Config')) {
     // 返回当前配置但不保存
     return next
@@ -569,7 +577,7 @@ export const saveSystemConfig = (configPatch) => {
   }
 
   if (isOnlyUIConfig || isInTimeMachineMode() === false) {
-    writeJSON(STORAGE_KEYS.systemConfig, next)
+    writeJSON(STORAGE_KEYS.systemConfig, next, isOnlyUIConfig ? { uiOnly: true } : {})
   }
 
   return next
@@ -1213,10 +1221,11 @@ const unionLedgerById = (localList, incomingList) => {
   return [...map.values()]
 }
 
-// Flat-merge config (incoming wins per key) EXCEPT the ledger arrays, which
-// are unioned so neither side's entries are dropped.
+// Incoming wins except unioned ledgers and this device's rendering budget.
+// A snapshot from a powerful device must never silently enable full quality.
 const mergeSystemConfig = (localCfg, incomingCfg) => {
   const merged = { ...(localCfg || {}), ...(incomingCfg || {}) }
+  merged.liquidGlassQuality = normalizeLiquidGlassQuality(localCfg?.liquidGlassQuality)
   LEDGER_CONFIG_KEYS.forEach((key) => {
     merged[key] = unionLedgerById(localCfg?.[key], incomingCfg?.[key])
   })
@@ -1279,7 +1288,9 @@ const applyDataBundle = (bundle, mode = 'replace') => {
     return true
   }
 
-  writeJSON(STORAGE_KEYS.systemConfig, { ...DEFAULT_SYSTEM_CONFIG, ...incomingConfig })
+  // Read storage directly: getSystemConfig would recurse during genesis setup.
+  const deviceQuality = normalizeLiquidGlassQuality(readJSON(STORAGE_KEYS.systemConfig, null)?.liquidGlassQuality)
+  writeJSON(STORAGE_KEYS.systemConfig, { ...DEFAULT_SYSTEM_CONFIG, ...incomingConfig, liquidGlassQuality: deviceQuality })
   writeJSON(STORAGE_KEYS.teamProfiles, incomingTeams.length > 0 ? incomingTeams : DEFAULT_TEAM_PROFILES)
   writeJSON(STORAGE_KEYS.investments, incomingInvestments)
   writeJSON(STORAGE_KEYS.accessLogs, incomingAccessLogs.slice(0, ACCESS_LOG_MAX_ROWS))

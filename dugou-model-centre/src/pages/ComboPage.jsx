@@ -3942,7 +3942,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
     const hydrateFull = () => {
       if (cancelled) return
-      const fullContext = getPredictionCalibrationContext({ detail: 'full' })
+      const fullContext = getPredictionCalibrationContext({ detail: 'full', includeWeightSuggestions: false })
       if (!cancelled) setCalibrationContext(fullContext)
     }
 
@@ -4226,7 +4226,10 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
   const allChecked = checkedMatches.length > 0 && checkedMatches.every(Boolean)
 
   useEffect(() => {
-    const onDataChanged = () => setDataVersion((prev) => prev + 1)
+    const onDataChanged = (event) => {
+      if (event?.detail?.uiOnly === true) return
+      setDataVersion((prev) => prev + 1)
+    }
     window.addEventListener('dugou:data-changed', onDataChanged)
     return () => window.removeEventListener('dugou:data-changed', onDataChanged)
   }, [])

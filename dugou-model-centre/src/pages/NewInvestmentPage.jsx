@@ -496,7 +496,10 @@ export default function NewInvestmentPage() {
   }
 
   useEffect(() => {
-    const onDataChanged = () => setDataVersion((prev) => prev + 1)
+    const onDataChanged = (event) => {
+      if (event?.detail?.uiOnly === true) return
+      setDataVersion((prev) => prev + 1)
+    }
     window.addEventListener('dugou:data-changed', onDataChanged)
     return () => window.removeEventListener('dugou:data-changed', onDataChanged)
   }, [])
@@ -510,7 +513,7 @@ export default function NewInvestmentPage() {
 
     const hydrateFull = () => {
       if (cancelled) return
-      const fullContext = getPredictionCalibrationContext({ detail: 'full' })
+      const fullContext = getPredictionCalibrationContext({ detail: 'full', includeWeightSuggestions: false })
       if (!cancelled) setCalibrationContext(fullContext)
     }
 

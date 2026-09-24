@@ -397,15 +397,134 @@ html.liquid-glass-dark .theme-modern :is(input, select, textarea):not([type='che
 html.liquid-glass-dark .theme-modern :is(input, select, textarea):focus-visible {
   border-color: color-mix(in srgb, var(--fx-accent) 55%, transparent);
 }
-/* Quick Input 大文本域（settle-ai-textarea 自带暖白渐变，深色下整体镜像） */
-html.liquid-glass-dark .settle-ai-textarea {
-  background: var(--fx-well);
+/* AI 录入 / 结算：浅色香槟金字与浮雕只适合亮底。深色旗舰统一使用实色
+ * 文字和稳定暗面；与画质预算无关，full / smooth 都应用同一可读性规则。 */
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) {
+  color: var(--fx-ink);
+}
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) :is(button, textarea, span, p, small) {
+  text-shadow: none;
+  -webkit-text-fill-color: currentColor;
+}
+html.liquid-glass-dark :is(.settle-ai-trigger, .settle-ai-title, .settle-match-ai-title, .qi-ai-result-heading) {
+  color: var(--fx-ink);
+}
+html.liquid-glass-dark :is(
+  .settle-ai-subtitle, .settle-ai-privacy, .settle-ai-result-summary, .settle-ai-diagnostic,
+  .settle-match-ai-caption, .settle-match-ai-tokens, .settle-match-ai-message
+) {
+  color: var(--fx-ink-2);
+}
+html.liquid-glass-dark :is(.settle-match-ai-caption, .settle-match-ai-tokens, .settle-match-ai-message) {
+  font-size: 11px;
+}
+html.liquid-glass-dark .settle-ai-chevron { color: var(--fx-ink-2); }
+html.liquid-glass-dark .settle-ai-body { border-top-color: var(--fx-line); }
+
+/* LAB 标记与结果图标保留少量主题强调，取消金属渐变、高光与循环扫光。 */
+html.liquid-glass-dark :is(.settle-ai-beta-badge, .settle-ai-result-orb, .settle-match-ai-orb) {
+  background: var(--fx-accent-wash);
+  border-color: var(--fx-line);
+  color: var(--fx-accent);
+  box-shadow: none;
+  animation: none;
+}
+html.liquid-glass-dark .settle-ai-beta-badge { font-size: 10px; }
+html.liquid-glass-dark .settle-ai-beta-badge::after { content: none; animation: none; }
+
+/* 结果和单场 AI 是文字密集的小面板：用近不透明暗底，避免白底衬浅字。 */
+html.liquid-glass-dark :is(.settle-ai-result, .settle-match-ai-card, .settle-match-ai-card.is-resolved) {
+  background: var(--fx-solid);
+  border-color: var(--fx-line);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-ai-result .qi-ai-model {
+  background: var(--fx-elev);
+  color: var(--fx-ink-2);
+  font-size: 11px;
+}
+html.liquid-glass-dark .settle-ai-diagnostic.is-warning { color: var(--fx-warn); }
+html.liquid-glass-dark :is(.settle-ai-diagnostic.is-error, .settle-match-ai-message.is-error) { color: var(--fx-neg); }
+
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) textarea:is(.settle-ai-textarea, .settle-match-ai-input) {
+  background: color-mix(in srgb, var(--fx-deep) 88%, var(--fx-ink));
   border-color: var(--fx-line);
   color: var(--fx-ink);
 }
-html.liquid-glass-dark .settle-ai-textarea:focus {
-  border-color: color-mix(in srgb, var(--fx-accent) 55%, transparent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--fx-accent) 22%, transparent);
+html.liquid-glass-dark :is(.settle-ai-textarea, .settle-match-ai-input)::placeholder {
+  color: var(--fx-ink-2);
+  opacity: 1;
+}
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) textarea:focus {
+  background: color-mix(in srgb, var(--fx-deep) 88%, var(--fx-ink));
+  border-color: var(--fx-accent);
+  box-shadow: 0 0 0 3px var(--fx-accent-wash);
+}
+
+/* 主要动作使用实色配对；每场重复出现的操作保持安静的暗色按钮。 */
+html.liquid-glass-dark :is(.settle-ai-parse-btn, .settle-ai-archive-btn) {
+  background: var(--fx-accent);
+  border-color: transparent;
+  color: var(--fx-on-accent);
+  box-shadow: none;
+}
+html.liquid-glass-dark :is(.settle-ai-parse-btn, .settle-ai-archive-btn):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--fx-accent) 86%, white);
+  color: var(--fx-on-accent);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-match-ai-card :is(.settle-match-ai-button, .settle-match-ai-reset),
+html.liquid-glass-dark .settle-ai-quick-card .qi-reinput-btn {
+  background: var(--fx-elev);
+  border-color: var(--fx-line);
+  color: var(--fx-ink);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-match-ai-card :is(.settle-match-ai-button, .settle-match-ai-reset):hover:not(:disabled),
+html.liquid-glass-dark .settle-ai-quick-card .qi-reinput-btn:hover:not(:disabled) {
+  background: var(--fx-accent-wash);
+  border-color: var(--fx-accent);
+  color: var(--fx-ink);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-ai-quick-card .settle-ai-body button.text-stone-500 {
+  color: var(--fx-ink-2);
+}
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) button:focus-visible {
+  outline: 2px solid var(--fx-accent);
+  outline-offset: 3px;
+}
+html.liquid-glass-dark :is(.settle-ai-quick-card, .settle-match-ai-card) button:disabled {
+  background: color-mix(in srgb, var(--fx-deep) 88%, var(--fx-ink));
+  border-color: var(--fx-line);
+  color: var(--fx-ink-2);
+  opacity: 1;
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* 多组合结果仍复用 champagne 类名，但深色主题不保留金白底与棕色字。 */
+html.liquid-glass-dark .settle-ai-quick-card .qi-combo-switcher.is-champagne {
+  background: var(--fx-solid);
+  border-color: var(--fx-line);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-ai-quick-card .qi-combo-switcher-label { color: var(--fx-ink-2); }
+html.liquid-glass-dark .settle-ai-quick-card .qi-combo-switcher .qi-combo-tab {
+  background: var(--fx-elev);
+  border-color: var(--fx-line);
+  color: var(--fx-ink);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-ai-quick-card .qi-combo-switcher .qi-combo-tab:is(.is-active, :hover) {
+  background: var(--fx-accent-wash);
+  border-color: var(--fx-accent);
+  color: var(--fx-ink);
+  box-shadow: none;
+}
+html.liquid-glass-dark .settle-ai-quick-card .qi-combo-switcher .qi-combo-tab > small {
+  color: var(--fx-ink-2);
+  font-size: 11px;
 }
 
 /* ── ⑨ 顶栏与全局件归队 ── */

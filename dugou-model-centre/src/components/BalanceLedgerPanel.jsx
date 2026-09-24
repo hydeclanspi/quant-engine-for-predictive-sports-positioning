@@ -37,7 +37,10 @@ export default function BalanceLedgerPanel({ periodKey = '2w', onConfirmSettle }
   // 自刷新：结算 / 撤销 / 注资都会写入 systemConfig 并派发 dugou:data-changed。
   // 由于本面板是 Modal 的静态内容节点（props 不会再被父级更新），自身监听事件来重算 snapshot。
   useEffect(() => {
-    const handler = () => setTick((t) => t + 1)
+    const handler = (event) => {
+      if (event?.detail?.uiOnly === true) return
+      setTick((t) => t + 1)
+    }
     window.addEventListener('dugou:data-changed', handler)
     return () => window.removeEventListener('dugou:data-changed', handler)
   }, [])

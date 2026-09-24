@@ -69,7 +69,8 @@
  * @module analytics
  */
 
-import { findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveSystemConfig } from './localData'
+import { findTeamProfile, saveSystemConfig } from './localData'
+import { getInvestments, getSystemConfig, getTeamProfiles } from './analyticsSource'
 import { getPrimaryEntryMarket } from './entryParsing'
 import { lookupTeam } from './teamDatabase'
 import { isPreviewMode } from './displayMode'
@@ -161,7 +162,10 @@ if (typeof window !== 'undefined') {
   if (typeof previousInvalidator === 'function') {
     window.removeEventListener(ANALYTICS_CACHE_EVENT, previousInvalidator)
   }
-  const invalidator = () => bumpAnalyticsRevision()
+  const invalidator = (event) => {
+    if (event?.detail?.uiOnly === true) return
+    bumpAnalyticsRevision()
+  }
   window.addEventListener(ANALYTICS_CACHE_EVENT, invalidator)
   window[ANALYTICS_CACHE_HANDLER_KEY] = invalidator
 }
@@ -2450,7 +2454,10 @@ const buildConfOddsCalibrationLayer = (matchRowsInput = null) => {
 export const getPredictionCalibrationContext = (options = {}) => {
   const detail = options?.detail === 'lite' ? 'lite' : 'full'
   const includeHeavy = detail === 'full'
-  const cacheKey = getRevisionCacheKey('calibrationContext', detail)
+  // Weight tuning is Console presentation data, not an input to predictions.
+  // Entry pages need the full prediction fit without this expensive diagnostic.
+  const includeWeightSuggestions = options.includeWeightSuggestions !== false
+  const cacheKey = getRevisionCacheKey('calibrationContext', `${detail}:${includeWeightSuggestions}`)
   const isolated = Array.isArray(options.investments)
   const cached = !isolated && analyticsMemo.calibrationContext.get(cacheKey)
   if (cached) return cached
@@ -2578,7 +2585,7 @@ export const getPredictionCalibrationContext = (options = {}) => {
   // ── FIX #7: Adaptive weight evaluation (side-effect free in render path) ──
   // IMPORTANT: do not write system config while pages are rendering.
   // Auto-apply can be triggered from explicit user actions in Console.
-  const adaptiveWeightSnapshot = includeHeavy && !isolated
+  const adaptiveWeightSnapshot = includeHeavy && !isolated && includeWeightSuggestions
     ? computeAdaptiveWeightSuggestions()
     : {
         suggestions: [],
@@ -2591,7 +2598,9 @@ export const getPredictionCalibrationContext = (options = {}) => {
   const adaptiveWeightResult = {
     ...adaptiveWeightSnapshot,
     applied: false,
-    reason: includeHeavy
+    reason: !includeWeightSuggestions
+      ? 'not_requested'
+      : includeHeavy
       ? comboHyperparams?.ready
         ? 'deferred_apply'
         : 'combo_calibration_not_ready'

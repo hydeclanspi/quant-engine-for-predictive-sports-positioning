@@ -1,0 +1,129 @@
+/* Smooth is a separate rendering budget; full-quality theme rules stay intact.
+ * Soft colour fields are baked into WebP (or static CSS for composed themes).
+ * Glass keeps its translucent fill, bevel, highlight and shadow, without a
+ * backdrop-sampling pass on every card and nested control. */
+.smooth-glass-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  background: #04070f;
+}
+
+.smooth-glass-backdrop picture,
+.smooth-glass-backdrop__image {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.smooth-glass-backdrop__image { object-fit: cover; }
+.smooth-glass-backdrop--xuanji { background: #060d0a; }
+.smooth-glass-backdrop--starward { background: #040b1c; }
+.smooth-glass-backdrop--vivid { background: #c6d2e6; }
+.smooth-glass-backdrop--hongguo { background: #d7e8df; }
+
+/* Confirmation text must stay readable above a dense Console page, even when
+ * the active theme maps light utility backgrounds to translucent dark fills. */
+.glass-quality-dialog > .fixed > div { background: #fbfcfd !important; }
+html.liquid-glass-dark .glass-quality-dialog > .fixed > div {
+  background: var(--fx-deep, #04070f) !important;
+}
+
+/* The only moving background layer: bounded, pre-rasterized, transform/opacity
+ * only. No time-based animation, blur, blend mode, or full-screen promotion. */
+.smooth-glass-signature {
+  position: absolute;
+  will-change: transform, opacity;
+  transition: transform 120ms ease-out, opacity 120ms ease-out;
+}
+
+.smooth-glass-signature--spectra {
+  width: min(72vw, 1152px);
+  aspect-ratio: 8 / 3;
+  right: -3vw;
+  top: -3vh;
+}
+.smooth-glass-signature--spectra img { display: block; width: 100%; height: 100%; }
+
+.smooth-glass-signature--xuanji {
+  width: min(42vw, 640px);
+  aspect-ratio: 1;
+  top: -12vh;
+  right: -7vw;
+  background: radial-gradient(ellipse, rgba(220, 195, 139, 0.07), transparent 68%);
+}
+
+.smooth-glass-signature--starward {
+  width: min(54vw, 800px);
+  aspect-ratio: 2;
+  bottom: 2vh;
+  left: -8vw;
+  background: radial-gradient(ellipse, rgba(72, 131, 212, 0.09), transparent 68%);
+}
+
+/* Include portals, pseudo-elements and nested surfaces. This removes the
+ * sampling chain regardless of which theme or layout supplied the surface. */
+html.liquid-glass-on.liquid-glass-smooth *,
+html.liquid-glass-on.liquid-glass-smooth *::before,
+html.liquid-glass-on.liquid-glass-smooth *::after {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Only the small navigation surfaces sample scrolling content. Cards already
+ * sit over a softened, static background and need no runtime blur. */
+html.liquid-glass-on.liquid-glass-smooth.lg-scrolled .mn-bar,
+html.liquid-glass-on.liquid-glass-smooth .mn-dropdown {
+  -webkit-backdrop-filter: blur(6px) !important;
+  backdrop-filter: blur(6px) !important;
+}
+
+html.liquid-glass-smooth .composed-glass-scene__cool,
+html.liquid-glass-smooth .composed-glass-scene__warm { filter: none; }
+
+html.liquid-glass-smooth .glow-card {
+  --mouse-x: 50% !important;
+  --mouse-y: 0% !important;
+}
+
+/* Don't reserve compositor layers for hundreds of offscreen Console controls. */
+html.liquid-glass-smooth .theme-modern :is(.console-interactive-surface, .console-interactive-chip, .motion-v2-surface) {
+  will-change: auto;
+  transition-property: transform, border-color;
+}
+html.liquid-glass-smooth .theme-modern .console-motion-scope :is(.console-interactive-surface, button:not(:disabled)):hover {
+  filter: none;
+}
+html.liquid-glass-smooth .theme-modern .console-motion-scope button:not(:disabled) {
+  transition-property: transform, border-color, background-color;
+}
+
+/* Freeze decorative ambient loops; loading indicators and interaction feedback
+ * remain active. Keep existing fills and shadows rather than hiding content. */
+html.liquid-glass-smooth .wr-liquid-orb,
+html.liquid-glass-smooth .wr-emblem__halo,
+html.liquid-glass-smooth .wr-emblem__ring,
+html.liquid-glass-smooth .wr-showcase .wr-emblem__plate,
+html.liquid-glass-smooth .wr-detail-card__aurora i {
+  animation: none !important;
+}
+
+@media (max-aspect-ratio: 4/5) {
+  .smooth-glass-signature--spectra { width: 132vw; right: -17vw; top: 0; }
+  .smooth-glass-signature--xuanji { width: 82vw; top: -4vh; right: -24vw; }
+  .smooth-glass-signature--starward { width: 94vw; left: -24vw; bottom: 8vh; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .smooth-glass-signature { transition: none; will-change: auto; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  html.liquid-glass-on.liquid-glass-smooth.lg-scrolled .mn-bar,
+  html.liquid-glass-on.liquid-glass-smooth .mn-dropdown {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}

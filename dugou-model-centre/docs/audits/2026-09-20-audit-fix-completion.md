@@ -50,6 +50,22 @@ A01–A12 表之外，复核时又发现的一批“已修但未修净”的实�
 
 实测（`genesisBundle.json`，45 票 / 94 腿，0 条有已记录结算时间）：94 行全部走推算；严格时间窗口 **0 → 11 个**；`computeAdaptiveWeightSuggestions().ready` 由 false 变 true（`accepted` 仍为 false，停在既有的后置收益门禁，而不是样本门槛）。Kelly 分母回测在本账本上仍为 bootstrap：可用的单腿模拟行只有 14 条，低于其 24 条下限。
 
+## 追加修复：验证对象统一与遗留诊断口径（次日）
+
+**B1 · blend walk-forward 统一到生产预测器（A02 的工程残留）。** `evaluateBlendWalkForward` 此前用手搓的"线性回归 + 球队位移 + 赔率锚定"简化管线评估，再把结果喂给 `marketLean` 和 Kelly 分母——即"能改生产概率和仓位的那条验证，评估的不是生产模型"。现在改为：每个窗口用该窗口训练集以 `detail: 'lite'` 拟合一次生产校准上下文，`predictCalibrated` 用去掉市场锚的 `predictMatchProbability`、`predictBlended` 用生产锚、`predictMarket` 维持市场隐含——三路全部走生产组件，不再有一条旁路管线。连带删除只被它调用的 `buildTeamCalibrationModelFromBinaryRows`。实测：91 条二元行 → 11 个窗口，`marketLean` 0.312，校准臂与锚定臂在同一行上给出 0.1762 / 0.1571（分离、无递归）。
+
+**A12 残留 · 依赖风险可比性守卫。** 原先 `bestKernelW > 1e-6` 几乎允许任意远的赔率档进入统计，只要有任何已结算历史，差距很远的 pair 也会拿到数值分数。新增 `MIN_COMPARABLE_KERNEL_WEIGHT`（两条腿都至多隔一个 band 且密度调节取最小值），低于下限的历史对不再计入；无可比历史时 `assessFragilityScore` 返回 `insufficient_data` 而不是数值。
+
+**A08 残留 · Monte Carlo 跨记录共享物理事件。** 共享键优先用 `event_id`（`event:<id>`），同一场次分两张票也不再各抽一次；不同 `event_id` 且队名不匹配时保持独立。回归：同事件两票的全灭概率仍是单场 miss（0.2），不同事件两票才是 0.04。算法说明第 47 条标题同步改为"共享抽样 Monte Carlo"。
+
+**B3 · 快照记录拟合后的内部取值。** 预测快照的 `calibration.metadata.fitted` 现在记录实际生效的 `confMultiplier`／`fseMultiplier`／`oddsWeightBase`／`marketLean`／`effectiveRecencyWeight`／`isotonicReliability`／`isotonicNodes`／`learnedFactorsReliability`（完整曲线仍由训练样本重建，此处记录规模与可靠度标量）；`buildForecastSnapshot` 对整个 metadata 做深拷贝，后续变更不能改写已保存的快照。
+
+**杂项。** `uniqueMatchRows` 的身份不全桶现在对"有事件身份但缺选择"的行也按事件去重，完全匿名的行照旧不合并；`oddsMatrix` 的 diff 与同族一并归一化到 `normalized AJR − Conf`。
+
+新增回归（净增）：生产权重敏感性（weightMode／Tys／Fid／Fse 可调、weightConf 不可调）、isotonic 手算对照（单调原样、违序合并、分段线性插值）、依赖风险可比性守卫（远距历史不给分）、MC 跨记录事件共享、快照拟合参数深拷贝隔离。
+
+仍未处理并已知：`allocatedProfit` 在上游 `getMetricsSnapshot` 行构建处被 `toNumber(..., 0)` 归一（`analytics.js` 约 3559 行），优势矩阵单元格因此无法在显示层区分"未知"与"真实 0"。这是修复收益口径唯一剩余的显示端缺口；实测当前账本 0 条已结算记录缺 `revenues` 且缺 `profit`，故本批不改。要修需在上游保留 NaN 并给各矩阵加 `profitSamples` 计数与 NaN 安全排序，同时改 AnalysisPage 优势矩阵与 MetricsPage 的 ROI 渲染——作为下一个独立项处理，不与本轮混在一起。
+
 ## 第 4 节逐项
 
 1. 已实现球队 ROI 排除 pending（即使残留 profit 字段也不混入）。

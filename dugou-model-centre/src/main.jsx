@@ -10,6 +10,7 @@ import './design/labEditions.css'
 import './design/inspiration2609.css'
 import './design/liquidGlassThemes.css'
 import './design/flagshipGlass.css'
+import './design/glassQuality.css'
 
 const renderApp = () => {
   // 存量用户一次性切到旗舰「光谱」（只执行一次；之后尊重手动选择）

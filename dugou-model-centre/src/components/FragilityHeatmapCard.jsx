@@ -77,7 +77,10 @@ export function FragilityHeatmapCard({ matches = [], expandedPair = null, onSele
   const [mappedViewEnabled, setMappedViewEnabled] = useState(true)
   const [dataRevision, setDataRevision] = useState(0)
   useEffect(() => {
-    const refresh = () => setDataRevision((revision) => revision + 1)
+    const refresh = (event) => {
+      if (event?.detail?.uiOnly === true) return
+      setDataRevision((revision) => revision + 1)
+    }
     window.addEventListener('dugou:data-changed', refresh)
     return () => window.removeEventListener('dugou:data-changed', refresh)
   }, [])

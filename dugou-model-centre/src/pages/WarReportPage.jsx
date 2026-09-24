@@ -1126,7 +1126,10 @@ export default function WarReportPage() {
 
   // 结算界面一落笔就派发 dugou:data-changed —— 战报据此重算，results 永远跟最新的。
   useEffect(() => {
-    const handler = () => setDataVersion((v) => v + 1)
+    const handler = (event) => {
+      if (event?.detail?.uiOnly === true) return
+      setDataVersion((v) => v + 1)
+    }
     window.addEventListener('dugou:data-changed', handler)
     return () => window.removeEventListener('dugou:data-changed', handler)
   }, [])

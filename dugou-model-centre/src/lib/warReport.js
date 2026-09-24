@@ -93,7 +93,10 @@ const bumpRevision = () => {
 if (typeof window !== 'undefined') {
   const previous = window[CACHE_HANDLER_KEY]
   if (typeof previous === 'function') window.removeEventListener(CACHE_EVENT, previous)
-  const invalidator = () => bumpRevision()
+  const invalidator = (event) => {
+    if (event?.detail?.uiOnly === true) return
+    bumpRevision()
+  }
   window.addEventListener(CACHE_EVENT, invalidator)
   window[CACHE_HANDLER_KEY] = invalidator
 }
