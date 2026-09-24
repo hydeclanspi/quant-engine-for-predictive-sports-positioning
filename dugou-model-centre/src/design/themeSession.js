@@ -8,9 +8,10 @@ export const SESSION_THEME_EVENT = 'dugou:session-theme'
 export const PAGE_GLASS_DEFAULTS = {
   '/new': 'sand',
   '/combo': 'sand',
-  '/settle': 'daylight',
+  '/settle': 'hongguo',
   '/dashboard': 'moon',
   '/history': 'daylight',
+  '/history/teams': 'moon',
   '/params': 'hongguo',
 }
 export const DEFAULT_GLASS_THEME = 'sand'
