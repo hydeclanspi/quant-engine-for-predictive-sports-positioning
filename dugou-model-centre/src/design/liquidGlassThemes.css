@@ -186,6 +186,29 @@ html.liquid-glass-on .theme-inspiration-2609 .inspiration-peach-canvas {
   background: transparent;
 }
 
+/* 被选中的球队卡：液态玻璃下真正「加深的蓝色玻璃」
+ * （原规则的本体蓝底会被 .glow-card 白玻璃覆盖，只剩很淡的一层，故整体重做） */
+html.liquid-glass-on .theme-modern .team-select-card--selected {
+  background: linear-gradient(145deg, rgba(125, 211, 252, 0.42), rgba(165, 180, 252, 0.26) 52%, rgba(110, 231, 183, 0.3));
+  border-color: rgba(56, 189, 248, 0.8) !important;
+  box-shadow:
+    0 0 0 1.5px rgba(56, 189, 248, 0.45),
+    0 18px 42px -20px rgba(37, 99, 235, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.72);
+}
+html.liquid-glass-on .theme-modern .team-select-card--selected::before {
+  opacity: 1;
+  background: linear-gradient(
+    135deg,
+    rgba(96, 165, 250, 0.34),
+    rgba(129, 140, 248, 0.2) 48%,
+    rgba(45, 212, 191, 0.28)
+  );
+}
+html.liquid-glass-on .theme-modern .team-select-card:hover::before {
+  opacity: 0.5;
+}
+
 @media (max-width: 640px) {
   .glass-theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .composed-glass-scene:not(.composed-glass-scene--preview) .composed-glass-scene__cool {
