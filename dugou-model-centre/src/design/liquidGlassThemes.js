@@ -1,6 +1,6 @@
 // Shared by Console, the renderer and persisted UI preferences.
-// 默认 = 旗舰「光谱」spectra（深底 + 棱镜色散）；已存用户保留自己的选择。
-export const DEFAULT_LIQUID_GLASS_STYLE = 'spectra'
+// 默认 = 暖砂 sand（评审期：各页默认见 design/themeSession.js 的 PAGE_GLASS_DEFAULTS）
+export const DEFAULT_LIQUID_GLASS_STYLE = 'sand'
 // 新设备与旧配置都从流畅模式开始；只有明确选择才启用持续渲染。
 export const DEFAULT_LIQUID_GLASS_QUALITY = 'smooth'
 export const normalizeLiquidGlassQuality = (value) => value === 'full' ? 'full' : DEFAULT_LIQUID_GLASS_QUALITY

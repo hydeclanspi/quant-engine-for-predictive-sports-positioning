@@ -26,7 +26,6 @@ import {
 import { normalizeAjrForModel } from '../lib/analytics'
 import { startConsoleAnalytics } from '../lib/consoleAnalyticsClient'
 import {
-  PAGE_AMBIENT_THEME_DEFAULTS,
   exportDataBundle,
   getAccessLogs,
   getCloudSyncStatus,
@@ -63,7 +62,8 @@ import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import InspirationIcon from '../components/InspirationIcon'
 import ComposedGlassScene from '../components/ComposedGlassScene'
-import { LIQUID_GLASS_THEMES, normalizeLiquidGlassStyle, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
+import { LIQUID_GLASS_THEMES, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
+import { SESSION_THEME_EVENT, clearSessionGlassThemes, getEffectiveGlassTheme, getPageGlassDefault, getSessionGlassTheme, setSessionGlassTheme } from '../design/themeSession'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
 import TimeMachineIcon from '../components/TimeMachineIcon'
@@ -229,11 +229,6 @@ const PAGE_AMBIENT_ITEMS = [
   { key: 'params', label: 'Console', hint: '参数后台' },
 ]
 
-const PAGE_AMBIENT_TONE_OPTIONS = [
-  { value: 'classic_white', label: '经典白' },
-  { value: 'soft_blue', label: '淡蓝色' },
-  { value: 'soft_orange', label: '浅橙色' },
-]
 const ACCESS_LOG_PAGE_SIZE = 6
 const FIT_TRAJECTORY_WINDOW_OPTIONS = [24, 36, 48, 72, 96, 120, 150, 0]
 const FIT_TRAJECTORY_MODE_OPTIONS = [
@@ -1061,47 +1056,99 @@ const renderFitTrajectoryChart = ({ model, mode }) => {
   )
 }
 
-const normalizeAmbientThemeMap = (value) => {
-  const incoming = value && typeof value === 'object' ? value : {}
-  const next = { ...PAGE_AMBIENT_THEME_DEFAULTS }
-  PAGE_AMBIENT_ITEMS.forEach((item) => {
-    const raw = String(incoming[item.key] || '').trim()
-    if (PAGE_AMBIENT_TONE_OPTIONS.some((option) => option.value === raw)) {
-      next[item.key] = raw
-    }
-  })
-  return next
+// 每页行 key → 路由路径（会话主题按路径存储，解析时最长前缀优先）
+const GLASS_PAGE_PATHS = {
+  new: '/new',
+  combo: '/combo',
+  settle: '/settle',
+  dashboard_overview: '/dashboard',
+  dashboard_analysis: '/dashboard/analysis',
+  dashboard_metrics: '/dashboard/metrics',
+  history: '/history',
+  teams: '/history/teams',
+  params: '/params',
 }
 
-function ThemeSettingsExplorer({ value, onChange, onReset }) {
-  const [themes, setThemes] = useState(() => normalizeAmbientThemeMap(value))
+/* 每页一行：6 个槽位 = 前 5 款主题 + ›（滑到第 3~8 款）。评审期选择只作用于本次会话。 */
+function GlassThemeStrip({ path, current, onPick }) {
+  const [offset, setOffset] = useState(0)
+  const visible = offset === 0 ? LIQUID_GLASS_THEMES.slice(0, 5) : LIQUID_GLASS_THEMES.slice(2, 8)
+  return (
+    <div className="relative">
+      {offset > 0 && (
+        <button
+          type="button"
+          aria-label="回看前五款"
+          onClick={() => setOffset(0)}
+          className="absolute -left-2 top-1/2 z-10 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-stone-200 bg-white text-xs text-stone-500 shadow-sm hover:border-sky-300 hover:text-sky-600"
+        >
+          ‹
+        </button>
+      )}
+      <div className="flex items-center gap-1.5">
+        {visible.map((theme) => {
+          const active = current === theme.key
+          return (
+            <button
+              key={`${path}-${theme.key}`}
+              type="button"
+              onClick={() => onPick(path, theme.key)}
+              aria-pressed={active}
+              aria-label={theme.label}
+              title={`${theme.label} · ${theme.description}`}
+              className={`flex w-[66px] flex-col gap-1 rounded-lg border p-1 transition-colors ${
+                active ? 'border-sky-400 bg-sky-50/70 ring-1 ring-sky-400' : 'border-stone-200 bg-white hover:border-sky-200'
+              }`}
+            >
+              <span
+                className="relative block h-8 overflow-hidden rounded-md border border-black/5"
+                aria-hidden="true"
+                style={theme.preview ? { background: theme.preview } : undefined}
+              >
+                {theme.composed && <ComposedGlassScene variant={theme.key} preview />}
+              </span>
+              <span className={`truncate text-[10px] leading-none ${active ? 'font-semibold text-sky-700' : 'text-stone-500'}`}>
+                {theme.label}
+              </span>
+            </button>
+          )
+        })}
+        {offset === 0 && (
+          <button
+            type="button"
+            aria-label="查看后五款主题"
+            onClick={() => setOffset(2)}
+            className="flex h-[52px] w-7 items-center justify-center rounded-lg border border-stone-200 bg-white text-base text-stone-500 hover:border-sky-300 hover:text-sky-600"
+          >
+            ›
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ThemeSettingsExplorer() {
+  const [, forceTick] = useState(0)
 
   useEffect(() => {
-    setThemes(normalizeAmbientThemeMap(value))
-  }, [value])
+    const onChange = () => forceTick((t) => t + 1)
+    window.addEventListener(SESSION_THEME_EVENT, onChange)
+    return () => window.removeEventListener(SESSION_THEME_EVENT, onChange)
+  }, [])
 
-  const pickTone = (pageKey, tone) => {
-    const next = {
-      ...themes,
-      [pageKey]: tone,
-    }
-    setThemes(next)
-    onChange(next)
-  }
-
-  const resetDefaults = () => {
-    const next = { ...PAGE_AMBIENT_THEME_DEFAULTS }
-    setThemes(next)
-    onReset(next)
-  }
+  const pick = (path, style) => setSessionGlassTheme(path, style)
+  const resetDefaults = () => clearSessionGlassThemes()
 
   return (
     <div className="rounded-2xl border border-sky-200/70 bg-gradient-to-br from-sky-50/85 via-white/94 to-cyan-50/75 p-4 sm:p-5 shadow-[0_20px_45px_rgba(56,189,248,0.15),inset_0_1px_0_rgba(255,255,255,0.82)]">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.12em] text-sky-600 font-semibold">Themes Settings</p>
-          <h4 className="text-[15px] font-semibold text-stone-800 mt-1">页面浮层主题</h4>
-          <p className="text-xs text-stone-500 mt-1">每个页面可独立设置：经典白 / 淡蓝色 / 浅橙色，修改即时生效并随云同步保留。</p>
+          <h4 className="text-[15px] font-semibold text-stone-800 mt-1">页面背景主题 · 液态玻璃</h4>
+          <p className="text-xs text-stone-500 mt-1">
+            8 款主题，每页独立设置，即时生效。评审期选择只作用于本次打开——刷新后回到各页默认，不写入偏好记忆。
+          </p>
         </div>
         <button
           type="button"
@@ -1113,38 +1160,28 @@ function ThemeSettingsExplorer({ value, onChange, onReset }) {
       </div>
 
       <div className="space-y-2.5">
-        {PAGE_AMBIENT_ITEMS.map((item) => (
-          <div
-            key={item.key}
-            className="rounded-xl border border-sky-100/80 bg-white/78 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)]"
-          >
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium text-stone-700 leading-tight">{item.label}</p>
-                <p className="text-[11px] text-stone-400 mt-0.5">{item.hint}</p>
+        {PAGE_AMBIENT_ITEMS.map((item) => {
+          const path = GLASS_PAGE_PATHS[item.key]
+          const current = getEffectiveGlassTheme(path)
+          const isDefault = current === getPageGlassDefault(path) && !getSessionGlassTheme(path)
+          return (
+            <div
+              key={item.key}
+              className="rounded-xl border border-sky-100/80 bg-white/78 px-3 py-2.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)]"
+            >
+              <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                <p className="text-sm font-medium text-stone-700 leading-tight">
+                  {item.label}
+                  <span className="ml-2 text-[11px] font-normal text-stone-400">{item.hint}</span>
+                </p>
+                <p className="text-[11px] text-stone-400">
+                  {isDefault ? `默认 · ${LIQUID_GLASS_THEMES.find((t) => t.key === current)?.label || current}` : '本次已改'}
+                </p>
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                {PAGE_AMBIENT_TONE_OPTIONS.map((option) => {
-                  const active = themes[item.key] === option.value
-                  return (
-                    <button
-                      key={`${item.key}-${option.value}`}
-                      type="button"
-                      onClick={() => pickTone(item.key, option.value)}
-                      className={`px-2.5 py-1 rounded-lg text-xs font-medium border transition-colors ${
-                        active
-                          ? 'border-sky-300 bg-sky-100/80 text-sky-700'
-                          : 'border-stone-200 bg-white text-stone-500 hover:border-sky-200 hover:text-sky-600'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  )
-                })}
-              </div>
+              <GlassThemeStrip path={path} current={current} onPick={pick} />
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )
@@ -3974,33 +4011,10 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     return getPreferredLayoutMode(config.layoutMode, typeof window === 'undefined' ? null : window.localStorage)
   }
 
-  const applyPageAmbientThemes = (nextThemes, options = {}) => {
-    const normalized = normalizeAmbientThemeMap(nextThemes)
-    const layoutMode = LAYOUT_MODE_OPTIONS.includes(options.layoutMode) ? options.layoutMode : getCurrentLayoutMode()
-    saveSystemConfig({ pageAmbientThemes: normalized, layoutMode })
-    if (typeof window !== 'undefined' && !isDesignPreview()) {
-      window.localStorage.setItem('dugou:layout-mode', layoutMode)
-      window.dispatchEvent(new CustomEvent('dugou:layout-changed', { detail: { mode: layoutMode } }))
-    }
-    setConfig((prev) => ({ ...prev, pageAmbientThemes: normalized, layoutMode }))
-    setSaveStatus('Theme 已保存')
-    setTimeout(() => setSaveStatus(''), 1200)
-  }
-
-  const resetPageAmbientThemes = (defaultThemes = PAGE_AMBIENT_THEME_DEFAULTS) => {
-    applyPageAmbientThemes(defaultThemes)
-  }
-
   const openThemeSettingsModal = () => {
     openModal({
       title: 'themes settings',
-      content: (
-        <ThemeSettingsExplorer
-          value={config.pageAmbientThemes}
-          onChange={applyPageAmbientThemes}
-          onReset={resetPageAmbientThemes}
-        />
-      ),
+      content: <ThemeSettingsExplorer />,
     })
   }
 
@@ -4302,7 +4316,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     saveSystemConfig({ liquidGlassEnabled: next })
     setConfig((prev) => ({ ...prev, liquidGlassEnabled: next }))
   }
-  const liquidGlassStyle = normalizeLiquidGlassStyle(config.liquidGlassStyle)
+  const liquidGlassStyle = getEffectiveGlassTheme('/params')
   const liquidGlassQuality = normalizeLiquidGlassQuality(config.liquidGlassQuality)
   const applyLiquidGlassQuality = (quality) => {
     const normalized = normalizeLiquidGlassQuality(quality)
@@ -4319,7 +4333,8 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
     applyLiquidGlassQuality('smooth')
   }
   const setLiquidGlassStyle = (style) => {
-    saveSystemConfig({ liquidGlassStyle: style, liquidGlassStylePinned: true })
+    // 评审期：只改本次会话（不落 localStorage / 云同步），刷新后回到路由默认
+    setSessionGlassTheme('/params', style)
     setConfig((prev) => ({ ...prev, liquidGlassStyle: style }))
   }
 

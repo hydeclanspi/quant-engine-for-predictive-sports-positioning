@@ -14,6 +14,7 @@ import Inspiration2609Shell from './components/Inspiration2609Shell'
 import LiquidGlassBackdrop from './components/LiquidGlassBackdrop'
 import SmoothGlassBackdrop from './components/SmoothGlassBackdrop'
 import { isComposedGlassStyle, isDarkGlassStyle, normalizeLiquidGlassQuality, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
+import { SESSION_THEME_EVENT, getEffectiveGlassTheme } from './design/themeSession'
 import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
 
@@ -83,7 +84,24 @@ function App() {
     }
   })()
   const liquidGlassEnabled = glassOverride === 'off' ? false : systemConfigSnapshot?.liquidGlassEnabled !== false
-  const liquidGlassStyle = normalizeLiquidGlassStyle(glassOverride && glassOverride !== 'off' ? glassOverride : systemConfigSnapshot?.liquidGlassStyle)
+  // 评审期：主题由「路由默认 + 本次会话内选择」决定，不读偏好记忆（localStorage/云同步）；
+  // URL 逃生开关 ?glass= 仍最高优先。
+  const [liquidGlassStyle, setLiquidGlassStyleState] = useState(() =>
+    glassOverride && glassOverride !== 'off'
+      ? normalizeLiquidGlassStyle(glassOverride)
+      : getEffectiveGlassTheme(location.pathname))
+  useEffect(() => {
+    const apply = () => {
+      setLiquidGlassStyleState(
+        glassOverride && glassOverride !== 'off'
+          ? normalizeLiquidGlassStyle(glassOverride)
+          : getEffectiveGlassTheme(location.pathname),
+      )
+    }
+    apply()
+    window.addEventListener(SESSION_THEME_EVENT, apply)
+    return () => window.removeEventListener(SESSION_THEME_EVENT, apply)
+  }, [glassOverride, location.pathname])
   const liquidGlassQuality = normalizeLiquidGlassQuality(systemConfigSnapshot?.liquidGlassQuality)
   const liquidGlass = liquidGlassEnabled ? (
     liquidGlassQuality === 'full'

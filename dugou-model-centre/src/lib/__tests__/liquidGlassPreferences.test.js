@@ -77,22 +77,22 @@ describe('liquid glass UI preferences', () => {
     expect(storage.get(key)).toBe(storedBefore)
   })
 
-  it('uses the flagship default for missing or unrecognized saved themes', () => {
+  it('uses the global default for missing or unrecognized saved themes', () => {
     for (const style of [undefined, 'unrecognized']) {
       storage.set(key, JSON.stringify({ liquidGlassStyle: style }))
-      expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
+      expect(getSystemConfig().liquidGlassStyle).toBe('sand')
     }
   })
 
-  it('self-heals legacy light themes to the flagship default until the user pins a choice', () => {
+  it('self-heals legacy light themes to the default until the user pins a choice', () => {
     initializeFlagshipGlassDefault()
-    expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
+    expect(getSystemConfig().liquidGlassStyle).toBe('sand')
     expect(JSON.parse(storage.get(key))).toMatchObject({ initialCapital: 12345, liquidGlassEnabled: true })
 
     // 云端快照把旧值打回来后（无 pinned），下次启动再次自愈
     storage.set(key, JSON.stringify({ liquidGlassStyle: 'hongguo', initialCapital: 12345 }))
     initializeFlagshipGlassDefault()
-    expect(getSystemConfig().liquidGlassStyle).toBe('spectra')
+    expect(getSystemConfig().liquidGlassStyle).toBe('sand')
 
     // 用户在选择器里手动钉选浅色主题 → 永久尊重，不再拉回
     saveSystemConfig({ liquidGlassStyle: 'moon', liquidGlassStylePinned: true })
