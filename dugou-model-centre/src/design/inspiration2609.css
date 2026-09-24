@@ -222,20 +222,3 @@
   position: relative;
   z-index: 1;
 }
-
-/* Settle（glacier）：对齐 Modern 的通透配方 ——
- * 卡片 86% 实色 → 半透玻璃（背景光透入），圆角 32px → 18px，边缘/投影改中性白。
- * 玻璃模糊按性能红线降到 18px/170%（基础层 30px/200% 超红线）。 */
-html.liquid-glass-on .theme-inspiration-2609 .inspiration-2609-body[data-lab-page='settle'].lab-editions {
-  --lab-card: rgba(255, 255, 255, 0.42);
-  --lab-glass: rgba(255, 255, 255, 0.34);
-  --lab-well: rgba(255, 255, 255, 0.58);
-  --lab-radius: 18px;
-  --lab-rim: rgba(255, 255, 255, 0.72);
-  --lab-edge: inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  --lab-shadow: 0 18px 44px rgba(30, 60, 80, 0.12);
-}
-html.liquid-glass-on .theme-inspiration-2609 .inspiration-2609-body[data-lab-page='settle'].lab-editions .glow-card:not(.settle-ai-quick-card) {
-  -webkit-backdrop-filter: blur(18px) saturate(170%);
-  backdrop-filter: blur(18px) saturate(170%);
-}
