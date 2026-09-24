@@ -180,6 +180,12 @@ html.liquid-glass-on .theme-inspiration-2609[data-inspiration-material] > .mn-ba
   backdrop-filter: blur(14px) saturate(150%);
 }
 
+/* Teams 页的淡橙几何画布（inspiration-peach-canvas，#f5e7d7）会盖住液态玻璃背景，
+ * 开启液态玻璃时中和为透明，让主题背景透出（与 .lab-optical-field 同款处理）。 */
+html.liquid-glass-on .theme-inspiration-2609 .inspiration-peach-canvas {
+  background: transparent;
+}
+
 @media (max-width: 640px) {
   .glass-theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .composed-glass-scene:not(.composed-glass-scene--preview) .composed-glass-scene__cool {
