@@ -163,21 +163,14 @@ html.liquid-glass-composed .theme-modern .app-main-content :is(.glow-card, .cons
     border-color: #6b7d83;
   }
 }
-/* ── 顶栏随主题着色：inspiration 材质的固定浅色规则统一改为
- * 「主题色半透染 + 重模糊」，顶栏融入当前液态玻璃主题；
- * 深色旗舰主题由 flagshipGlass.css 单独接管（--tb-tint 未定义即透明）。
- * 滚动凝结形态（lg-scrolled morph）不变。 */
-html.liquid-glass-on[data-liquid-glass-style='vivid'] { --tb-tint: rgba(235, 241, 250, 0.5); --tb-line: rgba(255, 255, 255, 0.55); }
-html.liquid-glass-on[data-liquid-glass-style='hongguo'] { --tb-tint: rgba(233, 241, 238, 0.52); --tb-line: rgba(255, 255, 255, 0.55); }
-html.liquid-glass-on[data-liquid-glass-style='daylight'] { --tb-tint: rgba(238, 244, 241, 0.5); --tb-line: rgba(255, 255, 255, 0.55); }
-html.liquid-glass-on[data-liquid-glass-style='moon'] { --tb-tint: rgba(230, 236, 244, 0.55); --tb-line: rgba(255, 255, 255, 0.5); }
-html.liquid-glass-on[data-liquid-glass-style='sand'] { --tb-tint: rgba(245, 240, 231, 0.55); --tb-line: rgba(255, 255, 255, 0.6); }
-
+/* 顶栏底色全部取消（user feedback：Modern 的透明顶栏最佳）。
+ * inspiration 材质的固定浅色顶栏与「随主题着色」一律改为完全透明、无模糊、无底线，
+ * 仅保留下滚凝结形态（lg-scrolled morph）。 */
 html.liquid-glass-on .theme-inspiration-2609[data-inspiration-material] > .mn-bar {
-  background: var(--tb-tint, transparent);
-  border-bottom-color: var(--tb-line, transparent);
-  -webkit-backdrop-filter: blur(14px) saturate(150%);
-  backdrop-filter: blur(14px) saturate(150%);
+  background: transparent;
+  border-bottom-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 /* Teams 页的淡橙几何画布（inspiration-peach-canvas，#f5e7d7）会盖住液态玻璃背景，

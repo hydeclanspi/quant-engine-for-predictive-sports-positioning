@@ -108,17 +108,6 @@ function LayoutMorphSwitch({ layoutMode, onPreviewChange }) {
     <div className="mn-layout-morph" role="group" aria-label="界面主题切换">
       <button
         type="button"
-        aria-label="切换到 Modern"
-        aria-pressed={visualMode === 'modern'}
-        title="Modern"
-        onClick={() => selectMode('modern')}
-        className={`mn-layout-choice mn-layout-choice--modern ${visualMode === 'modern' ? 'is-active' : ''}`}
-      >
-        <PanelsTopLeft size={13} strokeWidth={1.8} aria-hidden="true" />
-        <span>Modern</span>
-      </button>
-      <button
-        type="button"
         aria-label={`切换到 ${INSPIRATION_2609_NAME}`}
         aria-pressed={visualMode === 'inpiration'}
         title={INSPIRATION_2609_NAME}
@@ -127,6 +116,17 @@ function LayoutMorphSwitch({ layoutMode, onPreviewChange }) {
       >
         <InspirationIcon size={13} />
         <span>{INSPIRATION_2609_NAME}</span>
+      </button>
+      <button
+        type="button"
+        aria-label="切换到 Modern"
+        aria-pressed={visualMode === 'modern'}
+        title="Modern"
+        onClick={() => selectMode('modern')}
+        className={`mn-layout-choice mn-layout-choice--modern ${visualMode === 'modern' ? 'is-active' : ''}`}
+      >
+        <PanelsTopLeft size={13} strokeWidth={1.8} aria-hidden="true" />
+        <span>Modern</span>
       </button>
     </div>
   )
