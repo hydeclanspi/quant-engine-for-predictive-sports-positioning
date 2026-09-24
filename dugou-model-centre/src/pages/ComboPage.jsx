@@ -6907,7 +6907,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
             </div>
           )}
 
-          <button onClick={handleAdopt} className="w-full mt-4 btn-primary btn-hover">
+          <button onClick={handleAdopt} className="w-full mt-4 btn-primary btn-hover combo-adopt-btn">
             采纳已选方案
           </button>
         </div>

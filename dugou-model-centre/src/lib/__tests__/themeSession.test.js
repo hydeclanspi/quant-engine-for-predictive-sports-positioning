@@ -20,8 +20,8 @@ beforeEach(() => {
 
 describe('review-phase per-page glass themes', () => {
   it('resolves per-page defaults by longest route prefix', () => {
-    expect(getPageGlassDefault('/new')).toBe('sand')
-    expect(getPageGlassDefault('/new/')).toBe('sand')
+    expect(getPageGlassDefault('/new')).toBe('moon')
+    expect(getPageGlassDefault('/new/')).toBe('moon')
     expect(getPageGlassDefault('/combo')).toBe('sand')
     expect(getPageGlassDefault('/settle')).toBe('hongguo')
     expect(getPageGlassDefault('/history')).toBe('daylight')
@@ -48,7 +48,7 @@ describe('review-phase per-page glass themes', () => {
     setSessionGlassTheme('/new', 'starward')
     clearSessionGlassThemes()
     expect(getEffectiveGlassTheme('/params')).toBe('hongguo')
-    expect(getEffectiveGlassTheme('/new')).toBe('sand')
+    expect(getEffectiveGlassTheme('/new')).toBe('moon')
   })
 
   it('normalizes unknown styles back to the page default', () => {

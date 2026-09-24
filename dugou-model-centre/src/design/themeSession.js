@@ -6,7 +6,7 @@ export const SESSION_THEME_EVENT = 'dugou:session-theme'
 
 // 每页默认（最长路径前缀优先：/dashboard/analysis 命中 '/dashboard'）
 export const PAGE_GLASS_DEFAULTS = {
-  '/new': 'sand',
+  '/new': 'moon',
   '/combo': 'sand',
   '/settle': 'hongguo',
   '/dashboard': 'moon',
