@@ -1424,7 +1424,7 @@ export default function NewInvestmentPage() {
   ) || 0
 
   return (
-    <div className="page-shell page-content-fluid motion-v2-scope lab-new-page">
+    <div className="page-shell page-content-fluid motion-v2-scope lab-new-page" data-investment-view={viewMode}>
       <div className="mb-8 lab-page-heading flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
@@ -1452,7 +1452,6 @@ export default function NewInvestmentPage() {
         </div>
       </div>
 
-      <div data-investment-view={viewMode}>
       <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border lab-new-quick">
         <button
           onClick={() => {
@@ -2220,7 +2219,6 @@ export default function NewInvestmentPage() {
             </div>
           </div>
         </div>
-      </div>
       </div>
       <WaxSealStampOverlay burst={waxSealBurst} onDone={handleWaxSealStampDone} />
     </div>
