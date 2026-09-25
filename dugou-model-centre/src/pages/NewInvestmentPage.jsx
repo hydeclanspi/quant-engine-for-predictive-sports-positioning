@@ -24,6 +24,7 @@ import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from '../lib/investmentForecast'
 import { getMatchSourceIdentity } from '../lib/investmentIdentity'
+import PreMatchGridView from '../components/PreMatchGridView'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
 const DEFAULT_FSE_PERCENT = 10
@@ -1613,6 +1614,7 @@ export default function NewInvestmentPage() {
       </div>
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
+        {viewMode === 'pre' && <PreMatchGridView />}
         <div className="px-6 py-5 border-b border-stone-100 bg-stone-50/50 lab-new-construction">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4 flex-nowrap min-w-0">
