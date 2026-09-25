@@ -13,7 +13,7 @@ import LabEditionBar from './components/LabEditionBar'
 import Inspiration2609Shell from './components/Inspiration2609Shell'
 import LiquidGlassBackdrop from './components/LiquidGlassBackdrop'
 import SmoothGlassBackdrop from './components/SmoothGlassBackdrop'
-import { isComposedGlassStyle, isDarkGlassStyle, normalizeLiquidGlassQuality, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
+import { isComposedGlassStyle, isDarkGlassStyle, normalizeLiquidGlassQuality, normalizeLiquidGlassMaterialQuality, normalizeLiquidGlassStyle } from './design/liquidGlassThemes'
 import { SESSION_THEME_EVENT, getEffectiveGlassTheme } from './design/themeSession'
 import { isDesignPreview, getLabReturnPath, LAB_EDITION_KEY, normalizeLabEdition, readLabEdition } from './design/labEditions'
 import { getInspiration2609Surface, INSPIRATION_2609_EDITION } from './design/inspiration2609'
@@ -103,6 +103,7 @@ function App() {
     return () => window.removeEventListener(SESSION_THEME_EVENT, apply)
   }, [glassOverride, location.pathname])
   const liquidGlassQuality = normalizeLiquidGlassQuality(systemConfigSnapshot?.liquidGlassQuality)
+  const glassMaterialQuality = normalizeLiquidGlassMaterialQuality(systemConfigSnapshot?.liquidGlassMaterialQuality)
   const liquidGlass = liquidGlassEnabled ? (
     liquidGlassQuality === 'full'
       ? <LiquidGlassBackdrop variant={liquidGlassStyle} />
@@ -173,7 +174,7 @@ function App() {
   useEffect(() => {
     // Smooth mode keeps the static edge highlight without scanning every card
     // and reading layout on each pointer event.
-    if (liquidGlassQuality === 'smooth') return undefined
+    if (!liquidGlassEnabled || glassMaterialQuality === 'smooth') return undefined
     let frame = 0
     let pointer = null
     const update = () => {
@@ -199,7 +200,7 @@ function App() {
       window.removeEventListener('mousemove', handleMouseMove)
       if (frame) window.cancelAnimationFrame(frame)
     }
-  }, [liquidGlassQuality])
+  }, [liquidGlassEnabled, glassMaterialQuality])
 
   // Scroll to top on route change
   useEffect(() => {
@@ -219,8 +220,10 @@ function App() {
     root.classList.toggle('liquid-glass-on', liquidGlassEnabled)
     root.classList.toggle('liquid-glass-composed', liquidGlassEnabled && isComposedGlassStyle(liquidGlassStyle))
     root.classList.toggle('liquid-glass-dark', liquidGlassEnabled && isDarkGlassStyle(liquidGlassStyle))
-    root.classList.toggle('liquid-glass-smooth', liquidGlassQuality === 'smooth')
+    root.classList.toggle('liquid-glass-smooth', glassMaterialQuality === 'smooth')
+    root.classList.toggle('liquid-background-smooth', liquidGlassQuality === 'smooth')
     root.dataset.liquidGlassQuality = liquidGlassQuality
+    root.dataset.liquidGlassMaterialQuality = glassMaterialQuality
     if (liquidGlassEnabled) root.dataset.liquidGlassStyle = liquidGlassStyle
     else delete root.dataset.liquidGlassStyle
     // 浏览器外框一体化：深色旗舰主题时 theme-color 跟随深底
@@ -228,12 +231,13 @@ function App() {
     const darkBar = { xuanji: '#060d0a', spectra: '#04070f', starward: '#040b1c' }[liquidGlassStyle]
     if (meta) meta.setAttribute('content', liquidGlassEnabled && darkBar ? darkBar : '#fbbf24')
     return () => {
-      root.classList.remove('liquid-glass-on', 'liquid-glass-composed', 'liquid-glass-dark', 'liquid-glass-smooth')
+      root.classList.remove('liquid-glass-on', 'liquid-glass-composed', 'liquid-glass-dark', 'liquid-glass-smooth', 'liquid-background-smooth')
       delete root.dataset.liquidGlassStyle
       delete root.dataset.liquidGlassQuality
+      delete root.dataset.liquidGlassMaterialQuality
       if (meta) meta.setAttribute('content', '#fbbf24')
     }
-  }, [liquidGlassEnabled, liquidGlassStyle, liquidGlassQuality])
+  }, [liquidGlassEnabled, liquidGlassStyle, liquidGlassQuality, glassMaterialQuality])
 
   // 顶栏液态玻璃 morph：滚动容器下滚超过阈值后，<html> 加 .lg-scrolled 触发形态切换
   useEffect(() => {

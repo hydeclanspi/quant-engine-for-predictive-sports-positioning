@@ -24,7 +24,7 @@ import { addSettlementTimestamps, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS 
 import genesisBundle from '../data/genesisBundle.json'
 import { isPreviewMode, DISPLAY_MODE_CHANGE_EVENT } from './displayMode'
 import { previewRead, previewWrite, resetPreviewStore } from './previewStore'
-import { DEFAULT_LIQUID_GLASS_STYLE, DEFAULT_LIQUID_GLASS_QUALITY, isDarkGlassStyle, isLiquidGlassStyle, normalizeLiquidGlassStyle, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
+import { DEFAULT_LIQUID_GLASS_STYLE, DEFAULT_LIQUID_GLASS_QUALITY, DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY, isDarkGlassStyle, isLiquidGlassStyle, normalizeLiquidGlassStyle, normalizeLiquidGlassQuality, normalizeLiquidGlassMaterialQuality } from '../design/liquidGlassThemes'
 
 const STORAGE_KEYS = {
   investments: 'dugou.investments.v1',
@@ -131,6 +131,7 @@ const DEFAULT_SYSTEM_CONFIG = {
   // 背景主题选项统一维护于 design/liquidGlassThemes。
   liquidGlassStyle: DEFAULT_LIQUID_GLASS_STYLE,
   liquidGlassQuality: DEFAULT_LIQUID_GLASS_QUALITY,
+  liquidGlassMaterialQuality: DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY,
 }
 
 const DEFAULT_TEAM_PROFILES = [
@@ -518,6 +519,7 @@ export const getSystemConfig = () => {
     merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
     // 画质属于当前设备偏好；历史快照不能替设备开启满画质。
     merged.liquidGlassQuality = normalizeLiquidGlassQuality(currentConfig?.liquidGlassQuality)
+    merged.liquidGlassMaterialQuality = normalizeLiquidGlassMaterialQuality(currentConfig?.liquidGlassMaterialQuality)
     return merged
   }
 
@@ -527,6 +529,7 @@ export const getSystemConfig = () => {
   merged.pageAmbientThemes = normalizePageAmbientThemes(saved?.pageAmbientThemes)
   merged.liquidGlassStyle = normalizeLiquidGlassStyle(merged.liquidGlassStyle)
   merged.liquidGlassQuality = normalizeLiquidGlassQuality(merged.liquidGlassQuality)
+  merged.liquidGlassMaterialQuality = normalizeLiquidGlassMaterialQuality(merged.liquidGlassMaterialQuality)
   return merged
 }
 
@@ -551,7 +554,7 @@ export const saveSystemConfig = (configPatch) => {
   // 允许保存UI相关配置即使在时光穿越模式中
   if (!configPatch) return getSystemConfig()
 
-  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle', 'liquidGlassStylePinned', 'liquidGlassQuality']
+  const UI_CONFIG_KEYS = ['pageAmbientThemes', 'liquidGlassEnabled', 'liquidGlassStyle', 'liquidGlassStylePinned', 'liquidGlassQuality', 'liquidGlassMaterialQuality']
   const isOnlyUIConfig = Object.keys(configPatch).every(key => UI_CONFIG_KEYS.includes(key))
   // 浏览历史时只把 UI 改动写到当前存储，不能把历史业务参数一起写回。
   const current = isOnlyUIConfig && isInTimeMachineMode()
@@ -562,6 +565,7 @@ export const saveSystemConfig = (configPatch) => {
     ...(configPatch || {}),
   }
   next.liquidGlassQuality = normalizeLiquidGlassQuality(next.liquidGlassQuality)
+  next.liquidGlassMaterialQuality = normalizeLiquidGlassMaterialQuality(next.liquidGlassMaterialQuality)
 
   // 如果只是改变 UI 偏好，即使在时光穿越中也允许。
   if (!isOnlyUIConfig && !checkReadOnlyMode('Update System Config')) {
@@ -1226,6 +1230,7 @@ const unionLedgerById = (localList, incomingList) => {
 const mergeSystemConfig = (localCfg, incomingCfg) => {
   const merged = { ...(localCfg || {}), ...(incomingCfg || {}) }
   merged.liquidGlassQuality = normalizeLiquidGlassQuality(localCfg?.liquidGlassQuality)
+  merged.liquidGlassMaterialQuality = normalizeLiquidGlassMaterialQuality(localCfg?.liquidGlassMaterialQuality)
   LEDGER_CONFIG_KEYS.forEach((key) => {
     merged[key] = unionLedgerById(localCfg?.[key], incomingCfg?.[key])
   })
@@ -1289,8 +1294,13 @@ const applyDataBundle = (bundle, mode = 'replace') => {
   }
 
   // Read storage directly: getSystemConfig would recurse during genesis setup.
-  const deviceQuality = normalizeLiquidGlassQuality(readJSON(STORAGE_KEYS.systemConfig, null)?.liquidGlassQuality)
-  writeJSON(STORAGE_KEYS.systemConfig, { ...DEFAULT_SYSTEM_CONFIG, ...incomingConfig, liquidGlassQuality: deviceQuality })
+  const deviceConfig = readJSON(STORAGE_KEYS.systemConfig, null)
+  writeJSON(STORAGE_KEYS.systemConfig, {
+    ...DEFAULT_SYSTEM_CONFIG,
+    ...incomingConfig,
+    liquidGlassQuality: normalizeLiquidGlassQuality(deviceConfig?.liquidGlassQuality),
+    liquidGlassMaterialQuality: normalizeLiquidGlassMaterialQuality(deviceConfig?.liquidGlassMaterialQuality),
+  })
   writeJSON(STORAGE_KEYS.teamProfiles, incomingTeams.length > 0 ? incomingTeams : DEFAULT_TEAM_PROFILES)
   writeJSON(STORAGE_KEYS.investments, incomingInvestments)
   writeJSON(STORAGE_KEYS.accessLogs, incomingAccessLogs.slice(0, ACCESS_LOG_MAX_ROWS))

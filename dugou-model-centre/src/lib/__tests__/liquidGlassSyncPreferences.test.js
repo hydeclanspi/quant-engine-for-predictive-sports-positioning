@@ -54,27 +54,27 @@ beforeEach(() => {
 afterAll(() => vi.unstubAllGlobals())
 
 const cases = [
-  { label: 'missing', local: undefined, incoming: 'full', expected: 'smooth' },
-  { label: 'smooth', local: 'smooth', incoming: 'full', expected: 'smooth' },
-  { label: 'full', local: 'full', incoming: 'smooth', expected: 'full' },
+  { label: 'missing', local: undefined, incoming: 'full', expected: 'smooth', material: undefined, incomingMaterial: 'smooth', expectedMaterial: 'full' },
+  { label: 'smooth', local: 'smooth', incoming: 'full', expected: 'smooth', material: 'smooth', incomingMaterial: 'full', expectedMaterial: 'smooth' },
+  { label: 'full', local: 'full', incoming: 'smooth', expected: 'full', material: 'full', incomingMaterial: 'smooth', expectedMaterial: 'full' },
 ]
 
-const preparePull = ({ local, incoming }) => {
-  storage.set(configKey, JSON.stringify({ initialCapital: 12345, liquidGlassQuality: local }))
+const preparePull = ({ local, incoming, material, incomingMaterial }) => {
+  storage.set(configKey, JSON.stringify({ initialCapital: 12345, liquidGlassQuality: local, liquidGlassMaterialQuality: material }))
   sync.pullGitBundle.mockResolvedValue({
     ok: true,
     updatedAt: '2026-09-23T00:00:00.000Z',
     bundle: {
-      system_config: { initialCapital: 9876, liquidGlassQuality: incoming },
+      system_config: { initialCapital: 9876, liquidGlassQuality: incoming, liquidGlassMaterialQuality: incomingMaterial },
       team_profiles: [], investments: [], access_logs: [],
     },
   })
 }
 
-const expectLocalQuality = (quality) => {
+const expectLocalQuality = (quality, material) => {
   // The remote business update must apply; only the device rendering choice is retained.
-  expect(getSystemConfig()).toMatchObject({ initialCapital: 9876, liquidGlassQuality: quality })
-  expect(JSON.parse(storage.get(configKey))).toMatchObject({ initialCapital: 9876, liquidGlassQuality: quality })
+  expect(getSystemConfig()).toMatchObject({ initialCapital: 9876, liquidGlassQuality: quality, liquidGlassMaterialQuality: material })
+  expect(JSON.parse(storage.get(configKey))).toMatchObject({ initialCapital: 9876, liquidGlassQuality: quality, liquidGlassMaterialQuality: material })
   expect(sync.pullGitBundle).toHaveBeenCalledOnce()
 }
 
@@ -82,18 +82,18 @@ describe('Git pulls preserve device liquid glass quality', () => {
   it.each(cases)('startup keeps $label local quality when the remote disagrees', async (testCase) => {
     preparePull(testCase)
     expect(await bootstrapCloudSnapshotOnLoad()).toMatchObject({ ok: true, applied: true })
-    expectLocalQuality(testCase.expected)
+    expectLocalQuality(testCase.expected, testCase.expectedMaterial)
   })
 
   it.each(cases)('manual merge keeps $label local quality when the remote disagrees', async (testCase) => {
     preparePull(testCase)
     expect(await pullCloudSnapshotNow('merge')).toMatchObject({ ok: true, applied: true, mode: 'merge' })
-    expectLocalQuality(testCase.expected)
+    expectLocalQuality(testCase.expected, testCase.expectedMaterial)
   })
 
   it.each(cases)('unlock sync keeps $label local quality when the remote disagrees', async (testCase) => {
     preparePull(testCase)
     window.dispatchEvent(new CustomEvent('test:display-mode', { detail: { mode: 'full' } }))
-    await vi.waitFor(() => expectLocalQuality(testCase.expected))
+    await vi.waitFor(() => expectLocalQuality(testCase.expected, testCase.expectedMaterial))
   })
 })

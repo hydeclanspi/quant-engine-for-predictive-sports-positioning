@@ -62,7 +62,7 @@ import { isDesignPreview } from '../design/labEditions'
 import { INSPIRATION_2609_NAME } from '../design/inspiration2609'
 import InspirationIcon from '../components/InspirationIcon'
 import ComposedGlassScene from '../components/ComposedGlassScene'
-import { LIQUID_GLASS_THEMES, normalizeLiquidGlassQuality } from '../design/liquidGlassThemes'
+import { LIQUID_GLASS_THEMES, normalizeLiquidGlassQuality, normalizeLiquidGlassMaterialQuality } from '../design/liquidGlassThemes'
 import { SESSION_THEME_EVENT, clearSessionGlassThemes, getEffectiveGlassTheme, getPageGlassDefault, getSessionGlassTheme, setSessionGlassTheme } from '../design/themeSession'
 import { maskReactTree, useLabels, usePreviewTextMask } from '../lib/labels'
 import { useModeLabelMap } from '../components/ModeLabel'
@@ -2799,7 +2799,7 @@ function ConsoleCursorTrail() {
   )
 }
 
-function LiquidGlassQualityConfirmation({ onClose, onConfirm }) {
+function BackgroundQualityConfirmation({ onClose, onConfirm }) {
   const dialogRef = useRef(null)
   const cancelRef = useRef(null)
 
@@ -2807,7 +2807,7 @@ function LiquidGlassQualityConfirmation({ onClose, onConfirm }) {
     const trigger = document.activeElement
     cancelRef.current?.focus()
     // Shared Modal supplies Escape/backdrop dismissal; label its icon-only close control.
-    dialogRef.current?.querySelector('button')?.setAttribute('aria-label', '关闭满画质提示')
+    dialogRef.current?.querySelector('button')?.setAttribute('aria-label', '关闭背景满画质提示')
     return () => {
       if (trigger?.isConnected && typeof trigger.focus === 'function') trigger.focus()
     }
@@ -2829,23 +2829,23 @@ function LiquidGlassQualityConfirmation({ onClose, onConfirm }) {
   }
 
   return createPortal(
-    <div ref={dialogRef} className="glass-quality-dialog" role="alertdialog" aria-modal="true" aria-label="开启满画质？" aria-describedby="liquid-glass-quality-warning" onKeyDown={keepFocusInDialog}>
+    <div ref={dialogRef} className="glass-quality-dialog" role="alertdialog" aria-modal="true" aria-label="开启背景满画质？" aria-describedby="liquid-glass-quality-warning" onKeyDown={keepFocusInDialog}>
       <Modal
         onClose={onClose}
         data={{
-          title: '开启满画质？',
+          title: '开启背景满画质？',
           content: (
             <div className="max-w-xl">
               <div className="flex items-start gap-3">
                 <AlertTriangle size={22} className="shrink-0 text-amber-600 mt-0.5" aria-hidden="true" />
                 <div id="liquid-glass-quality-warning" className="space-y-3 text-sm leading-relaxed">
-                  <p>满画质保留所有主题原有的完整效果，持续渲染成本较高。设备配置不足时，可能出现严重卡顿，甚至页面无响应。</p>
-                  <p>确认后才会启用。你可以随时回到「界面布局」切换为流畅模式。</p>
+                  <p>背景满画质保留主题原有的动态渲染效果，持续渲染成本较高。设备配置不足时，可能出现严重卡顿，甚至页面无响应。</p>
+                  <p>确认后才会启用。你可以随时将「渲染背景」切回流畅，液态玻璃的选择保持不变。</p>
                 </div>
               </div>
               <div className="flex flex-wrap justify-end gap-3 mt-6">
                 <button ref={cancelRef} type="button" onClick={onClose} className="rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm text-stone-700 hover:bg-stone-50">取消，保持流畅</button>
-                <button type="button" onClick={onConfirm} className="rounded-xl border border-sky-600 bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700">确认开启满画质</button>
+                <button type="button" onClick={onConfirm} className="rounded-xl border border-sky-600 bg-sky-600 px-4 py-2 text-sm text-white hover:bg-sky-700">确认开启背景满画质</button>
               </div>
             </div>
           ),
@@ -4318,6 +4318,13 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
   }
   const liquidGlassStyle = getEffectiveGlassTheme('/params')
   const liquidGlassQuality = normalizeLiquidGlassQuality(config.liquidGlassQuality)
+  const glassMaterialQuality = normalizeLiquidGlassMaterialQuality(config.liquidGlassMaterialQuality)
+  const selectGlassMaterialQuality = (quality) => {
+    const normalized = normalizeLiquidGlassMaterialQuality(quality)
+    if (normalized === glassMaterialQuality) return
+    saveSystemConfig({ liquidGlassMaterialQuality: normalized })
+    setConfig((prev) => ({ ...prev, liquidGlassMaterialQuality: normalized }))
+  }
   const applyLiquidGlassQuality = (quality) => {
     const normalized = normalizeLiquidGlassQuality(quality)
     saveSystemConfig({ liquidGlassQuality: normalized })
@@ -4340,7 +4347,7 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
 
   return (
     <div className="page-shell page-content-wide console-motion-scope">
-      {showQualityConfirmation && <LiquidGlassQualityConfirmation onClose={() => setShowQualityConfirmation(false)} onConfirm={() => applyLiquidGlassQuality('full')} />}
+      {showQualityConfirmation && <BackgroundQualityConfirmation onClose={() => setShowQualityConfirmation(false)} onConfirm={() => applyLiquidGlassQuality('full')} />}
       {/* demo/preview 专属：右侧分区滚动导航（fixed 定位，DOM 位置不影响布局） */}
       {isPreviewMode() && !isDesignPreview() && <ConsoleAnchorRail />}
       {/* demo/preview 专属：覆盖右半区的光标星点拖尾（fixed 全屏 canvas，pointer-events:none） */}
@@ -4985,14 +4992,14 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
         <p className="text-[11px] text-stone-400 mt-3 text-center">Layout changes take effect immediately.</p>
         <div className="mt-4 pt-4 border-t border-stone-100 flex items-center justify-between gap-4">
           <div>
-            <span className="text-sm text-stone-700">液态玻璃背景 Liquid Glass</span>
+            <span className="text-sm text-stone-700">液态玻璃主题 Liquid Glass</span>
             <p className="text-xs text-stone-400 mt-0.5">透光背景与玻璃质感卡片 · 默认开启</p>
           </div>
           <button
             type="button"
             onClick={toggleLiquidGlass}
             aria-pressed={liquidGlassEnabled}
-            aria-label="液态玻璃背景"
+            aria-label="液态玻璃主题"
             className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
               liquidGlassEnabled
                 ? 'bg-sky-100 text-sky-700 border border-sky-200'
@@ -5003,20 +5010,43 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
           </button>
         </div>
         <div className="mt-4 pt-4 border-t border-stone-100">
-          <span id="liquid-glass-quality-label" className="text-sm text-stone-700">画质模式</span>
-          <p id="liquid-glass-quality-description" className="text-xs text-stone-500 mt-1">适用于全部背景主题 · 默认流畅，减少持续渲染负担；满画质保留完整效果。</p>
-          <div role="group" aria-labelledby="liquid-glass-quality-label" aria-describedby="liquid-glass-quality-description" className="flex flex-wrap gap-2 mt-3">
-            {[{ key: 'smooth', label: '流畅' }, { key: 'full', label: '满画质' }].map((quality) => (
-              <button
-                key={quality.key}
-                type="button"
-                onClick={() => selectLiquidGlassQuality(quality.key)}
-                aria-pressed={liquidGlassQuality === quality.key}
-                className={`rounded-lg border px-4 py-2 text-sm transition-colors ${liquidGlassQuality === quality.key ? 'border-sky-200 bg-sky-100 text-sky-700' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'}`}
-              >
-                {quality.label}
-              </button>
-            ))}
+          <span className="text-sm text-stone-700">画质模式</span>
+          <p className="text-xs text-stone-500 mt-1">玻璃材质与背景独立设置，适用于全部主题。</p>
+          <div className="grid gap-4 sm:grid-cols-2 mt-3">
+            <div className="rounded-xl border border-stone-200 p-3">
+              <span id="glass-material-quality-label" className="text-sm font-medium text-stone-700">液态玻璃</span>
+              <p id="glass-material-quality-description" className="text-xs text-stone-500 mt-1">默认满帧，保留实时模糊与鼠标追光；流畅减少材质采样。</p>
+              <div role="group" aria-labelledby="glass-material-quality-label" aria-describedby="glass-material-quality-description" className="flex flex-wrap gap-2 mt-3">
+                {[{ key: 'smooth', label: '流畅' }, { key: 'full', label: '满帧' }].map((quality) => (
+                  <button
+                    key={quality.key}
+                    type="button"
+                    onClick={() => selectGlassMaterialQuality(quality.key)}
+                    aria-pressed={glassMaterialQuality === quality.key}
+                    className={`rounded-lg border px-4 py-2 text-sm transition-colors ${glassMaterialQuality === quality.key ? 'border-sky-200 bg-sky-100 text-sky-700' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'}`}
+                  >
+                    {quality.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="rounded-xl border border-stone-200 p-3">
+              <span id="glass-background-quality-label" className="text-sm font-medium text-stone-700">渲染背景</span>
+              <p id="glass-background-quality-description" className="text-xs text-stone-500 mt-1">默认流畅，静态底图与局部光效；满画质启用完整动态背景。</p>
+              <div role="group" aria-labelledby="glass-background-quality-label" aria-describedby="glass-background-quality-description" className="flex flex-wrap gap-2 mt-3">
+                {[{ key: 'smooth', label: '流畅' }, { key: 'full', label: '满画质' }].map((quality) => (
+                  <button
+                    key={quality.key}
+                    type="button"
+                    onClick={() => selectLiquidGlassQuality(quality.key)}
+                    aria-pressed={liquidGlassQuality === quality.key}
+                    className={`rounded-lg border px-4 py-2 text-sm transition-colors ${liquidGlassQuality === quality.key ? 'border-sky-200 bg-sky-100 text-sky-700' : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50'}`}
+                  >
+                    {quality.label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
         {liquidGlassEnabled && (

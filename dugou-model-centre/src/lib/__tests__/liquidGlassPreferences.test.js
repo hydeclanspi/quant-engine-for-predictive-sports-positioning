@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_LIQUID_GLASS_QUALITY, LIQUID_GLASS_THEMES, normalizeLiquidGlassQuality } from '../../design/liquidGlassThemes'
+import { DEFAULT_LIQUID_GLASS_QUALITY, DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY, LIQUID_GLASS_THEMES, normalizeLiquidGlassQuality, normalizeLiquidGlassMaterialQuality } from '../../design/liquidGlassThemes'
 
 const session = vi.hoisted(() => ({ historical: null, preview: false }))
 vi.mock('../cloudSync', () => ({
@@ -172,7 +172,7 @@ describe('liquid glass UI preferences', () => {
 
   it.each([false, true])('marks only appearance changes as UI-only (preview=%s)', (preview) => {
     session.preview = preview
-    for (const patch of [{ liquidGlassQuality: 'full' }, { liquidGlassStyle: 'sand', liquidGlassStylePinned: true }, { liquidGlassEnabled: false }]) {
+    for (const patch of [{ liquidGlassQuality: 'full' }, { liquidGlassMaterialQuality: 'smooth' }, { liquidGlassStyle: 'sand', liquidGlassStylePinned: true }, { liquidGlassEnabled: false }]) {
       saveSystemConfig(patch)
       const event = dispatchEvent.mock.calls.at(-1)[0]
       expect(event.type).toBe('dugou:data-changed')
@@ -182,5 +182,66 @@ describe('liquid glass UI preferences', () => {
     saveSystemConfig({ initialCapital: 999, liquidGlassQuality: 'smooth' })
     expect(dispatchEvent.mock.calls.at(-1)[0].detail.uiOnly).not.toBe(true)
     expect(getSystemConfig().initialCapital).toBe(999)
+  })
+})
+
+
+describe('independent glass material and background budgets', () => {
+  it('defaults new and legacy settings to full material without coupling to background', () => {
+    expect(DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY).toBe('full')
+    expect(getSystemConfig()).toMatchObject({ liquidGlassMaterialQuality: 'full', liquidGlassQuality: 'smooth' })
+    for (const background of ['smooth', 'full']) {
+      for (const material of [undefined, null, '', 'unknown', true]) {
+        storage.set(key, JSON.stringify({ liquidGlassQuality: background, liquidGlassMaterialQuality: material }))
+        expect(normalizeLiquidGlassMaterialQuality(material)).toBe('full')
+        expect(getSystemConfig()).toMatchObject({ liquidGlassQuality: background, liquidGlassMaterialQuality: 'full' })
+      }
+    }
+    expect(saveSystemConfig({ liquidGlassMaterialQuality: 'unknown' }).liquidGlassMaterialQuality).toBe('full')
+  })
+
+  it.each([['smooth', 'smooth'], ['smooth', 'full'], ['full', 'smooth'], ['full', 'full']])(
+    'independently persists material %s and background %s for every theme', (material, background) => {
+      for (const { key: style } of LIQUID_GLASS_THEMES) {
+        saveSystemConfig({ liquidGlassStyle: style, liquidGlassQuality: background })
+        saveSystemConfig({ liquidGlassMaterialQuality: material })
+        const expected = { liquidGlassStyle: style, liquidGlassMaterialQuality: material, liquidGlassQuality: background }
+        expect(getSystemConfig()).toMatchObject(expected)
+        expect(exportDataBundle().system_config).toMatchObject(expected)
+        expect(JSON.parse(storage.get(key))).toMatchObject({ ...expected, initialCapital: 12345 })
+        saveSystemConfig({ liquidGlassQuality: background === 'full' ? 'smooth' : 'full' })
+        expect(getSystemConfig().liquidGlassMaterialQuality).toBe(material)
+      }
+    },
+  )
+
+  it('keeps both preview choices isolated from owner storage', () => {
+    const before = storage.get(key)
+    session.preview = true
+    saveSystemConfig({ liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'full' })
+    expect(getSystemConfig()).toMatchObject({ liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'full' })
+    expect(storage.get(key)).toBe(before)
+    session.preview = false
+    expect(getSystemConfig()).toMatchObject({ liquidGlassMaterialQuality: 'full', liquidGlassQuality: 'smooth' })
+  })
+
+  it('keeps device material during history reads and writes, without overwriting live parameters', () => {
+    const snapshot = { initialCapital: 500, liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'full' }
+    session.historical = { bundle: { system_config: snapshot } }
+    expect(getSystemConfig()).toMatchObject({ initialCapital: 500, liquidGlassMaterialQuality: 'full', liquidGlassQuality: 'smooth' })
+    saveSystemConfig({ liquidGlassMaterialQuality: 'smooth' })
+    expect(getSystemConfig()).toMatchObject({ initialCapital: 500, liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'smooth' })
+    expect(JSON.parse(storage.get(key))).toMatchObject({ initialCapital: 12345, liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'smooth' })
+    expect(snapshot).toEqual({ initialCapital: 500, liquidGlassMaterialQuality: 'smooth', liquidGlassQuality: 'full' })
+  })
+
+  it.each(['merge', 'replace'])('retains both local budgets through %s imports', (mode) => {
+    for (const material of [undefined, 'smooth', 'full']) {
+      storage.set(key, JSON.stringify({ liquidGlassMaterialQuality: material, liquidGlassQuality: 'smooth' }))
+      expect(importDataBundle({ system_config: {
+        initialCapital: 900, liquidGlassMaterialQuality: material === 'smooth' ? 'full' : 'smooth', liquidGlassQuality: 'full',
+      } }, mode)).toBe(true)
+      expect(getSystemConfig()).toMatchObject({ initialCapital: 900, liquidGlassMaterialQuality: material || 'full', liquidGlassQuality: 'smooth' })
+    }
   })
 })

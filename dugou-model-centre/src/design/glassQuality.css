@@ -1,6 +1,8 @@
-/* Smooth is a separate rendering budget; full-quality theme rules stay intact.
+/* Card material and background have independent rendering budgets.
+ * liquid-glass-smooth only reduces material sampling; liquid-background-smooth
+ * only freezes background/decorative effects. Full-quality theme rules stay intact.
  * Soft colour fields are baked into WebP (or static CSS for composed themes).
- * Glass keeps its translucent fill, bevel, highlight and shadow, without a
+ * Smooth material keeps its translucent fill, bevel, highlight and shadow, without a
  * backdrop-sampling pass on every card and nested control. */
 .smooth-glass-backdrop {
   position: fixed;
@@ -80,8 +82,8 @@ html.liquid-glass-on.liquid-glass-smooth .mn-dropdown {
   backdrop-filter: blur(6px) !important;
 }
 
-html.liquid-glass-smooth .composed-glass-scene__cool,
-html.liquid-glass-smooth .composed-glass-scene__warm { filter: none; }
+html.liquid-background-smooth .composed-glass-scene__cool,
+html.liquid-background-smooth .composed-glass-scene__warm { filter: none; }
 
 html.liquid-glass-smooth .glow-card {
   --mouse-x: 50% !important;
@@ -102,11 +104,11 @@ html.liquid-glass-smooth .theme-modern .console-motion-scope button:not(:disable
 
 /* Freeze decorative ambient loops; loading indicators and interaction feedback
  * remain active. Keep existing fills and shadows rather than hiding content. */
-html.liquid-glass-smooth .wr-liquid-orb,
-html.liquid-glass-smooth .wr-emblem__halo,
-html.liquid-glass-smooth .wr-emblem__ring,
-html.liquid-glass-smooth .wr-showcase .wr-emblem__plate,
-html.liquid-glass-smooth .wr-detail-card__aurora i {
+html.liquid-background-smooth .wr-liquid-orb,
+html.liquid-background-smooth .wr-emblem__halo,
+html.liquid-background-smooth .wr-emblem__ring,
+html.liquid-background-smooth .wr-showcase .wr-emblem__plate,
+html.liquid-background-smooth .wr-detail-card__aurora i {
   animation: none !important;
 }
 

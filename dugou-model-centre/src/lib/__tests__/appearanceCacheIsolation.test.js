@@ -34,7 +34,7 @@ describe('appearance changes preserve expensive model caches', () => {
     const dashboard = getDashboardSnapshot()
     const periods = getCyclePeriods()
     for (const style of ['spectra', 'xuanji', 'starward', 'moon']) {
-      state.config = { ...state.config, liquidGlassStyle: style, liquidGlassQuality: 'smooth' }
+      state.config = { ...state.config, liquidGlassStyle: style, liquidGlassQuality: 'smooth', liquidGlassMaterialQuality: style === 'spectra' ? 'smooth' : 'full' }
       announce({ key: 'dugou.system_config.v1', uiOnly: true })
       expect(getDashboardSnapshot()).toBe(dashboard)
       expect(getCyclePeriods()).toBe(periods)

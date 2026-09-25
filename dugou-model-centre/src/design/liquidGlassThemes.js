@@ -1,9 +1,12 @@
 // Shared by Console, the renderer and persisted UI preferences.
 // 默认 = 暖砂 sand（评审期：各页默认见 design/themeSession.js 的 PAGE_GLASS_DEFAULTS）
 export const DEFAULT_LIQUID_GLASS_STYLE = 'sand'
-// 新设备与旧配置都从流畅模式开始；只有明确选择才启用持续渲染。
+// 旧 liquidGlassQuality 字段现在只控制背景，保留已有背景选择。
+// 卡片材质独立设置：新设备与未设置材质的旧配置默认「满帧」。
 export const DEFAULT_LIQUID_GLASS_QUALITY = 'smooth'
 export const normalizeLiquidGlassQuality = (value) => value === 'full' ? 'full' : DEFAULT_LIQUID_GLASS_QUALITY
+export const DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY = 'full'
+export const normalizeLiquidGlassMaterialQuality = (value) => value === 'smooth' ? 'smooth' : DEFAULT_LIQUID_GLASS_MATERIAL_QUALITY
 
 export const LIQUID_GLASS_THEMES = [
   { key: 'vivid', label: '流光溢彩', description: '多彩流动', preview: 'linear-gradient(135deg, #84b7ec, #b1a0ee 36%, #f4c174 68%, #84d9bd)' },
