@@ -231,15 +231,9 @@ html.liquid-glass-on .theme-inspiration-2609 .inspiration-2609-body[data-lab-pag
   backdrop-filter: blur(18px) saturate(170%);
 }
 
-/* Seasons 战报页的大白底（.wr-showcase 底板）在液态玻璃下退场：
- * 去掉粉彩渐变 + 82% 白 wash + 边框投影，连同 ::before/::after 的白色轮廓与柔光皮，
- * 主题背景直接透出；内部仪表（banner/kpis/周期卡）保留各自的柔白玻璃层。 */
-html.liquid-glass-on .wr-showcase {
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-}
-html.liquid-glass-on .wr-showcase::before,
-html.liquid-glass-on .wr-showcase::after {
+/* 战报页的整页白底画布（.warreport-scope::before，#f5f5f7 通栏 + 蓝白光斑）退场：
+ * 白色的"大底"消失、主题背景透出，但 .wr-showcase 卡片本体保留其粉彩卡面。 */
+html.liquid-glass-on .warreport-scope::before,
+html.liquid-glass-on .warreport-scope::after {
   display: none;
 }
