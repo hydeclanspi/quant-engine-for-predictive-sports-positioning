@@ -343,6 +343,8 @@ export default function NewInvestmentPage() {
   const [quickInputMeta, setQuickInputMeta] = useState(null)
   const [waxSealBurst, setWaxSealBurst] = useState({ active: false, token: 0, x: 0, y: 0 })
   const [confirmPersistPending, setConfirmPersistPending] = useState(false)
+  // 投前研判（默认）/ 投后导入：本轮两视图复刻同一套界面，投前的升级下一轮在此分叉。
+  const [viewMode, setViewMode] = useState('pre')
   const [systemConfig] = useState(() => getSystemConfig())
   const persistTimerRef = useRef(null)
   const persistIdleRef = useRef(null)
@@ -465,9 +467,10 @@ export default function NewInvestmentPage() {
     })
     return map
   }, [historicalMatchLibrary])
-  // 实时蓄水池余额（cycle-aware）：建议下注金额与风险上限都以它为基数，
-  // 周期性结算后会自动以新周期的本金口径计算。
-  const poolCapital = useMemo(() => getReservoirState().poolBalance, [systemConfig, dataVersion])
+  // 实时蓄水池余额（cycle-aware）：建议下注金额与风险上限都以"可用资金"为基数
+  // （2026-09-25 决策：蓄水池余额扣除未结算在途投入；周期性结算后自动以新周期口径计算）。
+  const reservoirState = useMemo(() => getReservoirState(), [systemConfig, dataVersion])
+  const poolCapital = reservoirState.availableCash
   const riskCap = useMemo(
     () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
@@ -1422,11 +1425,34 @@ export default function NewInvestmentPage() {
 
   return (
     <div className="page-shell page-content-fluid motion-v2-scope lab-new-page">
-      <div className="mb-8 lab-page-heading">
-        <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
-        <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">录入比赛信息与预测参数 · Record match predictions & calibration parameters</p>
+      <div className="mb-8 lab-page-heading flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
+          <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">
+            {viewMode === 'pre'
+              ? '投前研判 · 赛前登记你的观点（当前界面与投后一致，升级在路上）'
+              : '投后导入 · 录入比赛信息与预测参数 · Record match predictions & calibration parameters'}
+          </p>
+        </div>
+        <div className="inline-flex rounded-xl border border-stone-200 bg-white/80 p-1 gap-1" role="tablist" aria-label="投资视图切换">
+          {[
+            { key: 'pre', label: '投前研判' },
+            { key: 'post', label: '投后导入' },
+          ].map((tab) => (
+            <button
+              key={tab.key}
+              role="tab"
+              aria-selected={viewMode === tab.key}
+              onClick={() => setViewMode(tab.key)}
+              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === tab.key ? 'bg-stone-800 text-white shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
       </div>
 
+      <div data-investment-view={viewMode}>
       <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border lab-new-quick">
         <button
           onClick={() => {
@@ -2155,6 +2181,9 @@ export default function NewInvestmentPage() {
                 <span className="text-xs text-stone-400 block whitespace-nowrap">风控上限</span>
                 <span className="text-sm text-stone-500">¥ {riskCap} ({Math.round(systemConfig.riskCapRatio * 100)}%)</span>
                 <span className="block text-[10px] text-stone-400 mt-0.5">
+                  蓄水池 ¥{reservoirState.poolBalance} · 在途冻结 ¥{reservoirState.inFlightCommitment} · 可用 ¥{reservoirState.availableCash}
+                </span>
+                <span className="block text-[10px] text-stone-400 mt-0.5">
                   Atomic Kelly÷{effectiveKellyDivisor.toFixed(1)} · Conf×{calibrationContext.multipliers.conf.toFixed(2)} · FSE×
                   {calibrationContext.multipliers.fse.toFixed(2)} · TeamCal {calibrationContext.teamCalibration?.teamCount || 0}队 ·
                   MarketLean {(calibrationContext.marketBlend?.marketLean || 0).toFixed(2)}
@@ -2191,6 +2220,7 @@ export default function NewInvestmentPage() {
             </div>
           </div>
         </div>
+      </div>
       </div>
       <WaxSealStampOverlay burst={waxSealBurst} onDone={handleWaxSealStampDone} />
     </div>

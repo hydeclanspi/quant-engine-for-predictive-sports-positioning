@@ -18,12 +18,16 @@ vi.mock('../localData', () => ({
 import {
   autoApplyAdaptiveWeights,
   backtestComboHyperparams,
+  bootstrapDateClusterInterval,
   buildEntryCorrelationMatrix,
   buildIsotonicRegression,
   computeAdaptiveWeightSuggestions,
+  getModelValidationSnapshot,
+  getPredictionCalibrationContext,
   __testables,
 } from '../analytics'
 import { predictMatchProbability } from '../matchPrediction'
+import { historyFromRows } from '../temporalValidation'
 
 const makeMatch = (extra = {}) => ({
   id: 'match', home_team: 'Home', away_team: 'Away', entry_market_type: 'moneyline',
@@ -251,7 +255,6 @@ describe('production weight sensitivity', () => {
   }
 
   it.each([
-    ['weightMode', 0.16, 1.5],
     ['weightTys', 0.12, 1.5],
     ['weightFid', 0.14, 1.5],
     ['weightFse', 0.07, 1.5],
@@ -262,9 +265,9 @@ describe('production weight sensitivity', () => {
     expect(highP).toBeGreaterThan(lowP)
   })
 
-  it('keeps weightConf out of the production probability', () => {
-    const a = predictMatchProbability(match, { ...baseConfig, weightConf: 0.25 }, {})
-    const b = predictMatchProbability(match, { ...baseConfig, weightConf: 0.65 }, {})
+  it.each([['weightConf'], ['weightMode']])('keeps %s out of the production probability', (key) => {
+    const a = predictMatchProbability(match, { ...baseConfig, [key]: 0.25 }, {})
+    const b = predictMatchProbability(match, { ...baseConfig, [key]: 0.65 }, {})
     expect(a).toBe(b)
   })
 })
@@ -294,5 +297,132 @@ describe('isotonic regression fixed fixture', () => {
     expect(model.calibrate(0.6)).toBeCloseTo(0.25, 10)
     // 分段线性：0.4 落在 0.2→0.6 段，t=(0.4-0.2)/0.4=0.5 → 0.2 + 0.5*(0.25-0.2)=0.225。
     expect(model.calibrate(0.4)).toBeCloseTo(0.225, 10)
+  })
+})
+
+// 带独立事件身份的时间序列夹具：供留出集 / 快照测试做严格时序切分。
+const makeEventInvestment = (i) => ({
+  id: `ev-${i}`, created_at: new Date(Date.UTC(2026, 0, i + 1)).toISOString(),
+  outcome_available_at: new Date(Date.UTC(2026, 0, i + 1, 1)).toISOString(),
+  status: i % 3 ? 'win' : 'lose', inputs: 10, profit: i % 3 ? 10 : -10,
+  matches: [{
+    id: `evm-${i}`, event_id: `eve-${i}`, home_team: `Home${i}`, away_team: `Away${i}`,
+    entry_market_type: 'moneyline', conf: 0.3 + (i % 6) / 10, odds: 2, mode: '常规',
+    tys_home: 'M', tys_away: 'L', fid: 0.4, fse_home: 0.3, fse_away: 0.7,
+    match_rating: i % 3 ? 0.8 : 0.4, is_correct: i % 3 !== 0,
+    entries: [{ name: 'win', odds: 2 }],
+  }],
+})
+
+describe('date-cluster bootstrap interval', () => {
+  const meanValue = (subset) => subset.reduce((sum, row) => sum + row.value, 0) / subset.length
+
+  it('is deterministic for the same seeded input', () => {
+    const rows = Array.from({ length: 40 }, (_, i) => ({
+      created_at: new Date(Date.UTC(2026, 0, 1 + (i % 10))).toISOString(),
+      conf: 0.6, odds: 2, value: i % 2,
+    }))
+    const first = bootstrapDateClusterInterval(rows, { statistic: meanValue, resamples: 200 })
+    const second = bootstrapDateClusterInterval(rows, { statistic: meanValue, resamples: 200 })
+    expect(first).toEqual(second)
+    expect(first).toMatchObject({ resamples: 200, clusters: 10 })
+    expect(first.p05).toBeLessThanOrEqual(first.p50)
+    expect(first.p50).toBeLessThanOrEqual(first.p95)
+  })
+
+  it('widens when the same rows are shuffled into fewer date clusters', () => {
+    // 同样的 40 行（0/1 各半）：40 个单点簇时重抽近似二项波动；压成 2 个
+    // 整簇后每次重抽由少数簇主导，区间必然更宽（聚类相关 ≠ 独立证据）。
+    const base = Array.from({ length: 40 }, (_, i) => ({ conf: 0.6, odds: 2, value: i % 2 }))
+    const manyClusters = base.map((row, i) => ({ ...row, created_at: new Date(Date.UTC(2026, 0, 1 + i)).toISOString() }))
+    const fewClusters = base.map((row) => ({ ...row, created_at: new Date(Date.UTC(2026, 0, 1 + row.value)).toISOString() }))
+    const wide = bootstrapDateClusterInterval(fewClusters, { statistic: meanValue })
+    const narrow = bootstrapDateClusterInterval(manyClusters, { statistic: meanValue })
+    expect(wide.clusters).toBe(2)
+    expect(narrow.clusters).toBe(40)
+    expect(wide.p95 - wide.p05).toBeGreaterThan(narrow.p95 - narrow.p05)
+  })
+
+  it('gives rows without a usable date their own singleton clusters', () => {
+    const rows = [
+      { created_at: 'not-a-date', value: 1 },
+      { value: 1 },
+      { created_at: new Date(Date.UTC(2026, 0, 3)).toISOString(), value: 0 },
+      { created_at: new Date(Date.UTC(2026, 0, 3, 6)).toISOString(), value: 0 },
+    ]
+    const result = bootstrapDateClusterInterval(rows, { statistic: (subset) => subset.length, resamples: 20 })
+    expect(result.clusters).toBe(3)
+  })
+})
+
+describe('frozen 7% holdout in the validation summary', () => {
+  beforeEach(() => {
+    state.investments = Array.from({ length: 50 }, (_, i) => makeEventInvestment(i))
+    __testables.bumpAnalyticsRevision()
+  })
+
+  it('excludes the newest rows from walk-forward training and still scores them', () => {
+    const rows = __testables.getBinaryOutcomeRows()
+    const result = __testables.summarizeModelValidationPrequential(rows, state.config)
+    expect(result.holdout).toMatchObject({
+      available: true, basis: 'frozen_holdout_never_trained_2026_09', samples: 4,
+    })
+    // 留出集 = created_at 最新的 4 场；任何窗口的训练与测试名单都不得包含它们
+    const holdoutKeys = new Set(rows.slice(-4).map((row) => row.eventKey))
+    expect(holdoutKeys.size).toBe(4)
+    result.walkForward.forEach((window) => {
+      window.trainingIds.forEach((id) => expect(holdoutKeys.has(id)).toBe(false))
+      window.predictions.forEach((p) => expect(holdoutKeys.has(p.eventKey)).toBe(false))
+    })
+    // 分数确实来自“训练池拟合的生产管道”在留出场次上的预测
+    const fit = getPredictionCalibrationContext({
+      investments: historyFromRows(rows.slice(0, -4)), config: state.config, detail: 'full',
+    })
+    const expectedCalibrated = rows.slice(-4)
+      .reduce((sum, row) => sum + (predictMatchProbability(row.match, state.config, fit) - row.actual) ** 2, 0) / 4
+    expect(result.holdout.brier.calibrated).toBeCloseTo(expectedCalibrated, 10)
+    const expectedRaw = rows.slice(-4).reduce((sum, row) => sum + (row.conf - row.actual) ** 2, 0) / 4
+    expect(result.holdout.brier.raw).toBeCloseTo(expectedRaw, 10)
+    expect(Number.isFinite(result.holdout.logLoss.calibrated)).toBe(true)
+    expect(Number.isFinite(result.holdout.logLoss.raw)).toBe(true)
+  })
+
+  it('reports the holdout as unavailable when the training pool would drop below the walk-forward minimum', () => {
+    state.investments = Array.from({ length: 24 }, (_, i) => makeEventInvestment(i))
+    const result = __testables.summarizeModelValidationPrequential(__testables.getBinaryOutcomeRows(), state.config)
+    expect(result).not.toBeNull()
+    expect(result.holdout).toMatchObject({
+      available: false, basis: 'frozen_holdout_never_trained_2026_09', samples: 0,
+    })
+  })
+})
+
+describe('model validation snapshot evidence fields', () => {
+  beforeEach(() => {
+    state.investments = Array.from({ length: 50 }, (_, i) => makeEventInvestment(i))
+    __testables.bumpAnalyticsRevision()
+  })
+
+  it('surfaces the three blend baselines, the Brier-gain interval and the frozen holdout', () => {
+    const snapshot = getModelValidationSnapshot()
+    expect(snapshot.ready).toBe(true)
+    expect(snapshot.blendBaselines.windows).toBeGreaterThan(0)
+    const arms = ['calibrated', 'market', 'blended']
+    arms.forEach((arm) => {
+      expect(Number.isFinite(snapshot.blendBaselines[arm].brier)).toBe(true)
+      expect(Number.isFinite(snapshot.blendBaselines[arm].logLoss)).toBe(true)
+      expect(snapshot.blendBaselines[arm].roi === null || Number.isFinite(snapshot.blendBaselines[arm].roi)).toBe(true)
+    })
+    expect(snapshot.brier.gainCi90).toMatchObject({ resamples: 400 })
+    expect(snapshot.brier.gainCi90.clusters).toBeGreaterThan(0)
+    expect(snapshot.brier.gainCi90.p05).toBeLessThanOrEqual(snapshot.brier.gainCi90.p50)
+    expect(snapshot.brier.gainCi90.p50).toBeLessThanOrEqual(snapshot.brier.gainCi90.p95)
+    expect(snapshot.holdout).toMatchObject({
+      available: true, basis: 'frozen_holdout_never_trained_2026_09', samples: 4,
+    })
+    expect(Number.isFinite(snapshot.holdout.brier.calibrated)).toBe(true)
+    expect(Number.isFinite(snapshot.holdout.brier.raw)).toBe(true)
+    expect(Number.isFinite(snapshot.holdout.logLoss.calibrated)).toBe(true)
+    expect(Number.isFinite(snapshot.holdout.logLoss.raw)).toBe(true)
   })
 })

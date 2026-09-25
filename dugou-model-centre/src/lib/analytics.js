@@ -1164,7 +1164,8 @@ const DEMO_POOL_BALANCE = 1529
  */
 export const getReservoirState = () => {
   const config = getSystemConfig()
-  const settledAll = getSettledInvestments(getActiveInvestments())
+  const activeInvestments = getActiveInvestments()
+  const settledAll = getSettledInvestments(activeInvestments)
   const injections = Array.isArray(config.capitalInjections) ? config.capitalInjections : []
   const settlements = Array.isArray(config.poolSettlements) ? config.poolSettlements : []
 
@@ -1191,6 +1192,13 @@ export const getReservoirState = () => {
 
   const poolBalance = cycleBaseCapital + cycleProfit
 
+  // 在途冻结（2026-09-25 决策）：未结算票的投入不是可用资金——采纳时冻结、结算时释放。
+  // poolBalance 的历史口径（本金+已实现盈亏）保持不变，仅新增可用口径供下注基数使用。
+  const inFlightCommitment = activeInvestments
+    .filter((item) => item.status === 'pending' && !item.is_archived)
+    .reduce((sum, item) => sum + Math.max(0, toNumber(item.inputs, 0)), 0)
+  const availableCash = Math.max(0, poolBalance - inFlightCommitment)
+
   // ── Demo「后台大手」：preview/demo 模式下把对外的蓄水池余额顶到展示值 ──────
   // 公开 demo 的最近一次结算会把当前周期清零（poolBalance=0），令首页卡片与新建/
   // 组合下注基数都变 0、demo 看起来像坏掉。这里只在 preview 模式覆盖对外的
@@ -1200,9 +1208,14 @@ export const getReservoirState = () => {
   const displayPoolBalance = isPreviewMode()
     ? DEMO_POOL_BALANCE
     : Number(poolBalance.toFixed(2))
+  const displayAvailableCash = isPreviewMode()
+    ? DEMO_POOL_BALANCE
+    : Number(availableCash.toFixed(2))
 
   return {
     poolBalance: displayPoolBalance,
+    availableCash: displayAvailableCash,
+    inFlightCommitment: isPreviewMode() ? 0 : Number(inFlightCommitment.toFixed(2)),
     cycleBaseCapital: Number(cycleBaseCapital.toFixed(2)),
     cycleProfit: Number(cycleProfit.toFixed(2)),
     cycleStartTime,
@@ -2875,8 +2888,86 @@ const simulateKellyStrategyByRows = (rows, predictFn, config, divisor) => {
   }
 }
 
+const FROZEN_HOLDOUT_RATIO = 0.07
+const FROZEN_HOLDOUT_MIN_ROWS = 3
+
+// 2026-09-25 决策：时间最后 7% 只做最终对照，不进训练。
+// 按 created_at 取时间跨度最后 7% 的记录（不足 3 场时向前补足 3 场）；
+// 没有可用日期的记录无法排进“最新”序列，只能留在训练池。
+const splitFrozenHoldoutRows = (rows) => {
+  const unavailable = { available: false, trainingRows: rows, holdoutRows: [] }
+  const dated = rows
+    .map((row, index) => ({ row, index, ts: validTime(row?.created_at) }))
+    .filter((entry) => Number.isFinite(entry.ts))
+    .sort((a, b) => a.ts - b.ts || a.index - b.index)
+  if (dated.length < FROZEN_HOLDOUT_MIN_ROWS) return unavailable
+  const span = dated[dated.length - 1].ts - dated[0].ts
+  const cutoff = dated[dated.length - 1].ts - span * FROZEN_HOLDOUT_RATIO
+  let holdoutEntries = dated.filter((entry) => entry.ts >= cutoff)
+  if (holdoutEntries.length < FROZEN_HOLDOUT_MIN_ROWS) holdoutEntries = dated.slice(-FROZEN_HOLDOUT_MIN_ROWS)
+  // 留出后训练池仍须满足下方 walk-forward 的 minRows 门槛（24），否则对照无从谈起
+  if (rows.length - holdoutEntries.length < 24) return unavailable
+  const holdoutSet = new Set(holdoutEntries.map((entry) => entry.row))
+  return {
+    available: true,
+    trainingRows: rows.filter((row) => !holdoutSet.has(row)),
+    holdoutRows: holdoutEntries.map((entry) => entry.row),
+  }
+}
+
+/**
+ * 日期聚类 Bootstrap 区间。
+ * 同一天的记录共享赛程与信息面，彼此并不独立；按日历日（created_at 的 UTC
+ * 日期）整簇重抽，避免把相关记录当作独立证据而低估区间宽度。无可用日期的
+ * 记录各自成为单点簇。种子由数据内容派生（buildMonteCarloSeed →
+ * createSeededRng），同一输入结果恒定。
+ *
+ * @returns {{ p05: number, p50: number, p95: number, resamples: number, clusters: number } | null}
+ */
+export const bootstrapDateClusterInterval = (rows, { statistic, resamples = 400, ci = 0.9 } = {}) => {
+  if (!Array.isArray(rows) || rows.length === 0 || typeof statistic !== 'function') return null
+  const clusterMap = new Map()
+  rows.forEach((row, index) => {
+    const ts = validTime(row?.created_at)
+    const key = Number.isFinite(ts) ? new Date(ts).toISOString().slice(0, 10) : `__undated_${index}`
+    if (!clusterMap.has(key)) clusterMap.set(key, [])
+    clusterMap.get(key).push(row)
+  })
+  const clusters = [...clusterMap.values()]
+  const runs = Math.max(1, Math.round(toNumber(resamples, 400)) || 400)
+  const alpha = clamp((1 - clamp(toNumber(ci, 0.9), 0.02, 0.999)) / 2, 0.0005, 0.49)
+  const rng = createSeededRng(buildMonteCarloSeed(rows, runs * 31 + clusters.length))
+  const stats = []
+  for (let r = 0; r < runs; r += 1) {
+    const subset = []
+    for (let k = 0; k < clusters.length; k += 1) {
+      const picked = clusters[Math.min(clusters.length - 1, Math.floor(rng() * clusters.length))]
+      subset.push(...picked)
+    }
+    const value = Number(statistic(subset))
+    if (Number.isFinite(value)) stats.push(value)
+  }
+  if (stats.length === 0) return null
+  stats.sort((a, b) => a - b)
+  const quantile = (q) => {
+    const pos = clamp(q, 0, 1) * (stats.length - 1)
+    const lo = Math.floor(pos)
+    const hi = Math.min(stats.length - 1, lo + 1)
+    return stats[lo] + (stats[hi] - stats[lo]) * (pos - lo)
+  }
+  return {
+    p05: quantile(alpha),
+    p50: quantile(0.5),
+    p95: quantile(1 - alpha),
+    resamples: runs,
+    clusters: clusters.length,
+  }
+}
+
 const summarizeModelValidationPrequential = (rows, config) => {
-  const windows = buildPrequentialWalkForwardWindows(rows, {
+  // 2026-09-25 决策：时间最后 7% 只做最终对照，不进训练
+  const holdoutSplit = splitFrozenHoldoutRows(rows)
+  const windows = buildPrequentialWalkForwardWindows(holdoutSplit.trainingRows, {
     minRows: 24,
     minTrain: 12,
     minTest: PREQUENTIAL_MIN_TEST_MATCHES,
@@ -2902,6 +2993,7 @@ const summarizeModelValidationPrequential = (rows, config) => {
   const walkForward = []
   const rawSimRows = []
   const calibratedSimRows = []
+  const scoredTestRows = []
 
   windows.forEach((window, idx) => {
     const { trainRows, testRows } = window
@@ -2951,11 +3043,19 @@ const summarizeModelValidationPrequential = (rows, config) => {
 
     const divisor = Math.max(1, toNumber(config.kellyDivisor, 4))
     testRows.forEach((row) => {
+      const pRaw = clamp(toNumber(rawPredict(row), row.conf), 0.02, 0.98)
+      const pCal = clamp(toNumber(calibratedPredict(row), row.conf), 0.02, 0.98)
+      // 逐场误差留档：供下方日期聚类 Bootstrap 估计（原始 − 校准）Brier 差值区间
+      scoredTestRows.push({
+        created_at: row.created_at,
+        conf: row.conf,
+        odds: row.odds,
+        rawSqError: (pRaw - row.actual) ** 2,
+        calibratedSqError: (pCal - row.actual) ** 2,
+      })
       if (row.binaryPayout === false) return
       const odds = Math.max(1.01, toNumber(row.odds, toNumber(config.defaultOdds, 2.5)))
       const unitReturn = row.actual === 1 ? odds - 1 : -1
-      const pRaw = clamp(toNumber(rawPredict(row), row.conf), 0.02, 0.98)
-      const pCal = clamp(toNumber(calibratedPredict(row), row.conf), 0.02, 0.98)
       const rawStake = Math.round(calcKellyStake(pRaw, odds, divisor, config))
       const calibratedStake = Math.round(calcKellyStake(pCal, odds, divisor, config))
       if (rawStake > 0) {
@@ -2985,6 +3085,41 @@ const summarizeModelValidationPrequential = (rows, config) => {
     rows.length * 193 + 29,
   )
 
+  // 校准相对原始 Conf 的逐场 Brier 差值（正值 = 校准更好），按日历日整簇
+  // 重抽的 Bootstrap 区间；区间覆盖 0 时不得声称任一方更好。
+  const brierGainInterval = bootstrapDateClusterInterval(scoredTestRows, {
+    statistic: (subset) =>
+      subset.length === 0
+        ? Number.NaN
+        : subset.reduce((sum, row) => sum + (row.rawSqError - row.calibratedSqError), 0) / subset.length,
+  })
+
+  // 冻结留出集（2026-09-25 决策）：生产管道按训练池全量经同一注入式
+  // context 路径重拟合，仅在从未参与训练的最近 7% 记录上做最终对照。
+  let holdout = { available: false, basis: 'frozen_holdout_never_trained_2026_09', samples: 0 }
+  if (holdoutSplit.available) {
+    const holdoutFit = getPredictionCalibrationContext({
+      investments: historyFromRows(holdoutSplit.trainingRows),
+      config,
+      detail: 'full',
+    })
+    const holdoutRawPredict = (row) => row.conf
+    const holdoutCalibratedPredict = (row) => predictMatchProbability(row.match, config, holdoutFit)
+    holdout = {
+      available: true,
+      basis: 'frozen_holdout_never_trained_2026_09',
+      samples: holdoutSplit.holdoutRows.length,
+      brier: {
+        raw: calcBrierScore(holdoutSplit.holdoutRows, holdoutRawPredict),
+        calibrated: calcBrierScore(holdoutSplit.holdoutRows, holdoutCalibratedPredict),
+      },
+      logLoss: {
+        raw: calcLogLoss(holdoutSplit.holdoutRows, holdoutRawPredict),
+        calibrated: calcLogLoss(holdoutSplit.holdoutRows, holdoutCalibratedPredict),
+      },
+    }
+  }
+
   return {
     trainSamples: latestWindow.trainRows.length,
     testSamples: latestWindow.testRows.length,
@@ -3012,6 +3147,8 @@ const summarizeModelValidationPrequential = (rows, config) => {
     walkForward,
     positiveWalkForward: walkForward.filter((row) => row.gainPct > 0).length,
     derivedAvailabilityRows,
+    brierGainInterval,
+    holdout,
     timeBasis: derivedAvailabilityRows > 0
       ? WINDOW_TIME_BASIS.derivedAvailability
       : WINDOW_TIME_BASIS.recordedOnly,
@@ -3070,6 +3207,8 @@ export const getModelValidationSnapshot = () => {
     positiveWalkForward,
     timeBasis,
     derivedAvailabilityRows,
+    brierGainInterval,
+    holdout,
   } = prequentialSummary
   const brierGainPct = brier.testRaw > 0 ? ((brier.testRaw - brier.testCalibrated) / brier.testRaw) * 100 : 0
   const logLossGainPct = logLoss.testRaw > 0 ? ((logLoss.testRaw - logLoss.testCalibrated) / logLoss.testRaw) * 100 : 0
@@ -3082,6 +3221,27 @@ export const getModelValidationSnapshot = () => {
   let stability = 'stable'
   if (drift > 0.03 || brierGainPct < -2) stability = 'risk'
   else if (drift > 0.015 || brierGainPct < 1) stability = 'watch'
+
+  // 三组基线（校准 / 市场 / 混合）透传自完整校准上下文的 blend walk-forward
+  // 汇总（marketBlend，生产侧本就算好）；属固定配置 prequential 对照，并非
+  // 独立样本外证明。ROI 仅在窗口实际报告时给出（隔离拟合不含策略仿真）。
+  const marketBlend = getPredictionCalibrationContext()?.marketBlend || {}
+  const blendWalkForward = Array.isArray(marketBlend.walkForward) ? marketBlend.walkForward : []
+  const blendRoiReported = blendWalkForward.some((row) => row && row.calibratedRoi !== null && row.calibratedRoi !== undefined)
+  const blendArm = (prefix) => ({
+    brier: Number(toNumber(marketBlend[`${prefix}Brier`], 0).toFixed(4)),
+    logLoss: Number(toNumber(marketBlend[`${prefix}LogLoss`], 0).toFixed(4)),
+    roi: blendRoiReported && Number.isFinite(marketBlend[`${prefix}Roi`])
+      ? Number(marketBlend[`${prefix}Roi`].toFixed(2))
+      : null,
+  })
+  const blendBaselines = {
+    basis: 'fixed_config_prequential_blend_walk_forward',
+    windows: blendWalkForward.length,
+    calibrated: blendArm('calibrated'),
+    market: blendArm('market'),
+    blended: blendArm('blended'),
+  }
 
   const snapshot = {
     ready: true,
@@ -3101,6 +3261,16 @@ export const getModelValidationSnapshot = () => {
       testCalibrated: Number(brier.testCalibrated.toFixed(4)),
       gainPct: Number(brierGainPct.toFixed(2)),
       drift: Number(drift.toFixed(4)),
+      // （原始 − 校准）逐场 Brier 差值的日期聚类 Bootstrap 区间；null = 无法估计
+      gainCi90: brierGainInterval
+        ? {
+            p05: Number(brierGainInterval.p05.toFixed(4)),
+            p50: Number(brierGainInterval.p50.toFixed(4)),
+            p95: Number(brierGainInterval.p95.toFixed(4)),
+            resamples: brierGainInterval.resamples,
+            clusters: brierGainInterval.clusters,
+          }
+        : null,
     },
     logLoss: {
       trainRaw: Number(logLoss.trainRaw.toFixed(4)),
@@ -3134,6 +3304,22 @@ export const getModelValidationSnapshot = () => {
     positiveWalkForward,
     timeBasis,
     derivedAvailabilityRows,
+    blendBaselines,
+    holdout: holdout?.available
+      ? {
+          available: true,
+          basis: holdout.basis,
+          samples: holdout.samples,
+          brier: {
+            raw: Number(holdout.brier.raw.toFixed(4)),
+            calibrated: Number(holdout.brier.calibrated.toFixed(4)),
+          },
+          logLoss: {
+            raw: Number(holdout.logLoss.raw.toFixed(4)),
+            calibrated: Number(holdout.logLoss.calibrated.toFixed(4)),
+          },
+        }
+      : { available: false, basis: 'frozen_holdout_never_trained_2026_09', samples: 0 },
   }
 
   analyticsMemo.modelValidation.set(cacheKey, snapshot)
@@ -3854,6 +4040,11 @@ export const getMetricsSnapshot = (periodKey = 'all') => {
 
 const WEIGHT_KEYS = ['weightConf', 'weightMode', 'weightTys', 'weightFid', 'weightOdds', 'weightFse']
 
+// 不按概率损失调参的权重：weightConf 在生产预测器中本就无作用（沿用既有处理）；
+// weightMode 自 2026-09-25 决策起只影响资金侧、不影响生产概率（见 matchPrediction.js
+// 的 MODE_AFFECTS_PROBABILITY），故同样标记为 inactive。
+const INACTIVE_WEIGHT_KEYS = new Set(['weightConf', 'weightMode'])
+
 const DEFAULT_WEIGHT_BOUNDS = {
   weightConf: [0.25, 0.65],
   weightMode: [0.08, 0.28],
@@ -3978,7 +4169,7 @@ export const computeAdaptiveWeightSuggestions = () => {
   const maxChange = Math.min(0.02, Math.max(0, toNumber(adaptive.maxSingleChange, 0.02)))
   let remaining = 0.08
   const suggestions = WEIGHT_KEYS.map((key) => {
-    const inactive = key === 'weightConf'
+    const inactive = INACTIVE_WEIGHT_KEYS.has(key)
     const limits = bounds[key] || DEFAULT_WEIGHT_BOUNDS[key]
     const plus = { ...current, [key]: clamp(current[key] + 0.01, ...limits) }
     const minus = { ...current, [key]: clamp(current[key] - 0.01, ...limits) }
@@ -5346,7 +5537,7 @@ export const autoApplyAdaptiveWeights = () => {
   const appliedChanges = []
 
   result.suggestions.forEach((suggestion) => {
-    if (suggestion.key === 'weightConf') return
+    if (INACTIVE_WEIGHT_KEYS.has(suggestion.key)) return
     if (suggestion.confidence < minConfidence) return
     if (Math.abs(suggestion.change) < 0.001) return
     // Guard: cap individual change magnitude
@@ -6502,6 +6693,7 @@ export const __testables = {
   getBinaryOutcomeRows,
   toCalibrationMatchRows,
   summarizeModelValidationPrequential,
+  bumpAnalyticsRevision,
   calcKellyStake,
   calcKellyRowStake,
   getForecastStates,

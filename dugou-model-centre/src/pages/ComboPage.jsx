@@ -1992,6 +1992,11 @@ const buildSubsets = (items, maxSubsetSize) => {
 // (implied ~31%) gives surplus +0.14, which is a STRONG edge.
 // Conf 0.75 on a 1.19 odds match (implied ~84%) gives surplus -0.09.
 // ═══════════════════════════════════════════════════════════════
+// 2026-09-25 决策：决策层一律纸面赔率——EV = p × odds − 1 天然已含抽水，不再手动去水
+// （手动去水会把"看着有优势、实际负 EV"的票推进来）。去水对照仅允许作纯展示。
+// 回调：把 DECISION_USE_DEVIG_BASELINE 改回 true。
+const DECISION_USE_DEVIG_BASELINE = false
+
 const calcConfSurplus = (match, calibratedP = null, hyperparams = null) => {
   const rawConf = clamp(Number(match.conf || 0.5), 0.05, 0.95)
   // Use calibrated probability if available, otherwise raw conf
@@ -2005,16 +2010,17 @@ const calcConfSurplus = (match, calibratedP = null, hyperparams = null) => {
   const vig = hyperparams?.vigOverround ?? 0.05
   const rawImplied = 1 / Math.max(1.01, anchorOdds)
   const vigAdjusted = clamp(rawImplied * (1 - vig), 0.02, 0.98)
-  const surplus = modelProb - vigAdjusted
+  const marketBaseline = DECISION_USE_DEVIG_BASELINE ? vigAdjusted : rawImplied
+  const surplus = modelProb - marketBaseline
   // Surplus ratio: how big is the edge relative to market prob
   // This normalizes across different odds levels
-  const surplusRatio = vigAdjusted > 0.01 ? surplus / vigAdjusted : 0
+  const surplusRatio = marketBaseline > 0.01 ? surplus / marketBaseline : 0
   // Edge classification — dynamic thresholds from backtest
   const st = hyperparams?.surplusThresholds || { strongEdge: 0.12, moderateEdge: 0.04, neutral: -0.03 }
   return {
     surplus: Number(surplus.toFixed(4)),
     surplusRatio: Number(surplusRatio.toFixed(4)),
-    marketImplied: Number(vigAdjusted.toFixed(4)),
+    marketImplied: Number(marketBaseline.toFixed(4)),
     conf: rawConf,
     modelProb: Number(modelProb.toFixed(4)),
     anchorOdds: Number(anchorOdds.toFixed(2)),
@@ -3965,7 +3971,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
 
   // 实时蓄水池余额（cycle-aware）：新建/组合页的资金仓管与下注建议都以它为基数，
   // 周期性结算后会自动切换到新周期的本金口径。
-  const poolCapital = useMemo(() => getReservoirState().poolBalance, [systemConfig, dataVersion])
+  const poolCapital = useMemo(() => getReservoirState().availableCash, [systemConfig, dataVersion])
   const riskCap = useMemo(
     () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
@@ -5314,7 +5320,7 @@ export default function ComboPage({ openModal, inspirationLayout = false }) {
           <p><strong>22. 逐场判断评级对照</strong>：对照原始 Conf 与归一化 AJR（AJR / 0.8）的差值、MAE 和 RMSE；这是判断评级差异，不是命中概率校准误差。</p>
 
           <p className="font-semibold text-indigo-600 text-xs tracking-wide mt-2">— Conf-Surplus 与组合分散化 —</p>
-          <p><strong>23. Conf-Surplus 反共识信号</strong>：<code>surplus = conf - (1/odds × 0.95)</code>，量化模型置信度相对去水市场隐含概率的超额。分四级 edge：strong（+12pp）→ moderate（+4pp）→ neutral → negative。Surplus 正向加分融入效用函数（均值 × 0.15 + 峰值 ≥ 12pp 额外 +3%），激励反共识高信心投注。</p>
+          <p><strong>23. Conf-Surplus 反共识信号</strong>：<code>surplus = conf − 1/odds</code>，量化模型置信度相对纸面赔率隐含概率的超额（2026-09 起决策层一律纸面赔率，不再手动去水）。分四级 edge：strong（+12pp）→ moderate（+4pp）→ neutral → negative。Surplus 正向加分融入效用函数（均值 × 0.15 + 峰值 ≥ 12pp 额外 +3%），激励反共识高信心投注。</p>
           <p><strong>24. 锚定分散化惩罚</strong>：MMR 重排序中引入锚定共享惩罚——共享同一最高信心场次的后续组合受 12% × (复用次 / 已选数) 效用扣减，防止单点故障导致全军覆没。</p>
           <p><strong>25. 场次集中度硬上限</strong>：单场出现频率不超过输出组合总数的 60%，强制分散场次维度风险。</p>
           <p><strong>26. 浓度惩罚叠加</strong>：通用 MMR 浓度罚项 +0.5 × 使用比，与锚定惩罚叠加，确保输出组合充分多样化。</p>

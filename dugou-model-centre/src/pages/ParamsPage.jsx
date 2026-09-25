@@ -161,6 +161,8 @@ const EMPTY_MODEL_VALIDATION = {
   },
   walkForward: [],
   positiveWalkForward: 0,
+  blendBaselines: null,
+  holdout: null,
 }
 
 const ConsoleCardIcon = ({ IconComp }) => (
@@ -5823,6 +5825,17 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
               </div>
             </div>
 
+            {modelValidation.brier?.gainCi90 && (
+              <div className="mb-4 text-[11px] leading-relaxed">
+                <p className="text-stone-500 tabular-nums">
+                  {maskText(`校准相对原始 Conf 的 Brier 差值 90% 区间 [${toSigned(modelValidation.brier.gainCi90.p05, 4)}, ${toSigned(modelValidation.brier.gainCi90.p95, 4)}]`)}
+                </p>
+                {modelValidation.brier.gainCi90.p05 <= 0 && modelValidation.brier.gainCi90.p95 >= 0 && (
+                  <p className="mt-0.5 text-amber-700">{maskText('区间覆盖 0：尚无法区分哪边更好')}</p>
+                )}
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div className="p-3 rounded-xl border border-stone-200 bg-white">
                 <ExplainHover card={modelValidationGlossary.kellyRaw}>
@@ -5851,6 +5864,40 @@ export default function ParamsPage({ openModal, previewLayoutMode }) {
                 </p>
               </div>
             </div>
+
+            {modelValidation.blendBaselines?.windows > 0 && (
+              <div className="rounded-xl border border-stone-200 bg-white p-3 mb-4">
+                <p className="text-xs text-stone-500">{maskText('Blend Walk-forward 三组基线对照')}</p>
+                <div className="mt-2 space-y-1">
+                  {[
+                    ['calibrated', '校准管道（无市场锚）'],
+                    ['market', '市场隐含概率'],
+                    ['blended', '混合管道（生产口径）'],
+                  ].map(([key, label]) => {
+                    const arm = modelValidation.blendBaselines[key] || {}
+                    return (
+                      <div key={key} className="flex items-baseline justify-between gap-3 text-[11px]">
+                        <span className="shrink-0 text-stone-500">{maskText(label)}</span>
+                        <span className="text-stone-600 tabular-nums">
+                          Brier {Number(arm.brier || 0).toFixed(4)} · LogLoss {Number(arm.logLoss || 0).toFixed(4)}
+                          {Number.isFinite(arm.roi) ? ` · ROI ${toSigned(arm.roi, 1, '%')}` : ''}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] text-stone-400 leading-relaxed">
+                  {maskText('固定配置按时间重放的 prequential 对照，并非独立样本外证明。')}
+                </p>
+              </div>
+            )}
+
+            {modelValidation.holdout?.available && (
+              <p className="mb-4 text-[11px] text-stone-500 leading-relaxed tabular-nums">
+                {maskText(`冻结留出集（最近 7%，${modelValidation.holdout.samples} 场）：校准 ${modelValidation.holdout.brier.calibrated.toFixed(2)} vs 原始 ${modelValidation.holdout.brier.raw.toFixed(2)}`)}
+                <span className="text-stone-400">{maskText('（Brier；该批记录从未参与训练）')}</span>
+              </p>
+            )}
 
             <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
               <div className="flex items-center justify-between">

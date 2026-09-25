@@ -173,14 +173,24 @@ const getOutcomeModel = (entries) => {
   const resultModel = resultSets.every((set) => set?.size > 0)
   const sameMarket = entries.every((entry) => entry.market_type === entries[0]?.market_type)
   const categoricalMarket = sameMarket && ['score', 'half_full'].includes(entries[0]?.market_type)
+  const canonicalLine = (entry) => entry.parse_detail?.canonicalLine ?? entry.parse_detail?.line
   const sameHandicap = sameMarket && entries[0]?.market_type === 'handicap' &&
+    entries.every((entry) => canonicalLine(entry) === canonicalLine(entries[0]))
+  const sameTotal = sameMarket && entries[0]?.market_type === 'total' &&
     entries.every((entry) => entry.parse_detail?.line === entries[0]?.parse_detail?.line)
-  const knownCategorical = categoricalMarket || sameHandicap
+  const knownCategorical = categoricalMarket || sameHandicap || sameTotal
   const keys = entries.map((entry) => entry.semantic_key)
   const sets = resultModel ? resultSets : knownCategorical ? keys.map((key) => new Set([key])) : null
   const union = sets ? new Set(sets.flatMap((set) => [...set])) : new Set()
   const disjoint = Boolean(sets && sets.reduce((n, set) => n + set.size, 0) === union.size)
-  const complete = resultModel && union.size === 3
+  // 同线大小球在半线上（x.5）的 over+under 覆盖全部进球数，视同完备（不产生普通 miss）；
+  // 整数线存在走盘（push）空间，不做完备认定。
+  const totalComplete = sameTotal && (() => {
+    const line = Number(entries[0]?.parse_detail?.line)
+    const directions = new Set(entries.map((entry) => entry.parse_detail?.direction))
+    return Number.isFinite(line) && Math.abs(line % 1) === 0.5 && directions.has('over') && directions.has('under')
+  })()
+  const complete = (resultModel && union.size === 3) || totalComplete
   const approximate = entries.length > 1 && (!sets || !disjoint)
   return { resultModel, sets, disjoint, complete, approximate }
 }

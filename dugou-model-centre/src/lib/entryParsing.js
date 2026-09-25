@@ -164,6 +164,17 @@ const parseHalfFullEntry = (value) => {
   return null
 }
 
+const HANDICAP_OPPOSITE_OUTCOME = { win: 'lose', lose: 'win', draw: 'draw' }
+
+// 异号让球归一化（2026-09-25 决策）：同一让球幅度可以正反两种写法表达，
+// 例如「-1 win」与「1 lose」是同一个选择。统一规范到负号线 + 翻转结果的
+// 规范键，保证同义词在身份、去重与原子建模里落到同一个键。
+const canonicalHandicap = (line, outcome) => {
+  const numericLine = toNumber(line, Number.NaN)
+  if (!Number.isFinite(numericLine) || numericLine <= 0 || !outcome) return { line, outcome }
+  return { line: -numericLine, outcome: HANDICAP_OPPOSITE_OUTCOME[outcome] || outcome }
+}
+
 const parseHandicapEntry = (value) => {
   const candidate = String(value || '')
     .replace(/[()]/g, ' ')
@@ -178,9 +189,10 @@ const parseHandicapEntry = (value) => {
     const line = toNumber(leadingNumber[1], Number.NaN)
     const outcome = parseOutcomeToken(leadingNumber[2])
     if (Number.isFinite(line) && outcome) {
+      const canonical = canonicalHandicap(line, outcome)
       return {
-        semanticKey: `${line}:${outcome}`,
-        detail: { line, outcome },
+        semanticKey: `${canonical.line}:${canonical.outcome}`,
+        detail: { line, outcome, canonicalLine: canonical.line, canonicalOutcome: canonical.outcome },
       }
     }
   }
@@ -190,9 +202,10 @@ const parseHandicapEntry = (value) => {
     const outcome = parseOutcomeToken(trailingNumber[1])
     const line = toNumber(trailingNumber[2], Number.NaN)
     if (Number.isFinite(line) && outcome) {
+      const canonical = canonicalHandicap(line, outcome)
       return {
-        semanticKey: `${line}:${outcome}`,
-        detail: { line, outcome },
+        semanticKey: `${canonical.line}:${canonical.outcome}`,
+        detail: { line, outcome, canonicalLine: canonical.line, canonicalOutcome: canonical.outcome },
       }
     }
   }

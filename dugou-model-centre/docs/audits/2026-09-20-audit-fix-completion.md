@@ -88,3 +88,21 @@ A01–A12 表之外，复核时又发现的一批“已修但未修净”的实�
 AJR 是否应作为概率信号、情境因子混杂与多层校准的实际增益、经验超参数映射、协方差近似是否值得替换、去水假设、全局风险政策及完整资金冻结／释放账本，都不因本轮修 bug 自动获得验证。本轮消除了已知错误或阻止其伪装成精确／已验证结果；不等于证明模型有正的样本外收益。
 
 参考：[DownsideDeviation 定义与实现](https://github.com/braverock/PerformanceAnalytics/blob/master/R/DownsideDeviation.R)、[交叉验证中的数据隔离](https://scikit-learn.org/stable/common_pitfalls.html)、[嵌套调参与外层评估的区别](https://scikit-learn.org/stable/auto_examples/model_selection/plot_nested_cross_validation_iris.html)。
+
+## 2026-09-25 产品决策落地：增量实施（旧代码全部保留、常量开关可回调）
+
+本轮全部为增量：没有任何旧逻辑被删除，凡被替换的行为均以"常量开关 + 决策标签"禁用，回调 = 把常量翻回。
+
+| 决策 | 实现 | 开关／锚点 |
+| --- | --- | --- |
+| 模式从概率挪到资金侧 | `predictMatchProbability` 的 lift 不再含 mode（生产概率与模式解耦）；每模式 Kelly 分母沿用既有资金侧入口；`weightMode` 与 `weightConf` 一并列为 inactive、不按概率损失调参 | `matchPrediction.js` `MODE_AFFECTS_PROBABILITY = false`；`analytics.js` `INACTIVE_WEIGHT_KEYS` |
+| 决策层一律纸面赔率 | `calcConfSurplus` 的基准改为 `1/odds`（不再手动去水）；去水对照仅可作纯展示 | `ComboPage.jsx` `DECISION_USE_DEVIG_BASELINE = false` |
+| 蓄水池冻结 | `getReservoirState` 新增 `inFlightCommitment`（未结算票投入）与 `availableCash = max(0, poolBalance − 在途)`；New／Combo 的下注基数改用 `availableCash`；New 页风控上限处显示"蓄水池／在途冻结／可用"三行 | `analytics.js:1192` 附近；`NewInvestmentPage.jsx` / `ComboPage.jsx` 的 `poolCapital` |
+| 同线大小球放行 | 同线 `total` 归入已知类别（判 `exact`）；半线（x.5）over+under 判完备（union=1、无普通 miss）；整数线判 exact 但保留走盘空间 | `atomicParlay.js` `getOutcomeModel` 的 `sameTotal`／`totalComplete` |
+| 异号让球归一化 | `-1 win ≡ 1 lose` 统一到负号线规范键，同义词在身份／去重／建模里落同一键，重复写法按 duplicate 拦截 | `entryParsing.js` `canonicalHandicap` |
+| 第三阶段（部分） | 基线三路（校准／市场／混合）的 Brier·LogLoss·ROI 上 UI；事件簇 bootstrap（按日期整块重采样，确定性种子）给出"校准−原始" Brier 差值 90% 区间，区间覆盖 0 时明示"尚无法区分"；时间最后 **7%** 作为冻结留出集，不进训练、只做最终对照 | `analytics.js` `bootstrapDateClusterInterval`／`splitFrozenHoldoutRows`（`FROZEN_HOLDOUT_RATIO = 0.07`，决策标签 `2026-09-25`）；`ParamsPage.jsx` 模型收口验证卡 |
+| 投前模块（壳） | New 页右上角新增 投前研判（默认）／投后导入 双按钮切换；投后导入完整保留原界面；投前本轮复刻同一界面，真实升级下一轮在 `data-investment-view` 分叉 | `NewInvestmentPage.jsx` `viewMode` |
+
+影子模式（候选权重先在后台与稳定版对照、达标再晋升）未实施，留作下一轮；7% 留出集目前只影响验证快照的呈现口径，生产拟合暂不剔除（会改变全部生产概率，须单独评估后再翻）。
+
+复测：Vitest 37 文件 / 367 用例通过；`npx eslint . --quiet` 无错误；`npm run build` 成功。

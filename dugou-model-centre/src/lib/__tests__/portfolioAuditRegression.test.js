@@ -41,6 +41,22 @@ describe('atomic payout model', () => {
     expect(profile.modelStatus).toBe('approximate')
     expect(profile.warnings.length).toBeGreaterThan(0)
   })
+  it('models same-line half-ball totals as exact and exhaustive (no ordinary miss)', () => {
+    const profile = buildAtomicMatchProfile({ entries: [{ name: '大2.5', odds: 1.9 }, { name: '小2.5', odds: 2 }], unionProbability: 0.5 })
+    expect(profile.modelStatus).toBe('exact')
+    expect(profile.hitProbability).toBe(1)
+    expect(profile.missProbability).toBe(0)
+  })
+  it('models same-line integer totals as exact but not complete (push space remains)', () => {
+    const profile = buildAtomicMatchProfile({ entries: [{ name: '大2', odds: 1.9 }, { name: '小2', odds: 2 }], unionProbability: 0.5 })
+    expect(profile.modelStatus).toBe('exact')
+    expect(profile.missProbability).toBeGreaterThan(0)
+  })
+  it('flags synonymous handicap notations (-1 win ≡ 1 lose) instead of double-counting them', () => {
+    const profile = buildAtomicMatchProfile({ entries: [{ name: '-1 win', odds: 2 }, { name: '1 lose', odds: 2 }], unionProbability: 0.5 })
+    expect(profile.modelStatus).toBe('approximate')
+    expect(profile.warnings.length).toBeGreaterThan(0)
+  })
 })
 
 describe('Portfolio Monte Carlo uses the saved return shape and actual money', () => {
