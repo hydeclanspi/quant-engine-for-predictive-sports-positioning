@@ -32,6 +32,21 @@ describe('review-phase per-page glass themes', () => {
     expect(getPageGlassDefault('/unknown')).toBe('sand')
   })
 
+  it('defaults the root path to 月汐 because it renders the New page', () => {
+    // 回归：路由 path="/" 同样渲染 New 页，此前漏配默认导致从根进入掉到「暖砂」金色兜底。
+    expect(getPageGlassDefault('/')).toBe('moon')
+    expect(getEffectiveGlassTheme('/')).toBe('moon')
+  })
+
+  it('still resolves the default when a base prefix is not stripped (owner route)', () => {
+    expect(getPageGlassDefault('/arsenal/new')).toBe('moon')
+    expect(getPageGlassDefault('/arsenal/combo')).toBe('sand')
+    expect(getPageGlassDefault('/arsenal/history/teams')).toBe('moon')
+    // 根前缀 '/' 不应吞掉其它路由
+    expect(getPageGlassDefault('/arsenal/dashboard')).toBe('moon')
+    expect(getPageGlassDefault('/arsenal/unknown')).toBe('sand')
+  })
+
   it('lets session picks override one page without touching the others', () => {
     expect(getEffectiveGlassTheme('/params')).toBe('hongguo')
     setSessionGlassTheme('/params', 'spectra')

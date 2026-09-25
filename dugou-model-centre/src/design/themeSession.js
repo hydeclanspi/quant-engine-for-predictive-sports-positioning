@@ -5,7 +5,11 @@ import { isLiquidGlassStyle, normalizeLiquidGlassStyle } from './liquidGlassThem
 export const SESSION_THEME_EVENT = 'dugou:session-theme'
 
 // 每页默认（最长路径前缀优先：/dashboard/analysis 命中 '/dashboard'）
+// 根路径 '/' 渲染的也是 New 页（App 路由 path="/" → NewInvestmentPage），
+// 所以必须给它同样的月汐默认，否则从根进入会掉到全局兜底「暖砂」（金色）。
+// 2026-09-25 修复：new 页"点开来是金色背景"的复现根因即此。
 export const PAGE_GLASS_DEFAULTS = {
+  '/': 'moon',
   '/new': 'moon',
   '/combo': 'sand',
   '/settle': 'hongguo',
@@ -29,10 +33,16 @@ const normalizePath = (pathname = '') => {
   return clean || '/'
 }
 
+// 前缀匹配同时容忍「应用挂载在子路径」的形态：owner 入口 /arsenal、设计预览
+// /__design/x 等情况下 pathname 可能仍带前缀（/arsenal/new）。按路径尾段匹配，
+// 保证 /arsenal/new 这类地址也能命中 '/new' 的页面默认，而不是掉进全局兜底。
+const matchesRoutePrefix = (path, prefix) =>
+  path === prefix || path.startsWith(`${prefix}/`) || path.endsWith(prefix) || path.includes(`${prefix}/`)
+
 const longestPrefixMatch = (map, path) => {
   let best = null
   Object.keys(map).forEach((prefix) => {
-    if ((path === prefix || path.startsWith(`${prefix}/`)) && (!best || prefix.length > best.length)) {
+    if (matchesRoutePrefix(path, prefix) && (!best || prefix.length > best.length)) {
       best = prefix
     }
   })
