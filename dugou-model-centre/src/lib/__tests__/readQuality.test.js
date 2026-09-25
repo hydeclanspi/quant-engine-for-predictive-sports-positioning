@@ -5,9 +5,11 @@ import {
   buildReadRecord,
   buildReadRecords,
   calibratedLambdaFromPoint,
+  deVigProportional,
   deriveMarketProbabilities,
   disagreementBuckets,
   fitFusionWeight,
+  fitMarketLambdas,
   learnForecastBias,
   learnScaleBias,
   legacyAjrBuckets,
@@ -310,5 +312,53 @@ describe('scoreline distance shape', () => {
     expect(normalized([0, 1], [1, 3])).toBeCloseTo(45.6, 1)
     expect(normalized([0, 1], [0, 3])).toBeCloseTo(59.1, 1)
     expect(normalized([2, 1], [2, 1])).toBe(0)
+  })
+})
+
+describe('机构市场定价通道（去水 + 倒算）', () => {
+  const makeQuotedOdds = (truth, vig = 1.05) => {
+    const m = deriveMarketProbabilities(truth.home, truth.away)
+    const ou = m.totals.find((row) => row.line === 2.5)
+    return {
+      oneXTwo: { home: 1 / (m.oneXTwo.home * vig), draw: 1 / (m.oneXTwo.draw * vig), away: 1 / (m.oneXTwo.away * vig) },
+      totals: [{ line: 2.5, over: 1 / (ou.over * vig), under: 1 / (ou.under * vig) }],
+    }
+  }
+
+  it('比例去水：公平概率和为 1，并回报抽水率', () => {
+    const devig = deVigProportional([1.73, 4.12, 4.34])
+    expect(devig.ok).toBe(true)
+    expect(devig.fair.reduce((sum, value) => sum + value, 0)).toBeCloseTo(1, 10)
+    // 1/1.73 + 1/4.12 + 1/4.34 = 0.5780 + 0.2427 + 0.2304 = 1.0512
+    expect(devig.overround).toBeCloseTo(0.0512, 3)
+    expect(deVigProportional([1.5, 'bad', 3]).ok).toBe(false)
+    expect(deVigProportional([1.5, 0.9, 3]).ok).toBe(false)
+  })
+
+  it('从机构赔率倒算出的进球分布能还原真值 λ', () => {
+    // 以真值 λ=(1.8, 1.05) 生成带 5% 抽水的赔率，再要求倒算把它找回
+    const fit = fitMarketLambdas(makeQuotedOdds({ home: 1.8, away: 1.05 }))
+    expect(fit.ready).toBe(true)
+    expect(fit.samples).toBe(5)
+    expect(fit.homeLambda).toBeCloseTo(1.8, 1)
+    expect(fit.awayLambda).toBeCloseTo(1.05, 1)
+    expect(fit.sse).toBeLessThan(0.001)
+  })
+
+  it('只给 1X2 也能倒算，不给的盘口不参与拟合', () => {
+    const fit = fitMarketLambdas({ oneXTwo: makeQuotedOdds({ home: 2.2, away: 0.8 }).oneXTwo })
+    expect(fit.ready).toBe(true)
+    expect(fit.samples).toBe(3)
+    expect(fit.homeLambda).toBeCloseTo(2.2, 1)
+    expect(fit.awayLambda).toBeCloseTo(0.8, 1)
+  })
+
+  it('输入不足或赔率非法时明确不可用，不猜测', () => {
+    expect(fitMarketLambdas({}).ready).toBe(false)
+    expect(fitMarketLambdas({ oneXTwo: { home: 1.9, draw: 3.4, away: '' } }).ready).toBe(false)
+    const partial = fitMarketLambdas({ oneXTwo: { home: 1.9, draw: 3.4, away: 4.2 }, totals: [{ line: 2.5, over: '', under: 2.1 }] })
+    expect(partial.ready).toBe(true)
+    expect(partial.targets.some((target) => target.label.includes('2.5'))).toBe(false)
+    expect(partial.notes.join()).toContain('未参与倒算')
   })
 })

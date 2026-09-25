@@ -24,6 +24,7 @@ import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from '../lib/investmentForecast'
 import { getMatchSourceIdentity } from '../lib/investmentIdentity'
+import { parseFinalScore } from '../lib/readQuality'
 import PreMatchGridView from '../components/PreMatchGridView'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
@@ -472,6 +473,16 @@ export default function NewInvestmentPage() {
   // （2026-09-25 决策：蓄水池余额扣除未结算在途投入；周期性结算后自动以新周期口径计算）。
   const reservoirState = useMemo(() => getReservoirState(), [systemConfig, dataVersion])
   const poolCapital = reservoirState.availableCash
+  // 右侧 Entry 里写了比分（例如「2-1」）时，投前的比分网格自动展开并跟随该比分计算。
+  const detectedScoreline = useMemo(() => {
+    for (const match of matches) {
+      for (const entry of match.entries || []) {
+        const parsed = parseFinalScore(entry?.name)
+        if (parsed) return parsed
+      }
+    }
+    return null
+  }, [matches])
   const riskCap = useMemo(
     () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
@@ -1611,10 +1622,10 @@ export default function NewInvestmentPage() {
             </div>
           </div>
         </div>
+        {viewMode === 'pre' && <PreMatchGridView detectedPoint={detectedScoreline} />}
       </div>
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
-        {viewMode === 'pre' && <PreMatchGridView />}
         <div className="px-6 py-5 border-b border-stone-100 bg-stone-50/50 lab-new-construction">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-4 flex-nowrap min-w-0">

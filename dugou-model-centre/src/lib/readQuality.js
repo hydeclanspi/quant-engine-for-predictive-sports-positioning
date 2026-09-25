@@ -383,6 +383,130 @@ export const deriveMarketProbabilities = (
   return { oneXTwo, totals, handicaps, topScores }
 }
 
+// ── 通道 4：机构市场定价（去水 + 倒算进球分布）─────────────────────────
+//
+// 与通道 2 相反：通道 2 是「我的观点 → 各盘口」，这里是「机构赔率 → 一场比赛
+// 的进球分布」。市场侧的赔率是唯一的元数据来源；本模块自己不产生任何赔率。
+
+/** 比例去水：把一组赔率还原成和为 1 的公平概率，同时返回抽水率。 */
+export const deVigProportional = (oddsList) => {
+  const implied = (Array.isArray(oddsList) ? oddsList : []).map((odds) => {
+    const value = Number(odds)
+    return Number.isFinite(value) && value > 1 ? 1 / value : Number.NaN
+  })
+  if (implied.some((value) => !Number.isFinite(value))) return { ok: false, overround: Number.NaN, fair: [] }
+  const sum = implied.reduce((acc, value) => acc + value, 0)
+  if (!(sum > 0)) return { ok: false, overround: Number.NaN, fair: [] }
+  return {
+    ok: true,
+    overround: Number((sum - 1).toFixed(4)),
+    fair: implied.map((value) => value / sum),
+  }
+}
+
+const marketTargetsFromInput = (input = {}) => {
+  const targets = []
+  const notes = []
+
+  const oneXTwoOdds = input.oneXTwo
+  if (oneXTwoOdds) {
+    const devig = deVigProportional([oneXTwoOdds.home, oneXTwoOdds.draw, oneXTwoOdds.away])
+    if (devig.ok) {
+      targets.push({ key: 'home', label: '主胜', value: devig.fair[0] })
+      targets.push({ key: 'draw', label: '平', value: devig.fair[1] })
+      targets.push({ key: 'away', label: '客胜', value: devig.fair[2] })
+    } else {
+      notes.push('1X2 赔率不完整或非十进制，未参与倒算')
+    }
+  }
+
+  ;(Array.isArray(input.totals) ? input.totals : []).forEach((row) => {
+    const devig = deVigProportional([row?.over, row?.under])
+    if (devig.ok && Number.isFinite(Number(row?.line))) {
+      targets.push({ key: `over:${Number(row.line)}`, label: `大 ${Number(row.line)}`, value: devig.fair[0] })
+      targets.push({ key: `under:${Number(row.line)}`, label: `小 ${Number(row.line)}`, value: devig.fair[1] })
+    } else {
+      notes.push(`大小球 ${row?.line ?? '?'} 赔率需两边都给，未参与倒算`)
+    }
+  })
+
+  return { targets, notes }
+}
+
+/**
+ * 从机构赔率倒算市场隐含的进球分布：在 (λ主, λ客) 上做粗网格 + 局部细化搜索，
+ * 最小化「泊松模型给出的盘口概率」与「去水后的市场公平概率」的平方误差。
+ * 只使用调用方提供的盘口；缺哪条就少一条约束，不做任何外推。
+ */
+export const fitMarketLambdas = (
+  input = {},
+  { maxGoals = 8, coarseStep = 0.1, fineStep = 0.02, min = 0.2, max = 3.6 } = {},
+) => {
+  const { targets, notes } = marketTargetsFromInput(input)
+  if (targets.length < 3) {
+    return { ready: false, reason: 'insufficient_market_input', targets: [], notes, samples: targets.length }
+  }
+
+  const evaluate = (home, away) => {
+    const markets = deriveMarketProbabilities(home, away, { maxGoals })
+    const valueByKey = {
+      home: markets.oneXTwo.home,
+      draw: markets.oneXTwo.draw,
+      away: markets.oneXTwo.away,
+    }
+    markets.totals.forEach((row) => {
+      valueByKey[`over:${row.line}`] = row.over
+      valueByKey[`under:${row.line}`] = row.under
+    })
+    let sse = 0
+    targets.forEach((target) => {
+      const model = valueByKey[target.key]
+      if (Number.isFinite(model)) sse += (model - target.value) ** 2
+    })
+    return { sse, markets }
+  }
+
+  let best = { home: DEFAULT_LAMBDA_PRIOR.home, away: DEFAULT_LAMBDA_PRIOR.away, sse: Number.POSITIVE_INFINITY }
+  for (let home = min; home <= max + 1e-9; home += coarseStep) {
+    for (let away = min; away <= max + 1e-9; away += coarseStep) {
+      const { sse } = evaluate(home, away)
+      if (sse < best.sse) best = { home, away, sse }
+    }
+  }
+  const coarseBest = { ...best }
+  for (let home = Math.max(min, coarseBest.home - coarseStep * 1.5); home <= Math.min(max, coarseBest.home + coarseStep * 1.5) + 1e-9; home += fineStep) {
+    for (let away = Math.max(min, coarseBest.away - coarseStep * 1.5); away <= Math.min(max, coarseBest.away + coarseStep * 1.5) + 1e-9; away += fineStep) {
+      const { sse } = evaluate(home, away)
+      if (sse < best.sse) best = { home, away, sse }
+    }
+  }
+
+  const { markets } = evaluate(best.home, best.away)
+  const valueByKey = {
+    home: markets.oneXTwo.home,
+    draw: markets.oneXTwo.draw,
+    away: markets.oneXTwo.away,
+  }
+  markets.totals.forEach((row) => {
+    valueByKey[`over:${row.line}`] = row.over
+    valueByKey[`under:${row.line}`] = row.under
+  })
+
+  return {
+    ready: true,
+    homeLambda: Number(best.home.toFixed(3)),
+    awayLambda: Number(best.away.toFixed(3)),
+    sse: Number(best.sse.toFixed(6)),
+    samples: targets.length,
+    notes,
+    targets: targets.map((target) => ({
+      ...target,
+      model: Number((valueByKey[target.key] ?? Number.NaN).toFixed(4)),
+      delta: Number(((valueByKey[target.key] ?? Number.NaN) - target.value).toFixed(4)),
+    })),
+  }
+}
+
 export const DEFAULT_LAMBDA_PRIOR = Object.freeze({ home: 1.45, away: 1.15 })
 
 /**
