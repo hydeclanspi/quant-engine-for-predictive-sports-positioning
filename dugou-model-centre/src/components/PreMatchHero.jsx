@@ -16,7 +16,9 @@ const resultChip = (row) => {
   return { text: row.settled ? '已结算' : '待赛', className: 'is-pending' }
 }
 
-const RecordRow = ({ row }) => {
+// 一条记录就是一行：[日期][主/客][对 对手][我的 Entry] odds X [结果 X] …… [中/没中]
+// 投前/投后备注放在下面；如果和更新的那条记录备注一字不差，旧的折叠成「同上」。
+const RecordRow = ({ row, folded = false }) => {
   const chip = resultChip(row)
   const predicted = row.predictedScore ? `${row.predictedScore.home}-${row.predictedScore.away}` : ''
   const actual = row.actualScore ? `${row.actualScore.home}-${row.actualScore.away}` : ''
@@ -25,27 +27,26 @@ const RecordRow = ({ row }) => {
 
   return (
     <li className="pre-record">
-      <div className="pre-record-head">
+      <div className="pre-record-main">
         <span className="pre-record-date">{row.dateLabel}</span>
-        <span className="pre-record-match">
-          <span className={`pre-record-venue is-${row.venue}`}>{row.venue === 'home' ? '主' : '客'}</span>
-          对 {row.opponent || '--'}
-        </span>
-        <span className={`pre-record-chip ${chip.className}`}>{chip.text}</span>
-      </div>
-      <p className="pre-record-line">
+        <span className={`pre-record-venue is-${row.venue}`}>{row.venue === 'home' ? '主' : '客'}</span>
+        <span className="pre-record-opponent">对 {row.opponent || '--'}</span>
         <span className="pre-record-entries">{row.entryText || '未记录 Entry'}</span>
         <span className="pre-record-odds">odds {row.oddsLabel}</span>
+        {(row.resultText || actual) && (
+          <span className="pre-record-actual">结果 {row.resultText || actual}</span>
+        )}
         {predicted && <span className="pre-record-pred">预测 {predicted}</span>}
-        {(row.resultText || actual) && <span className="pre-record-actual">结果 {row.resultText || actual}</span>}
-      </p>
-      {note && (
+        {folded && <span className="pre-record-folded">投前/投后 同上</span>}
+        <span className={`pre-record-chip ${chip.className}`}>{chip.text}</span>
+      </div>
+      {!folded && note && (
         <p className="pre-record-note">
           <em>投前</em>
           <span>{note}</span>
         </p>
       )}
-      {postNote && (
+      {!folded && postNote && (
         <p className="pre-record-note is-post">
           <em>投后</em>
           <span>{postNote}</span>
@@ -140,10 +141,23 @@ export default function PreMatchHero({
  * 两队的过往记录：一整块，左半边淡红（主队）、右半边淡蓝（客队），
  * 中间没有分隔线——颜色本身就是分隔。
  */
+const foldDuplicateNotes = (rows) => {
+  const seen = new Set()
+  return (Array.isArray(rows) ? rows : []).map((row) => {
+    const note = plainNote(row.note)
+    const postNote = plainNote(row.postNote)
+    if (!note && !postNote) return { row, folded: false }
+    const key = `${note}\u0000${postNote}`
+    if (seen.has(key)) return { row, folded: true }
+    seen.add(key)
+    return { row, folded: false }
+  })
+}
+
 export function PreMatchRecords({ homeTeam = '', awayTeam = '', records = { home: [], away: [] } }) {
   const sides = [
-    { side: 'home', team: homeTeam, rows: records.home || [] },
-    { side: 'away', team: awayTeam, rows: records.away || [] },
+    { side: 'home', team: homeTeam, rows: foldDuplicateNotes(records.home) },
+    { side: 'away', team: awayTeam, rows: foldDuplicateNotes(records.away) },
   ]
   return (
     <div className="pre-dossier" data-testid="pre-match-records">
@@ -158,8 +172,8 @@ export function PreMatchRecords({ homeTeam = '', awayTeam = '', records = { home
           <div className="pre-dossier-scroll">
             {rows.length > 0 ? (
               <ul className="pre-record-list">
-                {rows.map((row) => (
-                  <RecordRow key={`${side}-${row.id}`} row={row} />
+                {rows.map(({ row, folded }) => (
+                  <RecordRow key={`${side}-${row.id}`} row={row} folded={folded} />
                 ))}
               </ul>
             ) : (

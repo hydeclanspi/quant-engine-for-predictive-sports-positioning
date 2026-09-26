@@ -156,6 +156,40 @@ describe('两队过往记录（PreMatchRecords）', () => {
     away: [],
   }
 
+  it('备注一字不差的两条：新的照常显示，旧的那条折叠成「同上」', () => {
+    const dup = {
+      home: [
+        { id: 'new', dateLabel: '26-09-20', venue: 'home', opponent: '埃弗顿', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '赛前', postNote: '英格兰牛逼' },
+        { id: 'old', dateLabel: '26-09-18', venue: 'home', opponent: '克罗地亚', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '赛前', postNote: '英格兰牛逼' },
+        { id: 'other', dateLabel: '26-09-16', venue: 'home', opponent: '法国', entryText: 'draw', oddsLabel: '3.3', resultText: 'draw', isCorrect: false, settled: true, note: '另一条', postNote: '不一样' },
+      ],
+      away: [],
+    }
+    const html = strip(renderToStaticMarkup(<PreMatchRecords homeTeam="英格兰" awayTeam="西班牙" records={dup} />))
+    // 备注只出现一次（新的那条），旧的折叠
+    expect((html.match(/英格兰牛逼/g) || [])).toHaveLength(1)
+    expect(html).toContain('投前/投后 同上')
+    expect((html.match(/另一条/g) || [])).toHaveLength(1)
+  })
+
+  it('一条记录就一行：日期 · 主客 · 对手 · Entry · odds · 结果，都在同一个行容器里', () => {
+    const rows = {
+      home: [
+        { id: 'a', dateLabel: '26-08-23', venue: 'home', opponent: '皇马', entryText: 'lose', oddsLabel: '1.30', resultText: 'lose', isCorrect: true, settled: true, note: '', postNote: '' },
+      ],
+      away: [],
+    }
+    const html = strip(renderToStaticMarkup(<PreMatchRecords homeTeam="西班牙" awayTeam="英格兰" records={rows} />))
+    const main = html.slice(html.indexOf('pre-record-main'), html.indexOf('</li>'))
+    expect(main).toContain('26-08-23')
+    expect(main).toContain('主')
+    expect(main).toContain('对 皇马')
+    expect(main).toContain('lose')
+    expect(main).toContain('odds 1.30')
+    expect(main).toContain('结果 lose')
+    expect(main).toContain('中')
+  })
+
   it('一整块左右两半（淡红/淡蓝），行里带备注与复盘', () => {
     const html = strip(renderToStaticMarkup(
       <PreMatchRecords homeTeam="阿森纳" awayTeam="埃弗顿" records={records} />,

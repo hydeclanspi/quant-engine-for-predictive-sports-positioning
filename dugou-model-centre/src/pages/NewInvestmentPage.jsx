@@ -700,6 +700,24 @@ export default function NewInvestmentPage() {
     })
   }
 
+  // 投前固定给两条腿的位置（结果 + 比分 = 四个格子），不够就补空行。
+  useEffect(() => {
+    if (viewMode !== 'pre') return
+    setMatches((prev) => {
+      let changed = false
+      const next = prev.map((match) => {
+        const rows = Array.isArray(match.entries) ? match.entries : []
+        if (rows.length >= 2) return match
+        changed = true
+        return {
+          ...match,
+          entries: [...rows, ...Array.from({ length: 2 - rows.length }, () => ({ name: '', odds: '' }))],
+        }
+      })
+      return changed ? next : prev
+    })
+  }, [viewMode, matches])
+
   // 机构拉到这一场的赔率后，自动回填还空着的 odds（1X2 与比分盘）。
   // 只填空位、只填一次：填过之后字段非空就不会再写，也不会覆盖手改过的值。
   useEffect(() => {
@@ -1523,7 +1541,8 @@ export default function NewInvestmentPage() {
             data-testid="view-switch-pre"
             className={`pre-view-side pre-view-side--pre${viewMode === 'pre' ? ' is-active' : ''}`}
           >
-            投前研判
+            <span>投前</span>
+            <span>研判</span>
           </button>
           <button
             type="button"
@@ -1533,7 +1552,8 @@ export default function NewInvestmentPage() {
             data-testid="view-switch-post"
             className={`pre-view-side pre-view-side--post${viewMode === 'post' ? ' is-active' : ''}`}
           >
-            投后导入
+            <span>投后</span>
+            <span>导入</span>
           </button>
         </div>
   )
@@ -1993,11 +2013,11 @@ export default function NewInvestmentPage() {
                   </div>
                   {viewMode === 'pre' ? (
                     <div className="pre-entries" data-testid={`pre-entries-${idx}`}>
-                      {match.entries.map((entry, entryIdx) => (
+                      {displayEntries.map((entry, entryIdx) => (
                         <div key={`entry-${entryIdx}`} className="pre-entry-pair">
                           <input
                             type="text"
-                            placeholder={entryIdx === 0 ? 'w/d/l' : entryIdx === 1 ? '2-1' : '更多 Entry'}
+                            placeholder={entryIdx === 0 ? 'w/d/l' : entryIdx === 1 ? '2-1' : '更多'}
                             value={entry.name}
                             onChange={(event) => updateEntry(idx, entryIdx, 'name', event.target.value)}
                             onBlur={() => finalizeEntryName(idx, entryIdx)}
@@ -2015,14 +2035,14 @@ export default function NewInvestmentPage() {
                             data-testid={`pre-entry-odds-${idx}-${entryIdx}`}
                             className="pre-entry-odds"
                           />
-                          {match.entries.length > 1 && (
+                          {entryIdx >= 2 && (
                             <button
                               type="button"
                               onClick={() => removeEntry(idx, entryIdx)}
                               aria-label={`删除第 ${entryIdx + 1} 条 Entry`}
                               className="pre-entry-remove"
                             >
-                              <X size={14} />
+                              <X size={15} />
                             </button>
                           )}
                         </div>

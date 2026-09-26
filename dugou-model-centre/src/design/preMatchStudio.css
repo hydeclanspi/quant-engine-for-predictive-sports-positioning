@@ -61,9 +61,9 @@
 .pre-hero {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 14px;
+  gap: 16px;
   align-items: stretch;
-  margin-bottom: 22px;
+  margin-bottom: 26px;
 }
 
 .pre-hero-vs {
@@ -77,10 +77,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
+  width: 40px;
+  height: 40px;
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #78716c;
@@ -123,16 +123,17 @@
 .pre-hero-head {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  min-height: 20px;
+  min-height: 22px;
 }
 
 .pre-hero-chip {
   display: inline-flex;
   align-items: center;
-  padding: 2px 8px;
+  padding: 3px 11px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.06em;
 }
@@ -159,22 +160,22 @@
 
 .pre-hero-input-wrap {
   position: relative;
-  margin-top: 6px;
+  margin-top: 10px;
 }
 
 .pre-hero-input {
   width: 100%;
-  padding: 4px 2px 8px;
-  font-size: 26px;
-  line-height: 1.15;
+  padding: 14px 10px;
+  font-size: 34px;
+  line-height: 1.2;
   font-weight: 600;
+  text-align: center;
   color: #292524;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid rgba(120, 113, 108, 0.18);
-  border-radius: 0;
+  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 16px;
   outline: none;
-  transition: border-color 180ms ease;
+  transition: border-color 180ms ease, background 180ms ease;
 }
 
 .pre-hero-input::placeholder {
@@ -183,11 +184,13 @@
 }
 
 .pre-hero-side--home .pre-hero-input:focus {
-  border-bottom-color: rgba(225, 29, 72, 0.55);
+  border-color: rgba(244, 114, 182, 0.55);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .pre-hero-side--away .pre-hero-input:focus {
-  border-bottom-color: rgba(37, 99, 235, 0.55);
+  border-color: rgba(96, 165, 250, 0.55);
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .pre-hero-suggest {
@@ -234,39 +237,13 @@
 .pre-dossier {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin: 0 0 18px;
-  border-radius: 20px;
+  margin: 0 0 20px;
+  border-radius: 22px;
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.55);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 40px -36px rgba(41, 37, 36, 0.5);
   backdrop-filter: blur(16px) saturate(150%);
   -webkit-backdrop-filter: blur(16px) saturate(150%);
-}
-
-.pre-dossier-side {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  padding: 16px 18px 18px;
-}
-
-/* 只有列表滚动，表头固定；左半的滚动条走左侧边缘，绝不出现在两栏中间。 */
-.pre-dossier-scroll {
-  flex: 1 1 auto;
-  min-height: 240px;
-  max-height: 460px;
-  overflow-y: auto;
-  padding-right: 10px;
-}
-
-.pre-dossier-side--home .pre-dossier-scroll {
-  direction: rtl;
-  padding-right: 0;
-  padding-left: 12px;
-}
-
-.pre-dossier-side--home .pre-dossier-scroll > * {
-  direction: ltr;
 }
 
 .pre-dossier-side--home {
@@ -307,19 +284,19 @@
 }
 
 .pre-dossier-team {
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   color: #44403c;
 }
 
 .pre-dossier-count {
-  font-size: 11px;
+  font-size: 12.5px;
   color: rgba(120, 113, 108, 0.75);
 }
 
 .pre-hero-empty {
   padding: 30px 4px;
-  font-size: 12px;
+  font-size: 13px;
   line-height: 1.75;
   color: rgba(120, 113, 108, 0.6);
 }
@@ -330,7 +307,7 @@
 }
 
 .pre-record {
-  padding: 12px 2px;
+  padding: 13px 2px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.6);
 }
 
@@ -338,37 +315,32 @@
   border-bottom: 0;
 }
 
-.pre-record-head {
+/* 一行到底：日期 · 主/客 · 对手 · Entry · odds · 结果 · 预测 · [中/没中] */
+.pre-record-main {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: #78716c;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: #57534e;
 }
 
 .pre-record-date {
   font-variant-numeric: tabular-nums;
-  color: #57534e;
-}
-
-.pre-record-match {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: #44403c;
+  font-weight: 500;
 }
 
 .pre-record-venue {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 19px;
-  height: 19px;
-  border-radius: 6px;
-  font-size: 10px;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  font-size: 11px;
+  align-self: center;
 }
 
 .pre-record-venue.is-home {
@@ -381,11 +353,37 @@
   background: rgba(239, 246, 255, 0.95);
 }
 
-.pre-record-chip {
-  margin-left: auto;
-  padding: 2px 8px;
+.pre-record-opponent {
+  color: #57534e;
+}
+
+.pre-record-entries {
+  font-weight: 600;
+  color: #292524;
+}
+
+.pre-record-odds,
+.pre-record-pred,
+.pre-record-actual {
+  color: #6b6560;
+  font-variant-numeric: tabular-nums;
+}
+
+.pre-record-folded {
+  padding: 1px 8px;
   border-radius: 999px;
   font-size: 11px;
+  color: #a8a29e;
+  background: rgba(255, 255, 255, 0.7);
+  align-self: center;
+}
+
+.pre-record-chip {
+  margin-left: auto;
+  align-self: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
   border: 1px solid transparent;
 }
 
@@ -407,46 +405,28 @@
   border-color: rgba(214, 211, 209, 0.8);
 }
 
-.pre-record-line {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 10px;
-  margin-top: 6px;
-  font-size: 13px;
-  color: #57534e;
-  line-height: 1.55;
-}
-
-.pre-record-entries {
-  font-weight: 500;
-  color: #292524;
-}
-
-.pre-record-odds,
-.pre-record-pred,
-.pre-record-actual {
-  color: #78716c;
-  font-variant-numeric: tabular-nums;
-}
-
 .pre-record-note {
   display: flex;
-  gap: 7px;
-  margin-top: 6px;
-  font-size: 12px;
+  gap: 8px;
+  margin-top: 7px;
+  font-size: 13px;
   line-height: 1.7;
-  color: #5a544f;
+  color: #4f4a45;
 }
 
 .pre-record-note em {
   flex-shrink: 0;
   font-style: normal;
-  padding: 1px 6px;
-  border-radius: 6px;
-  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 7px;
+  font-size: 11px;
   color: #78716c;
   background: rgba(255, 255, 255, 0.82);
+}
+
+.pre-record-note.is-post em {
+  color: #7c3aed;
+  background: rgba(245, 243, 255, 0.95);
 }
 
 .pre-record-note.is-post em {
@@ -888,43 +868,46 @@
   color: rgba(120, 113, 108, 0.78);
 }
 
-/* 视图切换：一块通透糖果玻璃，颜色自己斜着分开（清新薄荷绿 → 樱粉）——
- * 不画任何分隔线，斜线只是两块颜色交界。左上「投前」、右下「投后」。 */
+/* 视图切换：一块很淡的液态玻璃，颜色自己斜着过渡（清透薄荷绿 → 淡粉）——
+ * 不画线、不加点；大字四个，一边两个字两行。 */
 .pre-view-switch {
   position: relative;
   flex: 0 0 auto;
-  width: 186px;
-  min-height: 92px;
-  max-height: 148px;
+  width: 196px;
+  min-height: 118px;
+  max-height: 168px;
   align-self: flex-start;
-  border-radius: 20px;
+  border-radius: 24px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.6);
   background: linear-gradient(
     135deg,
-    rgba(168, 250, 218, 0.94) 0%,
-    rgba(216, 253, 240, 0.7) 32%,
-    rgba(255, 236, 246, 0.68) 64%,
-    rgba(255, 190, 221, 0.94) 100%
+    rgba(196, 252, 228, 0.5) 0%,
+    rgba(228, 254, 244, 0.32) 34%,
+    rgba(255, 240, 247, 0.3) 66%,
+    rgba(255, 219, 236, 0.5) 100%
   );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.92),
-    0 16px 34px -26px rgba(15, 23, 42, 0.5);
-  backdrop-filter: blur(16px) saturate(165%);
-  -webkit-backdrop-filter: blur(16px) saturate(165%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -18px 30px -24px rgba(255, 255, 255, 0.7),
+    0 18px 40px -32px rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(22px) saturate(180%);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
 }
 
 .pre-view-side {
   position: absolute;
   inset: 0;
   display: flex;
-  padding: 13px 16px;
+  flex-direction: column;
+  gap: 2px;
+  padding: 15px 18px;
   border: 0;
   background: transparent;
-  font-size: 12.5px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.02em;
-  line-height: 1.15;
+  letter-spacing: 0.06em;
+  line-height: 1.25;
   cursor: pointer;
   transition: opacity 220ms ease;
 }
@@ -934,7 +917,7 @@
   align-items: flex-start;
   justify-content: flex-start;
   text-align: left;
-  color: #0f766e;
+  color: #0d9488;
 }
 
 .pre-view-side--post {
@@ -942,64 +925,47 @@
   align-items: flex-end;
   justify-content: flex-end;
   text-align: right;
-  color: #be185d;
+  color: #db2777;
 }
 
 .pre-view-side:not(.is-active) {
-  opacity: 0.42;
-}
-
-.pre-view-side.is-active::after {
-  content: '';
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 999px;
-  background: currentColor;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.78);
-}
-
-.pre-view-side--pre.is-active::after {
-  left: 16px;
-  top: 36px;
-}
-
-.pre-view-side--post.is-active::after {
-  right: 16px;
-  bottom: 36px;
+  opacity: 0.4;
 }
 
 /* Entries：一条腿一个「值 + odds（可空）」的组合 */
 .pre-entries {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 14px;
+  justify-content: center;
+  gap: 12px 16px;
 }
 
 .pre-entry-pair {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 .pre-entry-name,
 .pre-entry-odds {
-  padding: 9px 13px;
-  border-radius: 12px;
-  border: 1px solid rgba(214, 211, 209, 0.9);
-  background: rgba(255, 255, 255, 0.9);
-  font-size: 14px;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(214, 211, 209, 0.85);
+  background: rgba(255, 255, 255, 0.92);
+  font-size: 16px;
   color: #292524;
   outline: none;
   transition: border-color 160ms ease;
 }
 
 .pre-entry-name {
-  width: 168px;
+  width: 208px;
+  text-align: center;
 }
 
 .pre-entry-odds {
-  width: 116px;
+  width: 136px;
+  text-align: center;
   font-variant-numeric: tabular-nums;
 }
 
