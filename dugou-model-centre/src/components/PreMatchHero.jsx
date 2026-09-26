@@ -155,17 +155,19 @@ export function PreMatchRecords({ homeTeam = '', awayTeam = '', records = { home
               {rows.length > 0 ? `${rows.length} 条过往` : '暂无记录'}
             </span>
           </div>
-          {rows.length > 0 ? (
-            <ul className="pre-record-list">
-              {rows.map((row) => (
-                <RecordRow key={`${side}-${row.id}`} row={row} />
-              ))}
-            </ul>
-          ) : (
-            <p className="pre-hero-empty">
-              {team ? '这支队还没有历史记录' : '填上队名，这里会出现我在这支队上的过往'}
-            </p>
-          )}
+          <div className="pre-dossier-scroll">
+            {rows.length > 0 ? (
+              <ul className="pre-record-list">
+                {rows.map((row) => (
+                  <RecordRow key={`${side}-${row.id}`} row={row} />
+                ))}
+              </ul>
+            ) : (
+              <p className="pre-hero-empty">
+                {team ? '这支队还没有历史记录' : '填上队名，这里会出现我在这支队上的过往'}
+              </p>
+            )}
+          </div>
         </div>
       ))}
     </div>

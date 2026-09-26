@@ -1513,17 +1513,7 @@ export default function NewInvestmentPage() {
     0,
   ) || 0
 
-  return (
-    <div className="page-shell page-content-fluid motion-v2-scope lab-new-page" data-investment-view={viewMode}>
-      <div className="mb-8 lab-page-heading flex flex-wrap items-end justify-between gap-4">
-        <div>
-          <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
-          <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">
-            {viewMode === 'pre'
-              ? '投前研判 · 登记我对这场的观点：两队 → Entries → 进球区间与浓度 → 比分云图'
-              : '投后导入 · 录入比赛信息与预测参数 · Record match predictions & calibration parameters'}
-          </p>
-        </div>
+  const viewSwitch = (
         <div className="pre-view-switch" role="tablist" aria-label="投资视图切换" data-testid="investment-view-switch">
           <button
             type="button"
@@ -1546,8 +1536,9 @@ export default function NewInvestmentPage() {
             投后导入
           </button>
         </div>
-      </div>
+  )
 
+  const quickInputCard = (
       <div className="settle-ai-quick-card motion-v2-surface glow-card mb-5 overflow-hidden rounded-2xl border lab-new-quick">
         <button
           onClick={() => {
@@ -1565,7 +1556,7 @@ export default function NewInvestmentPage() {
           <span className="settle-ai-beta-badge ml-1">LAB · AI</span>
           <span className="settle-ai-subtitle ml-1">大模型自然语言快捷录入</span>
         </button>
-
+  
         <div
           className={`qi-collapse${quickShown ? ' is-open' : ''}${quickIntroUnfurl ? ' is-peeking' : ''}`}
           inert={quickShown ? undefined : ''}
@@ -1666,7 +1657,7 @@ export default function NewInvestmentPage() {
                     : (isPreview ? '演示数据仅在浏览器内解析' : '只填表，不会自动保存')}
                 </span>
               </div>
-
+  
               {quickInputResult && (
                 <div
                   className={`settle-ai-result is-${quickInputPhase}`}
@@ -1708,6 +1699,28 @@ export default function NewInvestmentPage() {
         </div>
         {/* 旧的比分网格已停用（保留文件方便回调）：投前的研究板现在长在每场比赛卡片里。 */}
       </div>
+  )
+  return (
+    <div className="page-shell page-content-fluid motion-v2-scope lab-new-page" data-investment-view={viewMode}>
+      <div className="mb-8 lab-page-heading flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
+          <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">
+            {viewMode === 'pre'
+              ? '投前研判 · 登记我对这场的观点：两队 → Entries → 进球区间与浓度 → 比分云图'
+              : '投后导入 · 录入比赛信息与预测参数 · Record match predictions & calibration parameters'}
+          </p>
+        </div>
+        {viewMode !== 'pre' && viewSwitch}
+      </div>
+
+      {viewMode === 'pre' ? (
+        <div className="pre-top-row">
+          {quickInputCard}
+          {viewSwitch}
+        </div>
+      ) : quickInputCard}
+
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
         <div className="px-6 py-5 border-b border-stone-100 bg-stone-50/50 lab-new-construction">
@@ -1877,8 +1890,9 @@ export default function NewInvestmentPage() {
                     onTeamBlur={() => setActiveTeamInput(null)}
                     onPickSuggestion={(side, name) => applyTeamSuggestion(idx, side, name)}
                     activeSide={activeTeamInput?.matchIdx === idx ? activeTeamInput.side : null}
-                    suggestions={{ home: homeSuggestions, away: awaySuggestions }}
-                    hintFor={getTeamHint}
+                    /* 投前不要自动匹配的历史提示：写着队名就好，别在旁边堆 REP 之类的记录。 */
+                    suggestions={{ home: [], away: [] }}
+                    hintFor={() => null}
                   />
                 ) : (
                 <div className="grid grid-cols-11 gap-3 items-center mb-4">

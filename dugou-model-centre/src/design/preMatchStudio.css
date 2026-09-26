@@ -4,42 +4,56 @@
  * 材质：沿用液态玻璃（半透明 + 底色渐变 + backdrop blur），主队暖玫瑰 / 客队冷天蓝。
  */
 
-/* ── 版式：投前单列，AI 框通栏且不长 ───────────────────────────────── */
+/* ── 版式：投前单列；Quick Input 与切换钮同一行 ───────────────────── */
 .lab-new-page[data-investment-view='pre'],
 .lab-editions .lab-new-page[data-investment-view='pre'] {
   display: block;
   max-width: 1500px;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick {
+.pre-top-row {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.pre-top-row > .lab-new-quick {
+  flex: 1 1 auto;
+  max-width: none;
+  width: auto;
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+.lab-editions .pre-top-row > .lab-new-quick {
   position: static;
   top: auto;
   grid-column: auto;
   grid-row: auto;
-  margin-bottom: 18px;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick textarea {
+.lab-editions .pre-top-row > .lab-new-quick textarea {
   min-height: 0;
   height: auto;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick .settle-ai-trigger {
+.lab-editions .pre-top-row > .lab-new-quick .settle-ai-trigger {
   flex-wrap: wrap;
   row-gap: 6px;
   padding: 14px 18px 10px;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick .settle-ai-subtitle {
+.lab-editions .pre-top-row > .lab-new-quick .settle-ai-subtitle {
   flex-basis: auto;
   margin-left: 4px;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick .settle-ai-body {
+.lab-editions .pre-top-row > .lab-new-quick .settle-ai-body {
   padding: 10px 18px 16px;
 }
 
-.lab-editions .lab-new-page[data-investment-view='pre'] > .lab-new-quick .settle-ai-textarea {
+.lab-editions .pre-top-row > .lab-new-quick .settle-ai-textarea {
   min-height: 74px;
 }
 
@@ -230,10 +244,29 @@
 }
 
 .pre-dossier-side {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
-  padding: 14px 16px 16px;
-  max-height: 320px;
+  padding: 16px 18px 18px;
+}
+
+/* 只有列表滚动，表头固定；左半的滚动条走左侧边缘，绝不出现在两栏中间。 */
+.pre-dossier-scroll {
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: 460px;
   overflow-y: auto;
+  padding-right: 10px;
+}
+
+.pre-dossier-side--home .pre-dossier-scroll {
+  direction: rtl;
+  padding-right: 0;
+  padding-left: 12px;
+}
+
+.pre-dossier-side--home .pre-dossier-scroll > * {
+  direction: ltr;
 }
 
 .pre-dossier-side--home {
@@ -248,13 +281,21 @@
     linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(246, 250, 255, 0.22));
 }
 
-.pre-dossier-side::-webkit-scrollbar {
-  width: 5px;
+.pre-dossier-scroll::-webkit-scrollbar {
+  width: 6px;
 }
 
-.pre-dossier-side::-webkit-scrollbar-thumb {
-  background: rgba(168, 162, 158, 0.42);
+.pre-dossier-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pre-dossier-scroll::-webkit-scrollbar-thumb {
+  background: rgba(168, 162, 158, 0.4);
   border-radius: 999px;
+}
+
+.pre-dossier-scroll::-webkit-scrollbar-thumb:hover {
+  background: rgba(120, 113, 108, 0.55);
 }
 
 .pre-dossier-head {
@@ -262,7 +303,7 @@
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
 }
 
 .pre-dossier-team {
@@ -847,36 +888,45 @@
   color: rgba(120, 113, 108, 0.78);
 }
 
-/* 视图切换：一块通透糖果玻璃，一条斜线劈成 投前（左上·淡绿）/ 投后（右下·淡蓝） */
+/* 视图切换：一块通透糖果玻璃，颜色自己斜着分开（清新薄荷绿 → 樱粉）——
+ * 不画任何分隔线，斜线只是两块颜色交界。左上「投前」、右下「投后」。 */
 .pre-view-switch {
   position: relative;
-  width: 168px;
-  height: 62px;
   flex: 0 0 auto;
-  border-radius: 18px;
+  width: 186px;
+  min-height: 92px;
+  max-height: 148px;
+  align-self: flex-start;
+  border-radius: 20px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.72);
-  background: rgba(255, 255, 255, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  background: linear-gradient(
+    135deg,
+    rgba(168, 250, 218, 0.94) 0%,
+    rgba(216, 253, 240, 0.7) 32%,
+    rgba(255, 236, 246, 0.68) 64%,
+    rgba(255, 190, 221, 0.94) 100%
+  );
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 14px 30px -24px rgba(15, 23, 42, 0.55);
-  backdrop-filter: blur(16px) saturate(160%);
-  -webkit-backdrop-filter: blur(16px) saturate(160%);
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 16px 34px -26px rgba(15, 23, 42, 0.5);
+  backdrop-filter: blur(16px) saturate(165%);
+  -webkit-backdrop-filter: blur(16px) saturate(165%);
 }
 
 .pre-view-side {
   position: absolute;
   inset: 0;
   display: flex;
-  padding: 9px 13px;
+  padding: 13px 16px;
   border: 0;
   background: transparent;
-  font-size: 11px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  line-height: 1.1;
+  line-height: 1.15;
   cursor: pointer;
-  transition: opacity 220ms ease, filter 220ms ease;
+  transition: opacity 220ms ease;
 }
 
 .pre-view-side--pre {
@@ -884,8 +934,7 @@
   align-items: flex-start;
   justify-content: flex-start;
   text-align: left;
-  color: #047857;
-  background: linear-gradient(140deg, rgba(167, 243, 208, 0.72), rgba(236, 253, 245, 0.34) 72%);
+  color: #0f766e;
 }
 
 .pre-view-side--post {
@@ -893,36 +942,31 @@
   align-items: flex-end;
   justify-content: flex-end;
   text-align: right;
-  color: #1d4ed8;
-  background: linear-gradient(320deg, rgba(191, 219, 254, 0.74), rgba(239, 246, 255, 0.32) 72%);
+  color: #be185d;
 }
 
 .pre-view-side:not(.is-active) {
-  opacity: 0.5;
-}
-
-.pre-view-side.is-active {
-  filter: saturate(1.12);
+  opacity: 0.42;
 }
 
 .pre-view-side.is-active::after {
   content: '';
   position: absolute;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.75;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.78);
 }
 
 .pre-view-side--pre.is-active::after {
-  left: 13px;
-  top: 30px;
+  left: 16px;
+  top: 36px;
 }
 
 .pre-view-side--post.is-active::after {
-  right: 13px;
-  bottom: 30px;
+  right: 16px;
+  bottom: 36px;
 }
 
 /* Entries：一条腿一个「值 + odds（可空）」的组合 */
@@ -1000,43 +1044,9 @@
   margin-top: 0;
 }
 
-.pre-board-cloud-legend {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
+/* 云图坐标说明：只留一行小注，画布上不叠任何别的东西。 */
+.pre-board-cloud-axis {
   margin-top: 6px;
-  font-size: 11px;
-  color: #57534e;
-}
-
-.pre-board-legend-swatch {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.pre-board-legend-swatch::before {
-  content: '';
-  width: 22px;
-  height: 10px;
-  border-radius: 6px;
-}
-
-.pre-board-legend-swatch.is-mine::before {
-  background: linear-gradient(120deg, rgba(206, 230, 255, 0.95), rgba(255, 224, 239, 0.95));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
-}
-
-.pre-board-legend-swatch.is-market::before {
-  background: none;
-  height: 0;
-  border-top: 2px dashed rgba(51, 65, 85, 0.7);
-  border-radius: 0;
-}
-
-.pre-board-legend-axis {
-  margin-left: auto;
   font-size: 11px;
   color: rgba(120, 113, 108, 0.85);
 }

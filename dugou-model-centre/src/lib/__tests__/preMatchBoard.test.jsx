@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import PreMatchBoard from '../../components/PreMatchBoard'
-import { buildContourSegments } from '../../components/PreMatchCloud'
 import PreMatchHero, { PreMatchRecords } from '../../components/PreMatchHero'
 import PreScoreSlider from '../../components/PreScoreSlider'
 import { weightsFromSlider } from '../../lib/preMatchOpinion'
@@ -176,31 +175,3 @@ describe('两队过往记录（PreMatchRecords）', () => {
   })
 })
 
-describe('云图上的机构虚线（等值线）', () => {
-  const field = () => {
-    const n = 9
-    return Array.from({ length: n }, (_, j) =>
-      Array.from({ length: n }, (_, i) => Math.exp(-(((i - 4) ** 2) + ((j - 4) ** 2)) / 6)))
-  }
-
-  it('在峰值的中间几档能画出闭合的等值线段', () => {
-    const f = field()
-    const peak = Math.max(...f.flat())
-    const segments = buildContourSegments(f, peak * 0.5, 240)
-    expect(segments.length).toBeGreaterThan(6)
-    segments.forEach((segment) => {
-      expect(Number.isFinite(segment.x1)).toBe(true)
-      expect(Number.isFinite(segment.y2)).toBe(true)
-      expect(segment.x1).toBeGreaterThanOrEqual(0)
-      expect(segment.x1).toBeLessThanOrEqual(240)
-    })
-  })
-
-  it('高于峰值 / 低于谷值都不画线', () => {
-    const f = field()
-    const peak = Math.max(...f.flat())
-    expect(buildContourSegments(f, peak * 1.5, 240)).toEqual([])
-    expect(buildContourSegments(f.flat().map(() => 0), 0.1, 240)).toEqual([])
-    expect(buildContourSegments([], 0.1, 240)).toEqual([])
-  })
-})

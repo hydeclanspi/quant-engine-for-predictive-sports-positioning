@@ -352,8 +352,6 @@ export default function PreMatchBoard({
     )
   }
 
-  const marketReadyForCloud = Boolean(marketScoreProbs?.ok) || marketReady
-
   return (
     <section className="pre-board" data-testid="pre-match-board">
       <header className="pre-board-head">
@@ -410,6 +408,49 @@ export default function PreMatchBoard({
         </p>
       </div>
 
+      <div className="pre-board-visual">
+        <div className="pre-board-cloud">
+          <PreMatchCloud
+            cells={cells}
+            registeredPoint={{ home: detectedScore.home, away: detectedScore.away }}
+            maxGoals={MAX_GOALS}
+          />
+          <p className="pre-board-cloud-axis">↑ 主队进球 · → 客队进球</p>
+        </div>
+
+        <div className="pre-board-readout">
+          <div className="pre-board-cards">
+            {[
+              { label: '主胜', value: myMarkets.oneXTwo.home },
+              { label: '平', value: myMarkets.oneXTwo.draw },
+              { label: '客胜', value: myMarkets.oneXTwo.away },
+            ].map((row) => (
+              <div key={row.label} className="pre-board-card">
+                <span className="pre-board-card-label">{row.label}</span>
+                <span className="pre-board-card-value tabular-nums">{pct(row.value)}</span>
+              </div>
+            ))}
+            <div className="pre-board-card is-wide">
+              <span className="pre-board-card-label">最可能比分</span>
+              <span className="pre-board-card-value is-small tabular-nums">
+                {topRows.map((row) => `${row.score} ${pct(row.p)}`).join(' · ')}
+              </span>
+            </div>
+          </div>
+
+          {firstEntry && (
+            <p className="pre-board-entry-line" data-testid="pre-board-entry-line">
+              这条 Entry（{firstEntry.name || '未命名'}）：我给 {pct(myEntryProbability)}
+            </p>
+          )}
+
+          <p className="pre-board-footnote">
+            我的分布只来自我的区间与浓度（负数方向由历史平均差修正，「我坚持」时用原始输入），不掺市场赔率。
+            这场的仓位按我的分布算。
+          </p>
+        </div>
+      </div>
+
       <div className="pre-board-market" data-testid="pre-board-market">
         <div className="pre-board-market-top">
           <span className="pre-board-market-label">机构市场定价</span>
@@ -458,6 +499,39 @@ export default function PreMatchBoard({
           </select>
         )}
 
+        {marketMarkets && (
+          <table className="pre-board-compare" data-testid="pre-board-compare">
+            <thead>
+              <tr>
+                <th>盘口</th>
+                <th>我</th>
+                <th>市场</th>
+                <th>差</th>
+              </tr>
+            </thead>
+            <tbody>
+              {firstEntry && (
+                <tr>
+                  <td>{firstEntry.name || '这条 Entry'}</td>
+                  <td className="tabular-nums">{pct(myEntryProbability)}</td>
+                  <td className="tabular-nums">{pct(marketEntryProbability)}</td>
+                  <td className={`tabular-nums ${myEntryProbability - marketEntryProbability >= 0 ? 'is-positive' : 'is-negative'}`}>
+                    {signedPp(myEntryProbability - marketEntryProbability)}
+                  </td>
+                </tr>
+              )}
+              {levelRows.map((row) => (
+                <tr key={row.label}>
+                  <td>{row.label}</td>
+                  <td className="tabular-nums">{pct(row.mine)}</td>
+                  <td className="tabular-nums">{pct(row.market)}</td>
+                  <td className={`tabular-nums ${row.delta >= 0 ? 'is-positive' : 'is-negative'}`}>{signedPp(row.delta)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+
         <details className="pre-board-manual">
           <summary>手工填写市场赔率</summary>
           <div className="pre-board-manual-grid">
@@ -494,87 +568,6 @@ export default function PreMatchBoard({
                 ? `已按赔率倒算市场进球分布：主 λ ${marketFit.homeLambda} · 客 λ ${marketFit.awayLambda}`
                 : '填了比分会自动拉官方赔率并按队名对位。'}
         </p>
-      </div>
-
-      <div className="pre-board-visual">
-      <div className="pre-board-cloud">
-        <PreMatchCloud
-          cells={cells}
-          marketCells={marketReadyForCloud ? marketCells : []}
-          registeredPoint={{ home: detectedScore.home, away: detectedScore.away }}
-          maxGoals={MAX_GOALS}
-        />
-        <p className="pre-board-cloud-legend">
-          <span className="pre-board-legend-swatch is-mine">我的观点</span>
-          {marketReadyForCloud
-            ? (
-              <>
-                <span className="pre-board-legend-swatch is-market">① 机构</span>
-                <span className="pre-board-legend-axis">↑ 主队进球 · → 客队进球</span>
-              </>
-            )
-            : <span className="pre-board-legend-axis">↑ 主队进球 · → 客队进球</span>}
-        </p>
-      </div>
-
-      <div className="pre-board-readout">
-        <div className="pre-board-cards">
-          {[
-            { label: '主胜', value: myMarkets.oneXTwo.home },
-            { label: '平', value: myMarkets.oneXTwo.draw },
-            { label: '客胜', value: myMarkets.oneXTwo.away },
-          ].map((row) => (
-            <div key={row.label} className="pre-board-card">
-              <span className="pre-board-card-label">{row.label}</span>
-              <span className="pre-board-card-value tabular-nums">{pct(row.value)}</span>
-            </div>
-          ))}
-          <div className="pre-board-card is-wide">
-            <span className="pre-board-card-label">最可能比分</span>
-            <span className="pre-board-card-value is-small tabular-nums">
-              {topRows.map((row) => `${row.score} ${pct(row.p)}`).join(' · ')}
-            </span>
-          </div>
-        </div>
-
-        {firstEntry && (
-          <p className="pre-board-entry-line" data-testid="pre-board-entry-line">
-            这条 Entry（{firstEntry.name || '未命名'}）：我给 {pct(myEntryProbability)}
-            {marketMarkets ? ` · 市场给 ${pct(marketEntryProbability)}` : ''}
-            {marketMarkets && Number.isFinite(marketEntryProbability)
-              ? ` · 差 ${signedPp(myEntryProbability - marketEntryProbability)}`
-              : ''}
-          </p>
-        )}
-
-        {levelRows.length > 0 && (
-          <table className="pre-board-compare">
-            <thead>
-              <tr>
-                <th>盘口</th>
-                <th>我</th>
-                <th>市场</th>
-                <th>差</th>
-              </tr>
-            </thead>
-            <tbody>
-              {levelRows.map((row) => (
-                <tr key={row.label}>
-                  <td>{row.label}</td>
-                  <td className="tabular-nums">{pct(row.mine)}</td>
-                  <td className="tabular-nums">{pct(row.market)}</td>
-                  <td className={`tabular-nums ${row.delta >= 0 ? 'is-positive' : 'is-negative'}`}>{signedPp(row.delta)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-
-        <p className="pre-board-footnote">
-          我的分布只来自我的区间与浓度（负数方向由历史平均差修正，「我坚持」时用原始输入），不掺市场赔率；
-          市场侧只做对照。这场的仓位按我的分布算。
-        </p>
-      </div>
       </div>
     </section>
   )

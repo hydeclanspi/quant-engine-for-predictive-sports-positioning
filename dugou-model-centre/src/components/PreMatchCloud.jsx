@@ -31,71 +31,16 @@ const paletteAt = (t, intensity) => {
 const rgba = (rgb, alpha) => `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha.toFixed(3)})`
 
 /**
- * 机构分布 → 等值线（marching squares）。
- * field 是 n×n 的标量场，返回该 level 下的线段列表 [{x1,y1,x2,y2}]。
- * 纯函数，单独可测；画布上再决定线型（机构用虚线）。
- */
-export const buildContourSegments = (field, level, size) => {
-  const n = Array.isArray(field) ? field.length : 0
-  if (n < 2 || !Number.isFinite(level)) return []
-  const step = size / (n - 1)
-  const segments = []
-  const at = (i, j) => field[j][i]
-  const lerp = (a, b) => (b - a === 0 ? 0.5 : (level - a) / (b - a))
-
-  for (let j = 0; j < n - 1; j += 1) {
-    for (let i = 0; i < n - 1; i += 1) {
-      const v00 = at(i, j)
-      const v10 = at(i + 1, j)
-      const v01 = at(i, j + 1)
-      const v11 = at(i + 1, j + 1)
-      const code = (v00 > level ? 1 : 0) | (v10 > level ? 2 : 0) | (v11 > level ? 4 : 0) | (v01 > level ? 8 : 0)
-      if (code === 0 || code === 15) continue
-      const x0 = i * step
-      const y0 = j * step
-      const x1 = x0 + step
-      const y1 = y0 + step
-      const top = { x: x0 + lerp(v00, v10) * step, y: y0 }
-      const right = { x: x1, y: y0 + lerp(v10, v11) * step }
-      const bottom = { x: x0 + lerp(v01, v11) * step, y: y1 }
-      const left = { x: x0, y: y0 + lerp(v00, v01) * step }
-      const push = (a, b) => segments.push({ x1: a.x, y1: a.y, x2: b.x, y2: b.y })
-      switch (code) {
-        case 1: case 14: push(left, top); break
-        case 2: case 13: push(top, right); break
-        case 3: case 12: push(left, right); break
-        case 4: case 11: push(right, bottom); break
-        case 5: push(left, top); push(right, bottom); break
-        case 6: case 9: push(top, bottom); break
-        case 7: case 8: push(left, bottom); break
-        case 10: push(left, bottom); push(top, right); break
-        default: break
-      }
-    }
-  }
-  return segments
-}
-
-/**
  * 比分分布「云图」——(MAX_GOALS+1)² 的比分概率当连续密度场来画：
  * 每个比分格是一团高斯云，概率越高云越浓越大，软边界、无表格线。
- * 主队进球纵向向下、客队进球横向向右。机构分布用虚线等值线叠在同一张图上。
+ * 主队进球纵向向下、客队进球横向向右。只画我自己的分布，不叠任何别的东西。
  * 只做展示，不参与任何计算。
  */
-export default function PreMatchCloud({
-  cells,
-  marketCells = [],
-  registeredPoint = null,
-  maxGoals = 8,
-}) {
+export default function PreMatchCloud({ cells, registeredPoint = null, maxGoals = 8 }) {
   const canvasRef = useRef(null)
   const [hover, setHover] = useState(null)
   const size = (maxGoals + 1) * CELL + PAD * 2
   const maxP = useMemo(() => (Array.isArray(cells) ? cells.reduce((max, cell) => Math.max(max, cell.p), 0) : 0), [cells])
-  const marketList = useMemo(
-    () => (Array.isArray(marketCells) ? marketCells.filter((cell) => cell.p > 0) : []),
-    [marketCells],
-  )
 
   useEffect(() => {
     const canvas = canvasRef.current
@@ -141,47 +86,6 @@ export default function PreMatchCloud({
     ctx.globalCompositeOperation = 'source-over'
     if (typeof ctx.filter === 'string') ctx.filter = 'none'
 
-    // 机构：虚线等值线（① 机构）。只在有市场报价时画。
-    if (marketList.length > 0) {
-      const N = 64
-      const step = size / (N - 1)
-      const sigma = CELL * 0.95
-      const field = []
-      for (let j = 0; j < N; j += 1) {
-        const row = []
-        for (let i = 0; i < N; i += 1) {
-          const x = i * step
-          const y = j * step
-          let value = 0
-          marketList.forEach((cell) => {
-            const cx = PAD + (cell.away + 0.5) * CELL
-            const cy = PAD + (cell.home + 0.5) * CELL
-            const d2 = (x - cx) ** 2 + (y - cy) ** 2
-            value += cell.p * Math.exp(-d2 / (2 * sigma * sigma))
-          })
-          row.push(value)
-        }
-        field.push(row)
-      }
-      const peak = field.reduce((max, row) => Math.max(max, ...row), 0)
-      if (peak > 0) {
-        ctx.save()
-        ctx.setLineDash([4.5, 4])
-        ctx.lineWidth = 1.1
-        ;[0.24, 0.46, 0.7].forEach((ratio, levelIndex) => {
-          ctx.globalAlpha = 0.8 - levelIndex * 0.16
-          ctx.strokeStyle = 'rgba(51, 65, 85, 0.9)'
-          buildContourSegments(field, ratio * peak, size).forEach((segment) => {
-            ctx.beginPath()
-            ctx.moveTo(segment.x1, segment.y1)
-            ctx.lineTo(segment.x2, segment.y2)
-            ctx.stroke()
-          })
-        })
-        ctx.restore()
-      }
-    }
-
     if (registeredPoint) {
       const x = PAD + (registeredPoint.away + 0.5) * CELL
       const y = PAD + (registeredPoint.home + 0.5) * CELL
@@ -196,7 +100,7 @@ export default function PreMatchCloud({
       ctx.lineWidth = 1.4
       ctx.stroke()
     }
-  }, [cells, marketList, maxP, registeredPoint, size, maxGoals])
+  }, [cells, maxP, registeredPoint, size, maxGoals])
 
   const handleMove = (event) => {
     const rect = canvasRef.current?.getBoundingClientRect()
@@ -205,8 +109,7 @@ export default function PreMatchCloud({
     const home = Math.floor((event.clientY - rect.top - PAD) / CELL)
     if (home >= 0 && home <= maxGoals && away >= 0 && away <= maxGoals) {
       const mine = cells?.find((row) => row.home === home && row.away === away)?.p ?? 0
-      const market = marketList.find((row) => row.home === home && row.away === away)?.p ?? null
-      setHover({ home, away, mine, market })
+      setHover({ home, away, mine })
     } else {
       setHover(null)
     }
@@ -239,7 +142,7 @@ export default function PreMatchCloud({
       </div>
       <p className="mt-1 h-4 text-[11px] text-stone-500">
         {hover
-          ? `${hover.home}-${hover.away} · 我 ${(hover.mine * 100).toFixed(1)}%${hover.market === null ? '' : ` · 机构 ${(hover.market * 100).toFixed(1)}%`}`
+          ? `${hover.home}-${hover.away} · ${(hover.mine * 100).toFixed(1)}%`
           : '颜色越浓 = 我给的比分概率越高 · 悬停读某一格'}
       </p>
     </div>
