@@ -246,6 +246,34 @@
   -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
+.pre-dossier-side {
+  display: flex;
+  flex-direction: column;
+  /* 关键：grid 子项默认 min-width 是 min-content，会被长文本撑宽，
+     把「中/没中」标签挤出可视区（上一轮就是这么错位的）。 */
+  min-width: 0;
+  padding: 16px 18px 18px;
+}
+
+.pre-dossier-scroll {
+  flex: 1 1 auto;
+  min-height: 240px;
+  max-height: 460px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+/* 左半的滚动条走左侧边缘（滚动容器 rtl、里面的内容全部拉回 ltr）。 */
+.pre-dossier-side--home .pre-dossier-scroll {
+  direction: rtl;
+  padding-right: 0;
+  padding-left: 12px;
+}
+
+.pre-dossier-side--home .pre-dossier-scroll * {
+  direction: ltr;
+}
+
 .pre-dossier-side--home {
   background:
     radial-gradient(140% 100% at 0% 0%, rgba(255, 226, 232, 0.72), rgba(255, 244, 240, 0.4) 66%, rgba(255, 255, 255, 0.28)),
@@ -278,8 +306,8 @@
 .pre-dossier-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
+  justify-content: flex-start;
+  gap: 10px;
   padding-bottom: 10px;
 }
 

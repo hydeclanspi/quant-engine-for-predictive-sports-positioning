@@ -2084,7 +2084,7 @@ export default function NewInvestmentPage() {
                     ))}
                   </div>
                   )}
-                  {displayEntries.length > 1 && (
+                  {getValidEntries(displayEntries).length > 1 && (
                     <p className="text-xs text-stone-500 mt-2">
                       Overall Odds（原子等效）:{' '}
                       <span className="font-semibold text-amber-600">{calcMatchOdds(displayEntries).toFixed(2)}</span>
