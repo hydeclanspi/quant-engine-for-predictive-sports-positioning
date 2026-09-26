@@ -44,6 +44,8 @@ const toNumber = (value, fallback = Number.NaN) => {
   return Number.isFinite(parsed) ? parsed : fallback
 }
 
+const text = (value) => String(value ?? '').trim()
+
 // ── 基础解析 ──────────────────────────────────────────────────────────
 
 /**
@@ -316,7 +318,115 @@ export const learnForecastBias = (recordsInput, { k = 8 } = {}) => {
   }
 }
 
-// ── 通道 2：从登记分布推导市场概率 ────────────────────────────────────
+// ── 通道 5：团队级、分主客场的在线偏差学习（2026-09-25 决策）────────────────
+//
+// 与通道 1（learnForecastBias）的区别：那套是全局每侧一个比值（把"主队"和"客队"
+// 各看成一锅），这套是**按球队 + 按主客场**学"我对这支队在这块场地的进球估计
+// 偏了多少"。设计要点（全部按拍板口径）：
+//   · 每结算一场就学一次，不攒、不取全局均值；
+//   · 时间近因用固定桶（近 3 / 3-6 / 6-10 / 10-14 / 14-20 / 20+ 场）；
+//   · 一场同时给主队和客队各贡献一个带方向的误差（实际进球 − 我登记的进球）；
+//   · 下一场主队的偏差 = 0.7×该队主场偏差 + 0.3×该队客场偏差（vice versa）。
+//     主场历史与客场历史是同一支球队的两份相关样本，不装独立，固定 70/30 混合。
+//   · 样本不足时向 0 收缩（可靠度 = n/(n+k)），完全没有 → 退到全局每侧偏差。
+// 误差是加性的（实际 − 登记），不是比值：登记 0 也能学，不存在 0×θ=0 的盲区。
+
+export const TEAM_BIAS_RECENCY_WEIGHTS = [1.6, 1.35, 1.15, 1.0, 0.9, 0.8]
+export const TEAM_BIAS_RECENCY_CUTS = [3, 6, 10, 14, 20]
+export const TEAM_BIAS_VENUE_BLEND = 0.7
+
+const recencyWeightForAge = (ageInMatches) => {
+  for (let i = 0; i < TEAM_BIAS_RECENCY_CUTS.length; i++) {
+    if (ageInMatches < TEAM_BIAS_RECENCY_CUTS[i]) return TEAM_BIAS_RECENCY_WEIGHTS[i]
+  }
+  return TEAM_BIAS_RECENCY_WEIGHTS[TEAM_BIAS_RECENCY_WEIGHTS.length - 1]
+}
+
+const newBiasStream = () => ({ weightedSum: 0, weightTotal: 0, n: 0 })
+
+const closeBiasStream = (stream, k) => {
+  const reliability = stream.n / (stream.n + k)
+  const rawBias = stream.weightTotal > 0 ? stream.weightedSum / stream.weightTotal : 0
+  return { bias: rawBias, reliability: Number(reliability.toFixed(3)), n: stream.n }
+}
+
+export const learnTeamBias = (recordsInput, { k = 8 } = {}) => {
+  const records = (Array.isArray(recordsInput) ? recordsInput : [])
+    .filter((record) => record?.actual && record?.primaryPoint)
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+
+  const teams = new Map()
+  const globalStreams = { home: newBiasStream(), away: newBiasStream() }
+
+  const push = (stream, age, error) => {
+    const w = recencyWeightForAge(age)
+    stream.weightedSum += error * w
+    stream.weightTotal += w
+    stream.n += 1
+  }
+
+  records.forEach((record, age) => {
+    const homeTeam = text(record.homeTeam)
+    const awayTeam = text(record.awayTeam)
+    if (!homeTeam || !awayTeam) return
+    if (!teams.has(homeTeam)) teams.set(homeTeam, { home: newBiasStream(), away: newBiasStream() })
+    if (!teams.has(awayTeam)) teams.set(awayTeam, { home: newBiasStream(), away: newBiasStream() })
+
+    const homeError = record.actual.home - record.primaryPoint.home
+    const awayError = record.actual.away - record.primaryPoint.away
+    push(teams.get(homeTeam).home, age, homeError)
+    push(teams.get(awayTeam).away, age, awayError)
+    push(globalStreams.home, age, homeError)
+    push(globalStreams.away, age, awayError)
+  })
+
+  const closed = new Map()
+  teams.forEach((streams, team) => {
+    closed.set(team, { home: closeBiasStream(streams.home, k), away: closeBiasStream(streams.away, k) })
+  })
+  const global = { home: closeBiasStream(globalStreams.home, k), away: closeBiasStream(globalStreams.away, k) }
+
+  return {
+    teams: closed,
+    global,
+    sampleCount: records.length,
+    k,
+  }
+}
+
+/**
+ * 取"下一场"的修正量：按主客场 70/30 合成，再按可靠度收缩。
+ * venue 指球队下一场踢的场地（'home' 主场 / 'away' 客场）。
+ */
+export const getTeamBias = (biasModel, teamName, venue) => {
+  const side = venue === 'away' ? 'away' : 'home'
+  const other = side === 'away' ? 'home' : 'away'
+  const entry = biasModel?.teams?.get(text(teamName))
+  const w = TEAM_BIAS_VENUE_BLEND
+
+  if (!entry || (entry[side].n === 0 && entry[other].n === 0)) {
+    const fallback = biasModel?.global?.[side]
+    if (!fallback || fallback.n === 0) return { bias: 0, reliability: 0, n: 0, basis: 'none' }
+    return { bias: fallback.bias * fallback.reliability, reliability: fallback.reliability, n: fallback.n, basis: 'global' }
+  }
+  const bias = w * entry[side].bias + (1 - w) * entry[other].bias
+  const reliability = w * entry[side].reliability + (1 - w) * entry[other].reliability
+  const n = entry[side].n + entry[other].n
+  return { bias: bias * reliability, reliability: Number(reliability.toFixed(3)), n, basis: 'team' }
+}
+
+/** 把登记比分按团队偏差修正成 expected actual（加性，主客分开算）。 */
+export const applyTeamBias = (point, { homeTeam, awayTeam, biasModel } = {}) => {
+  const homeBias = getTeamBias(biasModel, homeTeam, 'home')
+  const awayBias = getTeamBias(biasModel, awayTeam, 'away')
+  return {
+    home: Math.max(0, point.home + homeBias.bias),
+    away: Math.max(0, point.away + awayBias.bias),
+    homeBias,
+    awayBias,
+  }
+}
 
 const lnFactorial = (n) => {
   let sum = 0
@@ -430,7 +540,74 @@ const marketTargetsFromInput = (input = {}) => {
     }
   })
 
+  ;(Array.isArray(input.handicaps) ? input.handicaps : []).forEach((row) => {
+    const devig = deVigProportional([row?.win, row?.draw, row?.lose])
+    const line = Number(row?.line)
+    if (devig.ok && Number.isFinite(line)) {
+      targets.push({ key: `handicap:${line}:win`, label: `让 ${line} 主`, value: devig.fair[0] })
+      targets.push({ key: `handicap:${line}:push`, label: `让 ${line} 走`, value: devig.fair[1] })
+      targets.push({ key: `handicap:${line}:lose`, label: `让 ${line} 客`, value: devig.fair[2] })
+    } else {
+      notes.push(`让球 ${Number.isFinite(line) ? line : '?'} 赔率需三项都给，未参与倒算`)
+    }
+  })
+
   return { targets, notes }
+}
+
+/**
+ * 从一份进球分布里取某个 Entry 的概率。返回 NaN 表示该盘口无法从分布推出
+ * （half_full、other 等），调用方必须显式处理，不得当作 0。
+ */
+export const probabilityForEntry = (entry, { markets, cells } = {}) => {
+  if (!markets || !entry) return Number.NaN
+  const marketType = entry.market_type
+  const detail = entry.parse_detail || {}
+  if (marketType === 'result') {
+    if (detail.outcome === 'win') return markets.oneXTwo.home
+    if (detail.outcome === 'draw') return markets.oneXTwo.draw
+    if (detail.outcome === 'lose') return markets.oneXTwo.away
+    return Number.NaN
+  }
+  if (marketType === 'score') {
+    const cell = (Array.isArray(cells) ? cells : []).find((row) => row.home === detail.home && row.away === detail.away)
+    return cell ? cell.p : Number.NaN
+  }
+  if (marketType === 'total') {
+    const row = (markets.totals || []).find((item) => item.line === detail.line)
+    if (!row) return Number.NaN
+    if (detail.direction === 'over') return row.over
+    if (detail.direction === 'under') return row.under
+    return Number.NaN
+  }
+  if (marketType === 'handicap') {
+    const row = (markets.handicaps || []).find((item) => item.line === detail.line)
+    if (!row) return Number.NaN
+    if (detail.outcome === 'win') return row.win
+    if (detail.outcome === 'draw') return row.push
+    if (detail.outcome === 'lose') return row.lose
+    return Number.NaN
+  }
+  return Number.NaN
+}
+
+/** 让 deriveMarketProbabilities 覆盖 Entry 实际用到的大小球线/让球线，其余不动。 */
+export const deriveMarketProbabilitiesForEntries = (homeLambda, awayLambda, entries = [], options = {}) => {
+  const totalLines = [...new Set(
+    entries
+      .filter((entry) => entry?.market_type === 'total' && Number.isFinite(Number(entry?.parse_detail?.line)))
+      .map((entry) => Number(entry.parse_detail.line)),
+  )]
+  const handicapLines = [...new Set(
+    entries
+      .filter((entry) => entry?.market_type === 'handicap' && Number.isFinite(Number(entry?.parse_detail?.line)))
+      .map((entry) => Number(entry.parse_detail.line)),
+  )]
+  return deriveMarketProbabilities(homeLambda, awayLambda, {
+    ...options,
+    ...(totalLines.length ? { totalLines } : {}),
+    ...(handicapLines.length ? { handicapLines } : {}),
+  })
 }
 
 /**
@@ -447,8 +624,21 @@ export const fitMarketLambdas = (
     return { ready: false, reason: 'insufficient_market_input', targets: [], notes, samples: targets.length }
   }
 
-  const evaluate = (home, away) => {
-    const markets = deriveMarketProbabilities(home, away, { maxGoals })
+  // 只用市场给了的盘口线作为约束，不额外外推别的线
+  const lineOf = (prefix) => [...new Set(
+    targets.filter((target) => target.key.startsWith(`${prefix}:`))
+      .map((target) => Number(target.key.split(':')[1]))
+      .filter(Number.isFinite),
+  )]
+  const totalLines = lineOf('over')
+  const handicapLines = lineOf('handicap')
+  const marketOptions = {
+    maxGoals,
+    ...(totalLines.length ? { totalLines } : {}),
+    ...(handicapLines.length ? { handicapLines } : {}),
+  }
+
+  const marketValueMap = (markets) => {
     const valueByKey = {
       home: markets.oneXTwo.home,
       draw: markets.oneXTwo.draw,
@@ -458,6 +648,17 @@ export const fitMarketLambdas = (
       valueByKey[`over:${row.line}`] = row.over
       valueByKey[`under:${row.line}`] = row.under
     })
+    markets.handicaps.forEach((row) => {
+      valueByKey[`handicap:${row.line}:win`] = row.win
+      valueByKey[`handicap:${row.line}:push`] = row.push
+      valueByKey[`handicap:${row.line}:lose`] = row.lose
+    })
+    return valueByKey
+  }
+
+  const evaluate = (home, away) => {
+    const markets = deriveMarketProbabilities(home, away, marketOptions)
+    const valueByKey = marketValueMap(markets)
     let sse = 0
     targets.forEach((target) => {
       const model = valueByKey[target.key]
@@ -482,15 +683,7 @@ export const fitMarketLambdas = (
   }
 
   const { markets } = evaluate(best.home, best.away)
-  const valueByKey = {
-    home: markets.oneXTwo.home,
-    draw: markets.oneXTwo.draw,
-    away: markets.oneXTwo.away,
-  }
-  markets.totals.forEach((row) => {
-    valueByKey[`over:${row.line}`] = row.over
-    valueByKey[`under:${row.line}`] = row.under
-  })
+  const valueByKey = marketValueMap(markets)
 
   return {
     ready: true,

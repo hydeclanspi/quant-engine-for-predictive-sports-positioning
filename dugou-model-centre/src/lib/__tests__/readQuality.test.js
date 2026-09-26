@@ -2,22 +2,27 @@ import { describe, expect, it } from 'vitest'
 import {
   READ_TIERS,
   ajrObjectiveContrast,
+  applyTeamBias,
   buildReadRecord,
   buildReadRecords,
   calibratedLambdaFromPoint,
   deVigProportional,
   deriveMarketProbabilities,
+  deriveScoreDistribution,
   disagreementBuckets,
   fitFusionWeight,
   fitMarketLambdas,
+  getTeamBias,
   learnForecastBias,
   learnScaleBias,
+  learnTeamBias,
   legacyAjrBuckets,
   logit,
   parseFinalScore,
   pointDistance,
   pointForecastToLambda,
   poissonPmf,
+  probabilityForEntry,
   readStateAutocorrelation,
   scorelineDistance,
   sigmoid,
@@ -360,5 +365,103 @@ describe('机构市场定价通道（去水 + 倒算）', () => {
     expect(partial.ready).toBe(true)
     expect(partial.targets.some((target) => target.label.includes('2.5'))).toBe(false)
     expect(partial.notes.join()).toContain('未参与倒算')
+  })
+})
+
+describe('机构市场定价通道 · 让球盘约束', () => {
+  it('1X2 + 让球盘一起参与倒算，仍能还原真值 λ', () => {
+    const truth = { home: 1.8, away: 1.05 }
+    const m = deriveMarketProbabilities(truth.home, truth.away)
+    const hcp = m.handicaps.find((row) => row.line === -1)
+    const vig = 1.05
+    // 只给 1X2 与让球盘（不给大小球）：让球盘提供额外约束
+    const fit = fitMarketLambdas({
+      oneXTwo: { home: 1 / (m.oneXTwo.home * vig), draw: 1 / (m.oneXTwo.draw * vig), away: 1 / (m.oneXTwo.away * vig) },
+      handicaps: [{ line: -1, win: 1 / (hcp.win * vig), draw: 1 / (hcp.push * vig), lose: 1 / (hcp.lose * vig) }],
+    })
+    expect(fit.ready).toBe(true)
+    expect(fit.samples).toBe(6)
+    expect(fit.homeLambda).toBeCloseTo(1.8, 1)
+    expect(fit.awayLambda).toBeCloseTo(1.05, 1)
+    expect(fit.targets.filter((t) => t.label.startsWith('让 -1'))).toHaveLength(3)
+  })
+
+  it('让球盘三项给不全时明确排除，不静默少算', () => {
+    const fit = fitMarketLambdas({
+      oneXTwo: { home: 1.9, draw: 3.4, away: 4.2 },
+      handicaps: [{ line: -1, win: 3.0, draw: '', lose: 1.6 }],
+    })
+    expect(fit.ready).toBe(true)
+    expect(fit.samples).toBe(3)
+    expect(fit.notes.join()).toContain('让球 -1')
+  })
+})
+
+describe('团队级、分主客场的在线偏差学习（通道 5）', () => {
+  // 阿森纳主场 5 场：登记 vs 实际 = [2,2,1,3,2] vs [1,2,0,2,2]，误差 = 实际−登记 = [-1,0,-1,-1,0]
+  const arsenalRecords = [2, 2, 1, 3, 2].map((registered, i) => ({
+    date: new Date(2026, 8, 20 - i).toISOString(),
+    homeTeam: '阿森纳',
+    awayTeam: '埃弗顿',
+    primaryPoint: { home: registered, away: 0 },
+    actual: { home: [1, 2, 0, 2, 2][i], away: 0 },
+  }))
+
+  it('按球队单独学出带方向的偏差（加性，不是比值）', () => {
+    const model = learnTeamBias(arsenalRecords)
+    const stream = model.teams.get('阿森纳')
+    // 桶权重 [1.6,1.6,1.6,1.35,1.35]，Σ=7.5，Σw·err = -4.55 → bias = -0.6067
+    expect(stream.home.bias).toBeCloseTo(-0.6067, 3)
+    expect(stream.home.n).toBe(5)
+    expect(stream.home.reliability).toBeCloseTo(5 / 13, 3)
+  })
+
+  it('下一场主场修正 = 0.7×主场 + 0.3×客场，再按可靠度收缩', () => {
+    const model = learnTeamBias(arsenalRecords)
+    const next = getTeamBias(model, '阿森纳', 'home')
+    // 0.7×(-0.6067)+0.3×0 = -0.4247；×可靠度 0.269 ≈ -0.1144
+    expect(next.bias).toBeCloseTo(-0.1144, 3)
+    expect(next.basis).toBe('team')
+    const corrected = applyTeamBias({ home: 2, away: 0 }, { homeTeam: '阿森纳', awayTeam: '埃弗顿', biasModel: model })
+    expect(corrected.home).toBeCloseTo(1.8856, 3)
+  })
+
+  it('没有该队样本时降级到全局；两边都没登记也不产出偏差', () => {
+    const model = learnTeamBias(arsenalRecords)
+    const unknown = getTeamBias(model, '利物浦', 'home')
+    expect(unknown.basis).toBe('global')
+    expect(learnTeamBias([]).global.home.bias).toBe(0)
+    expect(getTeamBias(learnTeamBias([]), '任何队', 'home').bias).toBe(0)
+  })
+
+  it('登记 0 的边也能学（差值口径不存在 0×θ=0 的盲区）', () => {
+    const model = learnTeamBias([{
+      date: '2026-09-20', homeTeam: '阿森纳', awayTeam: '埃弗顿',
+      primaryPoint: { home: 3, away: 0 }, actual: { home: 2, away: 1 },
+    }])
+    expect(model.teams.get('埃弗顿').away.bias).toBe(1)
+  })
+})
+
+describe('probabilityForEntry：从分布取某个 Entry 的概率', () => {
+  const cells = deriveScoreDistribution(1.8, 1.0, 8)
+  const markets = deriveMarketProbabilities(1.8, 1.0, { maxGoals: 8 })
+
+  it('胜平负 / 比分 / 大小球 / 让球各自取到对应概率', () => {
+    expect(probabilityForEntry({ market_type: 'result', parse_detail: { outcome: 'win' } }, { markets, cells })).toBeCloseTo(markets.oneXTwo.home, 8)
+    expect(probabilityForEntry({ market_type: 'result', parse_detail: { outcome: 'draw' } }, { markets, cells })).toBeCloseTo(markets.oneXTwo.draw, 8)
+    const cell = cells.find((c) => c.home === 2 && c.away === 1)
+    expect(probabilityForEntry({ market_type: 'score', parse_detail: { home: 2, away: 1 } }, { markets, cells })).toBeCloseTo(cell.p, 8)
+    const ou = markets.totals.find((t) => t.line === 2.5)
+    expect(probabilityForEntry({ market_type: 'total', parse_detail: { direction: 'over', line: 2.5 } }, { markets, cells })).toBeCloseTo(ou.over, 8)
+    const hcp = markets.handicaps.find((t) => t.line === -1)
+    expect(probabilityForEntry({ market_type: 'handicap', parse_detail: { line: -1, outcome: 'win' } }, { markets, cells })).toBeCloseTo(hcp.win, 8)
+    expect(probabilityForEntry({ market_type: 'handicap', parse_detail: { line: -1, outcome: 'draw' } }, { markets, cells })).toBeCloseTo(hcp.push, 8)
+  })
+
+  it('取不到的盘口明确返回 NaN，不当 0', () => {
+    expect(Number.isNaN(probabilityForEntry({ market_type: 'other' }, { markets, cells }))).toBe(true)
+    expect(Number.isNaN(probabilityForEntry({ market_type: 'score', parse_detail: { home: 9, away: 9 } }, { markets, cells }))).toBe(true)
+    expect(Number.isNaN(probabilityForEntry(null, { markets, cells }))).toBe(true)
   })
 })

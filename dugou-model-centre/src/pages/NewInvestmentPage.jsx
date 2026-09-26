@@ -24,7 +24,7 @@ import { useModeLabelMap } from '../components/ModeLabel'
 import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from '../lib/investmentForecast'
 import { getMatchSourceIdentity } from '../lib/investmentIdentity'
-import { parseFinalScore } from '../lib/readQuality'
+import { parseFinalScore, learnTeamBias, buildReadRecords } from '../lib/readQuality'
 import PreMatchGridView from '../components/PreMatchGridView'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
@@ -474,15 +474,32 @@ export default function NewInvestmentPage() {
   const reservoirState = useMemo(() => getReservoirState(), [systemConfig, dataVersion])
   const poolCapital = reservoirState.availableCash
   // 右侧 Entry 里写了比分（例如「2-1」）时，投前的比分网格自动展开并跟随该比分计算。
-  const detectedScoreline = useMemo(() => {
-    for (const match of matches) {
+  // detectedScorelineInfo 同时记录这场的位置（matchIndex）、两队队名与 Entries，
+  // 供网格的偏差修正与这场 Entry 的概率回传用。
+  const detectedScorelineInfo = useMemo(() => {
+    for (let matchIndex = 0; matchIndex < matches.length; matchIndex++) {
+      const match = matches[matchIndex]
       for (const entry of match.entries || []) {
         const parsed = parseFinalScore(entry?.name)
-        if (parsed) return parsed
+        if (parsed) {
+          return { point: parsed, matchIndex, homeTeam: match.homeTeam, awayTeam: match.awayTeam, entries: match.entries }
+        }
       }
     }
     return null
   }, [matches])
+
+  // 我对各球队（分主客场）的历史登记偏差：从已结算账本里在线学出。
+  // 只读取、不写；账本没有变化时不重算。
+  const teamBiasModel = useMemo(() => {
+    try {
+      return learnTeamBias(buildReadRecords(getInvestments()))
+    } catch {
+      return null
+    }
+  }, [dataVersion])
+  // 网格回传的「这场 Entry 的概率」——投前时若命中就替换这场的仓位输入。
+  const [preMatchOverride, setPreMatchOverride] = useState(null)
   const riskCap = useMemo(
     () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
@@ -746,13 +763,19 @@ export default function NewInvestmentPage() {
   const atomicMatchProfiles = useMemo(
     () =>
       matches
-        .map((match) => {
+        .map((match, index) => {
           const home = normalizeTeamNameInput(match.homeTeam)
           const away = normalizeTeamNameInput(match.awayTeam)
           const validEntries = getValidEntries(match.entries)
           if (!home || !away || validEntries.length === 0) return null
 
-          const unionProbability = calcAdjustedConf(match)
+          // 投前：这场 Entry 的概率来自「我的登记分布」（默认 θ 修正；「我坚持」时为原始输入）。
+          // 只在单 Entry 场次上覆盖；多 Entry 仍走生产管线。
+          const override = viewMode === 'pre' && preMatchOverride
+            && preMatchOverride.matchIndex === index && validEntries.length === 1
+            && Number.isFinite(preMatchOverride.probability)
+            ? preMatchOverride : null
+          const unionProbability = override ? override.probability : calcAdjustedConf(match)
           return {
             ...buildAtomicMatchProfile({
               entries: validEntries,
@@ -763,7 +786,7 @@ export default function NewInvestmentPage() {
           }
         })
         .filter(Boolean),
-    [calibrationContext, matches, systemConfig],
+    [calibrationContext, matches, systemConfig, viewMode, preMatchOverride],
   )
 
   const combinedAtomicProfile = useMemo(
@@ -1622,7 +1645,17 @@ export default function NewInvestmentPage() {
             </div>
           </div>
         </div>
-        {viewMode === 'pre' && <PreMatchGridView detectedPoint={detectedScoreline} />}
+        {viewMode === 'pre' && (
+          <PreMatchGridView
+            detectedPoint={detectedScorelineInfo?.point ?? null}
+            biasModel={teamBiasModel}
+            homeTeam={detectedScorelineInfo?.homeTeam ?? matches[0]?.homeTeam ?? ''}
+            awayTeam={detectedScorelineInfo?.awayTeam ?? matches[0]?.awayTeam ?? ''}
+            targetMatchIndex={detectedScorelineInfo?.matchIndex ?? 0}
+            matchEntries={detectedScorelineInfo?.entries ?? matches[0]?.entries ?? []}
+            onOverrideChange={setPreMatchOverride}
+          />
+        )}
       </div>
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
