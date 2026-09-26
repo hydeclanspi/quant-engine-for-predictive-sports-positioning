@@ -156,7 +156,36 @@ describe('两队过往记录（PreMatchRecords）', () => {
     away: [],
   }
 
-  it('备注一字不差的两条：新的照常显示，旧的那条折叠成「同上」', () => {
+  it('同一注但有一边没写备注：也折，且备注不会因为折叠被吞掉', () => {
+    const mixed = {
+      home: [
+        { id: 'new', dateLabel: '26-09-20', venue: 'home', opponent: '埃弗顿', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '', postNote: '' },
+        { id: 'old', dateLabel: '26-09-18', venue: 'home', opponent: '克罗地亚', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '', postNote: '英格兰牛逼' },
+      ],
+      away: [],
+    }
+    const html = strip(renderToStaticMarkup(<PreMatchRecords homeTeam="英格兰" awayTeam="西班牙" records={mixed} />))
+    expect(html).toContain('×2')
+    expect(html).toContain('英格兰牛逼')          // 折叠了但话还在
+    expect(html).not.toContain('26-09-18')        // 旧的那条默认压在里面
+  })
+
+  it('同一注但两边都写了、而且不一样：不折，各显示各的', () => {
+    const different = {
+      home: [
+        { id: 'a', dateLabel: '26-09-20', venue: 'home', opponent: '埃弗顿', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '', postNote: '英格兰牛逼' },
+        { id: 'b', dateLabel: '26-09-18', venue: 'home', opponent: '克罗地亚', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '', postNote: '这场被爆了' },
+      ],
+      away: [],
+    }
+    const html = strip(renderToStaticMarkup(<PreMatchRecords homeTeam="英格兰" awayTeam="西班牙" records={different} />))
+    expect(html).not.toContain('data-testid="pre-record-fold"')
+    expect(html).toContain('英格兰牛逼')
+    expect(html).toContain('这场被爆了')
+    expect(html).toContain('26-09-18')
+  })
+
+  it('完全相同的记录折成一条：给 ×N 与 History 同款的展开钮，默认收起', () => {
     const dup = {
       home: [
         { id: 'new', dateLabel: '26-09-20', venue: 'home', opponent: '埃弗顿', entryText: 'win', oddsLabel: '1.52', resultText: 'win', isCorrect: true, settled: true, note: '赛前', postNote: '英格兰牛逼' },
@@ -166,10 +195,16 @@ describe('两队过往记录（PreMatchRecords）', () => {
       away: [],
     }
     const html = strip(renderToStaticMarkup(<PreMatchRecords homeTeam="英格兰" awayTeam="西班牙" records={dup} />))
-    // 备注只出现一次（新的那条），旧的折叠
+    // 备注只出现一次（最新的那条），旧的那条折进组里
     expect((html.match(/英格兰牛逼/g) || [])).toHaveLength(1)
-    expect(html).toContain('投前/投后 同上')
     expect((html.match(/另一条/g) || [])).toHaveLength(1)
+    // 折叠钮：×2 + History 同款 chevron，默认收起（那条更旧的日期不出现）
+    expect(html).toContain('data-testid="pre-record-fold"')
+    expect(html).toContain('×2')
+    expect(html).toContain('展开另外 1 条相同记录')
+    expect(html).not.toContain('26-09-18')
+    // 计数按真实条数（3 条），不是折叠后的行数
+    expect(html).toContain('3 条过往')
   })
 
   it('一条记录就一行：日期 · 主客 · 对手 · Entry · odds · 结果，都在同一个行容器里', () => {

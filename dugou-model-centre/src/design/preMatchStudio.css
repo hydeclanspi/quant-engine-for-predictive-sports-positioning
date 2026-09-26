@@ -397,13 +397,37 @@
   font-variant-numeric: tabular-nums;
 }
 
-.pre-record-folded {
-  padding: 1px 8px;
-  border-radius: 999px;
-  font-size: 11px;
-  color: #a8a29e;
-  background: rgba(255, 255, 255, 0.7);
+/* 相同记录的折叠钮：跟 History 页同一套（小圆钮 + chevron） */
+.pre-record-fold {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   align-self: center;
+  padding: 1px 4px 1px 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.72);
+  transition: background 160ms ease;
+}
+
+.pre-record-fold:hover {
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.pre-record-fold-count {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #78716c;
+}
+
+/* 展开出来的那几条：同一笔下注的另一天，缩进、不重复条目内容 */
+.pre-record.is-child {
+  padding-left: 14px;
+  border-bottom: 0;
+  opacity: 0.72;
+}
+
+.pre-record.is-child .pre-record-main {
+  font-size: 13px;
 }
 
 .pre-record-chip {
