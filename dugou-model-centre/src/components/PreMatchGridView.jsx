@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronRight, Loader2, Minus, Plus, RefreshCw } from 'lucide-react'
+// 已停用：投前研判改用 PreMatchBoard（进球区间 + 浓度 + 幻彩云图）。
+// 这个「比分网格」版本保留下来只为回调，当前没有任何页面引用它；测试仍在跑它。
 import {
   DEFAULT_LAMBDA_PRIOR,
   applyTeamBias,

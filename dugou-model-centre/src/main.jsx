@@ -11,6 +11,7 @@ import './design/inspiration2609.css'
 import './design/liquidGlassThemes.css'
 import './design/flagshipGlass.css'
 import './design/glassQuality.css'
+import './design/preMatchStudio.css'
 
 const renderApp = () => {
   // 评审期已禁用偏好记忆：主题由「路由默认 + 会话内选择」决定（design/themeSession.js）。

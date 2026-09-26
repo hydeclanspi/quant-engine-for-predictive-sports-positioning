@@ -25,7 +25,9 @@ import { useDisplayMode, PREVIEW_MODE, isFullMode } from '../lib/displayMode'
 import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LEG_RATING_SEMANTICS } from '../lib/investmentForecast'
 import { getMatchSourceIdentity } from '../lib/investmentIdentity'
 import { parseFinalScore, learnTeamBias, buildReadRecords } from '../lib/readQuality'
-import PreMatchGridView from '../components/PreMatchGridView'
+import { buildTeamHistory, findTeamHistory } from '../lib/teamHistory'
+import PreMatchHero from '../components/PreMatchHero'
+import PreMatchBoard from '../components/PreMatchBoard'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
 const DEFAULT_FSE_PERCENT = 10
@@ -473,21 +475,19 @@ export default function NewInvestmentPage() {
   // （2026-09-25 决策：蓄水池余额扣除未结算在途投入；周期性结算后自动以新周期口径计算）。
   const reservoirState = useMemo(() => getReservoirState(), [systemConfig, dataVersion])
   const poolCapital = reservoirState.availableCash
-  // 右侧 Entry 里写了比分（例如「2-1」）时，投前的比分网格自动展开并跟随该比分计算。
-  // detectedScorelineInfo 同时记录这场的位置（matchIndex）、两队队名与 Entries，
-  // 供网格的偏差修正与这场 Entry 的概率回传用。
-  const detectedScorelineInfo = useMemo(() => {
-    for (let matchIndex = 0; matchIndex < matches.length; matchIndex++) {
-      const match = matches[matchIndex]
-      for (const entry of match.entries || []) {
-        const parsed = parseFinalScore(entry?.name)
-        if (parsed) {
-          return { point: parsed, matchIndex, homeTeam: match.homeTeam, awayTeam: match.awayTeam, entries: match.entries }
+  // 投前：每场各自的「登记比分」（Entry 里写了 2-1 这类）。有比分的场次才展开研究板，
+  // 没有比分的场次整块折叠——投后导入与没写比分的场次都不受影响。
+  const scoreOpinionsByMatch = useMemo(
+    () =>
+      matches.map((match) => {
+        for (const entry of match.entries || []) {
+          const parsed = parseFinalScore(entry?.name)
+          if (parsed) return { point: parsed }
         }
-      }
-    }
-    return null
-  }, [matches])
+        return null
+      }),
+    [matches],
+  )
 
   // 我对各球队（分主客场）的历史登记偏差：从已结算账本里在线学出。
   // 只读取、不写；账本没有变化时不重算。
@@ -498,8 +498,20 @@ export default function NewInvestmentPage() {
       return null
     }
   }, [dataVersion])
-  // 网格回传的「这场 Entry 的概率」——投前时若命中就替换这场的仓位输入。
-  const [preMatchOverride, setPreMatchOverride] = useState(null)
+  // 投前：每支球队的过往记录（投前登记 / 投后复盘 / 预测与结果），最新在前。
+  const teamHistoryMap = useMemo(() => {
+    try {
+      return buildTeamHistory(getInvestments())
+    } catch {
+      return new Map()
+    }
+  }, [dataVersion])
+  // 研究板回传的「这场 Entry 的概率」——投前时若命中就替换这场的仓位输入。
+  const [preMatchOpinions, setPreMatchOpinions] = useState({})
+  const handlePreOpinionChange = (payload) => {
+    if (!payload) return
+    setPreMatchOpinions((prev) => ({ ...prev, [payload.matchIndex]: payload }))
+  }
   const riskCap = useMemo(
     () => capRecommendedStake(Number.MAX_SAFE_INTEGER, poolCapital, systemConfig.riskCapRatio),
     [poolCapital, systemConfig.riskCapRatio],
@@ -769,12 +781,15 @@ export default function NewInvestmentPage() {
           const validEntries = getValidEntries(match.entries)
           if (!home || !away || validEntries.length === 0) return null
 
-          // 投前：这场 Entry 的概率来自「我的登记分布」（默认 θ 修正；「我坚持」时为原始输入）。
-          // 只在单 Entry 场次上覆盖；多 Entry 仍走生产管线。
-          const override = viewMode === 'pre' && preMatchOverride
-            && preMatchOverride.matchIndex === index && validEntries.length === 1
-            && Number.isFinite(preMatchOverride.probability)
-            ? preMatchOverride : null
+          // 投前：这场 Entry 的概率来自「我的进球分布」（默认按历史平均差修正；
+          // 「我坚持」时为原始输入）。只在单 Entry 场次上覆盖；多 Entry 仍走生产管线。
+          const opinion = viewMode === 'pre' ? preMatchOpinions[index] : null
+          const scoreInfo = scoreOpinionsByMatch[index] || null
+          const override = opinion?.active && scoreInfo && validEntries.length === 1
+            && Number.isFinite(opinion.probability)
+            && opinion.registered?.home === scoreInfo.point.home
+            && opinion.registered?.away === scoreInfo.point.away
+            ? opinion : null
           const unionProbability = override ? override.probability : calcAdjustedConf(match)
           return {
             ...buildAtomicMatchProfile({
@@ -786,7 +801,7 @@ export default function NewInvestmentPage() {
           }
         })
         .filter(Boolean),
-    [calibrationContext, matches, systemConfig, viewMode, preMatchOverride],
+    [calibrationContext, matches, preMatchOpinions, scoreOpinionsByMatch, systemConfig, viewMode],
   )
 
   const combinedAtomicProfile = useMemo(
@@ -1465,7 +1480,7 @@ export default function NewInvestmentPage() {
           <h2 className="text-2xl font-semibold text-stone-800 font-display">新建投资</h2>
           <p className="text-stone-400 text-sm mt-1.5 leading-relaxed">
             {viewMode === 'pre'
-              ? '投前研判 · 赛前登记你的观点（当前界面与投后一致，升级在路上）'
+              ? '投前研判 · 登记我对这场的观点：两队 → Entries → 进球区间与浓度 → 比分云图'
               : '投后导入 · 录入比赛信息与预测参数 · Record match predictions & calibration parameters'}
           </p>
         </div>
@@ -1645,17 +1660,7 @@ export default function NewInvestmentPage() {
             </div>
           </div>
         </div>
-        {viewMode === 'pre' && (
-          <PreMatchGridView
-            detectedPoint={detectedScorelineInfo?.point ?? null}
-            biasModel={teamBiasModel}
-            homeTeam={detectedScorelineInfo?.homeTeam ?? matches[0]?.homeTeam ?? ''}
-            awayTeam={detectedScorelineInfo?.awayTeam ?? matches[0]?.awayTeam ?? ''}
-            targetMatchIndex={detectedScorelineInfo?.matchIndex ?? 0}
-            matchEntries={detectedScorelineInfo?.entries ?? matches[0]?.entries ?? []}
-            onOverrideChange={setPreMatchOverride}
-          />
-        )}
+        {/* 旧的比分网格已停用（保留文件方便回调）：投前的研究板现在长在每场比赛卡片里。 */}
       </div>
 
       <div className="motion-v2-surface glow-card bg-white rounded-2xl border border-stone-100 overflow-hidden lab-new-ticket">
@@ -1710,6 +1715,15 @@ export default function NewInvestmentPage() {
             const homeFseHistorySuggestion = homeTeamKey ? (latestTeamFseMap.get(homeTeamKey) ?? null) : null
             const awayFseHistorySuggestion = awayTeamKey ? (latestTeamFseMap.get(awayTeamKey) ?? null) : null
             const excludedEntries = excludedEntriesByMatch[idx] || []
+            // 投前：这场的登记比分、两队的过往记录（都只在投前用，投后导入不变）。
+            const preEntries = match.entries.map(normalizeEntry).filter((entry) => entry.name)
+            const scoreInfo = viewMode === 'pre' ? (scoreOpinionsByMatch[idx] || null) : null
+            const heroRecords = viewMode === 'pre'
+              ? {
+                  home: findTeamHistory(teamHistoryMap, match.homeTeam),
+                  away: findTeamHistory(teamHistoryMap, match.awayTeam),
+                }
+              : { home: [], away: [] }
 
             return (
               <div key={idx} className={`motion-v2-match-card relative lab-new-match ${idx > 0 ? 'pt-6 border-t border-stone-100' : ''}`}>
@@ -1800,9 +1814,26 @@ export default function NewInvestmentPage() {
                   <div className="w-6 h-6 rounded-lg bg-amber-100 flex items-center justify-center">
                     <span className="text-amber-600 text-xs font-bold">{idx + 1}</span>
                   </div>
-                  <span className="text-sm font-medium text-stone-700">比赛信息</span>
+                  <span className="text-sm font-medium text-stone-700">{viewMode === 'pre' ? '对阵 · 两队 PK' : '比赛信息'}</span>
                 </div>
 
+                {viewMode === 'pre' ? (
+                  <PreMatchHero
+                    homeTeam={match.homeTeam}
+                    awayTeam={match.awayTeam}
+                    onTeamChange={(side, value) => {
+                      updateMatch(idx, side === 'home' ? 'homeTeam' : 'awayTeam', resolveTypingTeamName(value))
+                      setActiveTeamInput({ matchIdx: idx, side })
+                    }}
+                    onTeamFocus={(side) => setActiveTeamInput({ matchIdx: idx, side })}
+                    onTeamBlur={() => setActiveTeamInput(null)}
+                    onPickSuggestion={(side, name) => applyTeamSuggestion(idx, side, name)}
+                    activeSide={activeTeamInput?.matchIdx === idx ? activeTeamInput.side : null}
+                    suggestions={{ home: homeSuggestions, away: awaySuggestions }}
+                    hintFor={getTeamHint}
+                    records={heroRecords}
+                  />
+                ) : (
                 <div className="grid grid-cols-11 gap-3 items-center mb-4">
                   <div className="col-span-5 relative">
                     <label className="text-xs text-stone-400 mb-1.5 block">主队</label>
@@ -1888,6 +1919,7 @@ export default function NewInvestmentPage() {
                     )}
                   </div>
                 </div>
+                )}
 
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
@@ -1951,6 +1983,18 @@ export default function NewInvestmentPage() {
                     </div>
                   )}
                 </div>
+
+                {viewMode === 'pre' && (
+                  <PreMatchBoard
+                    matchIndex={idx}
+                    homeTeam={match.homeTeam}
+                    awayTeam={match.awayTeam}
+                    entries={preEntries}
+                    detectedScore={scoreInfo?.point ?? null}
+                    biasModel={teamBiasModel}
+                    onOpinionChange={handlePreOpinionChange}
+                  />
+                )}
 
                 <div className="grid grid-cols-3 gap-4 mb-4">
                   <div className="relative">

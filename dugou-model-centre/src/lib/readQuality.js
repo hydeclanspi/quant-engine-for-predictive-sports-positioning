@@ -468,6 +468,18 @@ export const deriveMarketProbabilities = (
   { maxGoals = 8, totalLines = [1.5, 2.5, 3.5], handicapLines = [-1, 0, 1] } = {},
 ) => {
   const cells = deriveScoreDistribution(homeLambda, awayLambda, maxGoals)
+  return marketProbabilitiesFromCells(cells, { totalLines, handicapLines })
+}
+
+/**
+ * 同一套盘口推导，直接吃一份比分分布（不要求它来自泊松）。
+ * 投前的「进球区间 + 浓度」权重就是走这条：权重先合成比分分布，再推出各盘口概率。
+ */
+export const marketProbabilitiesFromCells = (
+  cellsInput,
+  { totalLines = [1.5, 2.5, 3.5], handicapLines = [-1, 0, 1] } = {},
+) => {
+  const cells = Array.isArray(cellsInput) ? cellsInput : []
   const sum = (predicate) => cells.reduce((acc, cell) => acc + (predicate(cell) ? cell.p : 0), 0)
   const oneXTwo = {
     home: sum((c) => c.home > c.away),
