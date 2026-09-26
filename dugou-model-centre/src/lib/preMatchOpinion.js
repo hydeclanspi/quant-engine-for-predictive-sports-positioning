@@ -170,3 +170,137 @@ export const matchOfficialFixture = (matches, homeTeam, awayTeam) => {
     candidateCount: ranked.length,
   }
 }
+
+// ── 每条腿在我的分布里「中 / 不中」────────────────────────────────────
+//
+// 同场可以有多条腿（例如「主胜」+「2-1」）。仓位算的是"这一场至少中一条"，
+// 所以需要逐格判断每条腿中不中——只支持能从比分网格精确判定的盘口，
+// 判不了（半全场、整数让球线的走盘、非常规盘口）就整体放弃覆盖，走生产管线。
+
+const parseLine = (detail) => {
+  const line = Number(detail?.line ?? detail?.canonicalLine)
+  return Number.isFinite(line) ? line : null
+}
+
+/** 一个比分格子对某条腿的结果：hit / miss / push / unsupported。 */
+export const legOutcomeForCell = (entry, homeGoals, awayGoals) => {
+  const detail = entry?.parse_detail || {}
+  switch (entry?.market_type) {
+    case 'result': {
+      const outcome = homeGoals > awayGoals ? 'win' : homeGoals === awayGoals ? 'draw' : 'lose'
+      if (!['win', 'draw', 'lose'].includes(detail.outcome)) return 'unsupported'
+      return detail.outcome === outcome ? 'hit' : 'miss'
+    }
+    case 'score': {
+      const home = Number(detail.home)
+      const away = Number(detail.away)
+      if (!Number.isFinite(home) || !Number.isFinite(away)) return 'unsupported'
+      return home === homeGoals && away === awayGoals ? 'hit' : 'miss'
+    }
+    case 'total': {
+      const line = parseLine(detail)
+      if (line === null) return 'unsupported'
+      const total = homeGoals + awayGoals
+      if (total === line) return 'push'
+      if (detail.direction === 'over') return total > line ? 'hit' : 'miss'
+      if (detail.direction === 'under') return total < line ? 'hit' : 'miss'
+      return 'unsupported'
+    }
+    case 'handicap': {
+      const line = parseLine(detail)
+      if (line === null) return 'unsupported'
+      const adjusted = homeGoals - awayGoals + line
+      if (adjusted === 0) return 'push'
+      if (detail.outcome === 'win') return adjusted > 0 ? 'hit' : 'miss'
+      if (detail.outcome === 'lose') return adjusted < 0 ? 'hit' : 'miss'
+      if (detail.outcome === 'draw') return 'miss'
+      return 'unsupported'
+    }
+    default:
+      return 'unsupported'
+  }
+}
+
+const normalizeSplitWeights = (count, splitWeights) => {
+  const fallback = Array.from({ length: count }, () => 1 / count)
+  if (!Array.isArray(splitWeights) || splitWeights.length !== count) return fallback
+  const values = splitWeights.map((value) => Math.max(0, Number(value) || 0))
+  const sum = values.reduce((acc, value) => acc + value, 0)
+  if (!(sum > 0)) return fallback
+  return values.map((value) => value / sum)
+}
+
+/**
+ * 用「我的比分分布」直接算这一场的仓位分布：逐格判断每条腿中不中，
+ * 把格子汇总成"中哪几条腿 / 哪几条走盘退款"的分组，每组给一个赔付。
+ * 判不了的腿（半全场、非常规盘口）→ supported: false，调用方必须走生产管线。
+ */
+export const buildOpinionMatchProfile = ({ entries, cells, splitWeights } = {}) => {
+  const list = Array.isArray(entries) ? entries : []
+  const grid = Array.isArray(cells) ? cells : []
+  if (list.length === 0 || grid.length === 0) return { supported: false }
+
+  const outcomes = grid.map((cell) => list.map((entry) => legOutcomeForCell(entry, cell.home, cell.away)))
+  if (outcomes.some((row) => row.some((outcome) => outcome === 'unsupported'))) {
+    return { supported: false }
+  }
+
+  const weights = normalizeSplitWeights(list.length, splitWeights)
+  const buckets = new Map()
+  grid.forEach((cell, index) => {
+    const row = outcomes[index]
+    const key = row.map((outcome) => (outcome === 'hit' ? '1' : outcome === 'push' ? 'p' : '0')).join('')
+    if (!buckets.has(key)) buckets.set(key, { probability: 0, key })
+    buckets.get(key).probability += cell.p
+  })
+
+  const total = [...buckets.values()].reduce((sum, bucket) => sum + bucket.probability, 0)
+  if (!(total > 0)) return { supported: false }
+
+  const states = []
+  let hitProbability = 0
+  let pushProbability = 0
+  const entryHitProbabilities = list.map(() => 0)
+  buckets.forEach((bucket) => {
+    const probability = bucket.probability / total
+    const hits = []
+    const pushes = []
+    bucket.key.split('').forEach((token, index) => {
+      if (token === '1') hits.push(index)
+      else if (token === 'p') pushes.push(index)
+    })
+    hits.forEach((index) => {
+      entryHitProbabilities[index] += probability
+    })
+    if (hits.length > 0) hitProbability += probability
+    else if (pushes.length > 0) pushProbability += probability
+    const gross = hits.reduce((sum, index) => sum + weights[index] * (Number(list[index]?.odds) || 0), 0)
+      + pushes.reduce((sum, index) => sum + weights[index], 0)
+    const isMiss = hits.length === 0 && pushes.length === 0
+    states.push({
+      id: [...hits.map((index) => `leg_${index}`), ...pushes.map((index) => `push_${index}`)].join('+') || 'miss',
+      label: isMiss
+        ? 'miss'
+        : [...hits, ...pushes].map((index) => list[index]?.name || `leg_${index}`).join(' + '),
+      probability,
+      gross,
+      net: gross - 1,
+      isMiss,
+    })
+  })
+
+  return {
+    supported: true,
+    valid: true,
+    modelVersion: 'opinion-v1',
+    modelStatus: 'exact',
+    issues: [],
+    warnings: [],
+    hasPush: pushProbability > 0,
+    pushProbability,
+    hitProbability,
+    missProbability: Math.max(0, 1 - hitProbability - pushProbability),
+    entryHitProbabilities,
+    states,
+  }
+}

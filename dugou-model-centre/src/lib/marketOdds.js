@@ -171,6 +171,33 @@ export const marketScorelineProbabilities = (match) => {
   }
 }
 
+/**
+ * 机构给这条腿开的赔率（原样、含抽水，就是下单时看到的那个数）。
+ * 投前自动回填赔率用：1X2 取胜平负池，比分取比分盘单格；其它盘口本轮不回填。
+ */
+export const marketOddsForEntry = (match, entry) => {
+  if (!match || !entry) return null
+  const detail = entry.parse_detail || {}
+  if (entry.market_type === 'result') {
+    if (!match.had) return null
+    const odds =
+      detail.outcome === 'win' ? match.had.home
+        : detail.outcome === 'draw' ? match.had.draw
+          : detail.outcome === 'lose' ? match.had.away
+            : Number.NaN
+    return Number.isFinite(odds) && odds > 1 ? { odds, source: 'had' } : null
+  }
+  if (entry.market_type === 'score') {
+    const home = Number(detail.home)
+    const away = Number(detail.away)
+    if (!Number.isFinite(home) || !Number.isFinite(away)) return null
+    const cell = (Array.isArray(match.scores) ? match.scores : [])
+      .find((row) => row.home === home && row.away === away)
+    return cell && Number.isFinite(cell.odds) && cell.odds > 1 ? { odds: cell.odds, source: 'crs' } : null
+  }
+  return null
+}
+
 export const fetchOfficialMarketOdds = async ({ fetchImpl, timeoutMs = 12000 } = {}) => {
   const doFetch = fetchImpl || (typeof fetch === 'function' ? fetch : null)
   if (!doFetch) return { ok: false, reason: 'fetch_unavailable', matches: [] }

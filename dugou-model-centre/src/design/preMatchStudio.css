@@ -216,29 +216,71 @@
   color: #a8a29e;
 }
 
-.pre-hero-records {
-  margin-top: 10px;
-  min-height: 148px;
-  max-height: 208px;
-  overflow-y: auto;
-  padding-right: 2px;
-  border-top: 1px dashed rgba(120, 113, 108, 0.16);
+/* 记录区：一整块，左淡红（主队）／右淡蓝（客队），中间不画分隔线——颜色就是分隔。 */
+.pre-dossier {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0 0 18px;
+  border-radius: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 18px 40px -36px rgba(41, 37, 36, 0.5);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
 }
 
-.pre-hero-records::-webkit-scrollbar {
+.pre-dossier-side {
+  min-width: 0;
+  padding: 14px 16px 16px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pre-dossier-side--home {
+  background:
+    radial-gradient(140% 100% at 0% 0%, rgba(255, 226, 232, 0.72), rgba(255, 244, 240, 0.4) 66%, rgba(255, 255, 255, 0.28)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(255, 246, 248, 0.22));
+}
+
+.pre-dossier-side--away {
+  background:
+    radial-gradient(140% 100% at 100% 0%, rgba(219, 236, 255, 0.74), rgba(240, 247, 255, 0.42) 66%, rgba(255, 255, 255, 0.26)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.42), rgba(246, 250, 255, 0.22));
+}
+
+.pre-dossier-side::-webkit-scrollbar {
   width: 5px;
 }
 
-.pre-hero-records::-webkit-scrollbar-thumb {
+.pre-dossier-side::-webkit-scrollbar-thumb {
   background: rgba(168, 162, 158, 0.42);
   border-radius: 999px;
 }
 
-.pre-hero-empty {
-  padding: 26px 4px;
+.pre-dossier-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-bottom: 8px;
+}
+
+.pre-dossier-team {
+  font-size: 15px;
+  font-weight: 600;
+  color: #44403c;
+}
+
+.pre-dossier-count {
   font-size: 11px;
-  line-height: 1.7;
-  color: rgba(120, 113, 108, 0.55);
+  color: rgba(120, 113, 108, 0.75);
+}
+
+.pre-hero-empty {
+  padding: 30px 4px;
+  font-size: 12px;
+  line-height: 1.75;
+  color: rgba(120, 113, 108, 0.6);
 }
 
 .pre-record-list {
@@ -247,8 +289,8 @@
 }
 
 .pre-record {
-  padding: 9px 2px;
-  border-bottom: 1px solid rgba(231, 229, 228, 0.78);
+  padding: 12px 2px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .pre-record:last-child {
@@ -258,8 +300,8 @@
 .pre-record-head {
   display: flex;
   align-items: center;
-  gap: 7px;
-  font-size: 10px;
+  gap: 8px;
+  font-size: 12px;
   color: #78716c;
 }
 
@@ -282,10 +324,10 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 5px;
-  font-size: 9px;
+  width: 19px;
+  height: 19px;
+  border-radius: 6px;
+  font-size: 10px;
 }
 
 .pre-record-venue.is-home {
@@ -300,9 +342,9 @@
 
 .pre-record-chip {
   margin-left: auto;
-  padding: 1px 6px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 9px;
+  font-size: 11px;
   border: 1px solid transparent;
 }
 
@@ -328,11 +370,11 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 8px;
-  margin-top: 4px;
-  font-size: 11px;
+  gap: 10px;
+  margin-top: 6px;
+  font-size: 13px;
   color: #57534e;
-  line-height: 1.5;
+  line-height: 1.55;
 }
 
 .pre-record-entries {
@@ -349,21 +391,21 @@
 
 .pre-record-note {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
-  font-size: 10px;
-  line-height: 1.6;
-  color: #6b6560;
+  gap: 7px;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.7;
+  color: #5a544f;
 }
 
 .pre-record-note em {
   flex-shrink: 0;
   font-style: normal;
-  padding: 0 5px;
-  border-radius: 5px;
-  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 6px;
+  font-size: 10px;
   color: #78716c;
-  background: rgba(245, 245, 244, 0.95);
+  background: rgba(255, 255, 255, 0.82);
 }
 
 .pre-record-note.is-post em {
@@ -409,7 +451,7 @@
 }
 
 .pre-board-sub {
-  font-size: 10px;
+  font-size: 11px;
   color: rgba(120, 113, 108, 0.72);
 }
 
@@ -655,7 +697,7 @@
 }
 
 .pre-board-correction-text {
-  font-size: 11px;
+  font-size: 13px;
   color: #57534e;
 }
 
@@ -665,9 +707,9 @@
 }
 
 .pre-board-insist {
-  padding: 2px 9px;
-  border-radius: 9px;
-  font-size: 10px;
+  padding: 3px 11px;
+  border-radius: 10px;
+  font-size: 11px;
   font-weight: 500;
   color: #78716c;
   background: rgba(255, 255, 255, 0.9);
@@ -682,8 +724,8 @@
 }
 
 .pre-board-bias {
-  margin-top: 5px;
-  font-size: 10px;
+  margin-top: 6px;
+  font-size: 11px;
   line-height: 1.65;
   color: rgba(120, 113, 108, 0.86);
 }
@@ -705,13 +747,13 @@
 }
 
 .pre-board-market-label {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   color: #57534e;
 }
 
 .pre-board-market-state {
-  font-size: 10px;
+  font-size: 11px;
   color: #78716c;
   display: inline-flex;
   align-items: center;
@@ -799,10 +841,144 @@
 }
 
 .pre-board-market-note {
-  margin-top: 5px;
-  font-size: 10px;
+  margin-top: 6px;
+  font-size: 11px;
   line-height: 1.6;
   color: rgba(120, 113, 108, 0.78);
+}
+
+/* 视图切换：一块通透糖果玻璃，一条斜线劈成 投前（左上·淡绿）/ 投后（右下·淡蓝） */
+.pre-view-switch {
+  position: relative;
+  width: 168px;
+  height: 62px;
+  flex: 0 0 auto;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 14px 30px -24px rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+}
+
+.pre-view-side {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  padding: 9px 13px;
+  border: 0;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: opacity 220ms ease, filter 220ms ease;
+}
+
+.pre-view-side--pre {
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  align-items: flex-start;
+  justify-content: flex-start;
+  text-align: left;
+  color: #047857;
+  background: linear-gradient(140deg, rgba(167, 243, 208, 0.72), rgba(236, 253, 245, 0.34) 72%);
+}
+
+.pre-view-side--post {
+  clip-path: polygon(0 100%, 100% 0, 100% 100%);
+  align-items: flex-end;
+  justify-content: flex-end;
+  text-align: right;
+  color: #1d4ed8;
+  background: linear-gradient(320deg, rgba(191, 219, 254, 0.74), rgba(239, 246, 255, 0.32) 72%);
+}
+
+.pre-view-side:not(.is-active) {
+  opacity: 0.5;
+}
+
+.pre-view-side.is-active {
+  filter: saturate(1.12);
+}
+
+.pre-view-side.is-active::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.75;
+}
+
+.pre-view-side--pre.is-active::after {
+  left: 13px;
+  top: 30px;
+}
+
+.pre-view-side--post.is-active::after {
+  right: 13px;
+  bottom: 30px;
+}
+
+/* Entries：一条腿一个「值 + odds（可空）」的组合 */
+.pre-entries {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+}
+
+.pre-entry-pair {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pre-entry-name,
+.pre-entry-odds {
+  padding: 9px 13px;
+  border-radius: 12px;
+  border: 1px solid rgba(214, 211, 209, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  color: #292524;
+  outline: none;
+  transition: border-color 160ms ease;
+}
+
+.pre-entry-name {
+  width: 168px;
+}
+
+.pre-entry-odds {
+  width: 116px;
+  font-variant-numeric: tabular-nums;
+}
+
+.pre-entry-name:focus,
+.pre-entry-odds:focus {
+  border-color: rgba(52, 211, 153, 0.75);
+}
+
+.pre-entry-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 8px;
+  color: #a8a29e;
+  background: rgba(250, 250, 249, 0.9);
+  border: 1px solid rgba(231, 229, 228, 0.9);
+}
+
+.pre-entry-remove:hover {
+  color: #e11d48;
+  border-color: rgba(251, 113, 133, 0.5);
 }
 
 /* 云图 */
@@ -824,35 +1000,45 @@
   margin-top: 0;
 }
 
-.pre-board-cloud-tabs {
+.pre-board-cloud-legend {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #57534e;
+}
+
+.pre-board-legend-swatch {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.pre-board-tab {
-  padding: 2px 10px;
-  border-radius: 9px;
-  font-size: 10px;
-  color: #78716c;
-  border: 1px solid transparent;
-  transition: all 160ms ease;
+.pre-board-legend-swatch::before {
+  content: '';
+  width: 22px;
+  height: 10px;
+  border-radius: 6px;
 }
 
-.pre-board-tab.is-active {
-  color: #ffffff;
-  background: #44403c;
+.pre-board-legend-swatch.is-mine::before {
+  background: linear-gradient(120deg, rgba(206, 230, 255, 0.95), rgba(255, 224, 239, 0.95));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6);
 }
 
-.pre-board-tab:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
+.pre-board-legend-swatch.is-market::before {
+  background: none;
+  height: 0;
+  border-top: 2px dashed rgba(51, 65, 85, 0.7);
+  border-radius: 0;
 }
 
-.pre-board-cloud-axis {
+.pre-board-legend-axis {
   margin-left: auto;
-  font-size: 10px;
-  color: rgba(168, 162, 158, 0.95);
+  font-size: 11px;
+  color: rgba(120, 113, 108, 0.85);
 }
 
 /* 读数 */
@@ -865,9 +1051,9 @@
 .pre-board-card {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  min-width: 88px;
-  padding: 7px 11px;
+  gap: 3px;
+  min-width: 104px;
+  padding: 10px 14px;
   border-radius: 12px;
   border: 1px solid rgba(231, 229, 228, 0.9);
   background: rgba(255, 255, 255, 0.7);
@@ -879,38 +1065,38 @@
 }
 
 .pre-board-card-label {
-  font-size: 9px;
+  font-size: 11px;
   color: #a8a29e;
 }
 
 .pre-board-card-value {
-  font-size: 15px;
+  font-size: 19px;
   font-weight: 600;
   color: #292524;
 }
 
 .pre-board-card-value.is-small {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 500;
   color: #57534e;
 }
 
 .pre-board-entry-line {
-  margin-top: 8px;
-  font-size: 11px;
+  margin-top: 10px;
+  font-size: 13px;
   color: #44403c;
 }
 
 .pre-board-compare {
   width: 100%;
-  margin-top: 8px;
-  font-size: 11px;
+  margin-top: 10px;
+  font-size: 13px;
   border-collapse: collapse;
 }
 
 .pre-board-compare th {
   font-weight: 400;
-  font-size: 9px;
+  font-size: 11px;
   color: #a8a29e;
   text-align: right;
   padding: 2px 6px;
@@ -922,7 +1108,7 @@
 }
 
 .pre-board-compare td {
-  padding: 4px 6px;
+  padding: 6px 6px;
   text-align: right;
   color: #57534e;
   border-top: 1px solid rgba(245, 245, 244, 0.95);
@@ -939,10 +1125,10 @@
 }
 
 .pre-board-footnote {
-  margin-top: 8px;
-  font-size: 10px;
-  line-height: 1.7;
-  color: rgba(120, 113, 108, 0.72);
+  margin-top: 10px;
+  font-size: 11px;
+  line-height: 1.75;
+  color: rgba(120, 113, 108, 0.78);
 }
 
 @media (max-width: 900px) {

@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
   CELL_MODE_FACTORS,
+  buildOpinionMatchProfile,
   cycleCellMode,
   defaultSigmaForWindow,
   defaultWindowForGoals,
   expectedGoals,
   jointScoreCells,
+  legOutcomeForCell,
   matchOfficialFixture,
   shiftWeights,
   teamNamesMatch,
@@ -114,5 +116,66 @@ describe('机构场次对位（队名匹配）', () => {
     const result = matchOfficialFixture(matches, '阿森纳', '埃弗顿')
     expect(result.match.matchId).toBe('NEW')
     expect(result.alternatives.map((row) => row.matchId)).toEqual(['OLD'])
+  })
+})
+
+describe('同场多腿：每条腿在我的分布里中不中', () => {
+  const grid = () => {
+    const home = weightsFromSlider({ lo: 1, hi: 3 })
+    const away = weightsFromSlider({ lo: 0, hi: 2 })
+    return jointScoreCells(home, away)
+  }
+  const resultEntry = { name: '主胜', odds: 2, market_type: 'result', parse_detail: { outcome: 'win' } }
+  const scoreEntry = { name: '2-1', odds: 8.5, market_type: 'score', parse_detail: { home: 2, away: 1 } }
+
+  it('结果腿：命中率 = 我的分布里主胜那部分', () => {
+    const profile = buildOpinionMatchProfile({ entries: [resultEntry], cells: grid() })
+    expect(profile.supported).toBe(true)
+    expect(profile.hitProbability).toBeCloseTo(0.6772, 3)
+    expect(profile.states.find((state) => state.gross === 2).probability).toBeCloseTo(0.6772, 3)
+    expect(profile.states.find((state) => state.isMiss).probability).toBeCloseTo(0.3228, 3)
+  })
+
+  it('结果 + 比分一起下：union = 主胜，比分中时两腿都收', () => {
+    const profile = buildOpinionMatchProfile({ entries: [resultEntry, scoreEntry], cells: grid() })
+    expect(profile.supported).toBe(true)
+    // 2-1 是主胜的子集，所以"至少中一条"就是主胜
+    expect(profile.hitProbability).toBeCloseTo(0.6772, 3)
+    const both = profile.states.find((state) => state.id === 'leg_0+leg_1')
+    expect(both.probability).toBeCloseTo(0.2042, 3)
+    // 每条腿各占一半权重 → 两腿都中：0.5×2.0 + 0.5×8.5
+    expect(both.gross).toBeCloseTo(5.25, 6)
+    const onlyResult = profile.states.find((state) => state.id === 'leg_0')
+    expect(onlyResult.probability).toBeCloseTo(0.4730, 3)
+    expect(onlyResult.gross).toBeCloseTo(1, 6)
+  })
+
+  it('整数让球/大小球线的走盘算退款，不算全输', () => {
+    const pushEntry = { name: '大2', odds: 1.95, market_type: 'total', parse_detail: { line: 2, direction: 'over' } }
+    expect(legOutcomeForCell(pushEntry, 2, 0)).toBe('push')
+    expect(legOutcomeForCell(pushEntry, 3, 0)).toBe('hit')
+    expect(legOutcomeForCell(pushEntry, 1, 0)).toBe('miss')
+
+    const profile = buildOpinionMatchProfile({ entries: [pushEntry], cells: grid() })
+    expect(profile.supported).toBe(true)
+    expect(profile.hasPush).toBe(true)
+    const pushState = profile.states.find((state) => state.id.startsWith('push_'))
+    expect(pushState.probability).toBeGreaterThan(0)
+    expect(pushState.gross).toBeCloseTo(1, 6)
+  })
+
+  it('判不了的盘口（半全场等）整体放弃覆盖，交给生产管线', () => {
+    const weird = { name: '半全场 主/主', odds: 3.1, market_type: 'half_full', parse_detail: { home: 'win', away: 'win' } }
+    expect(legOutcomeForCell(weird, 2, 1)).toBe('unsupported')
+    expect(buildOpinionMatchProfile({ entries: [weird], cells: grid() }).supported).toBe(false)
+    expect(buildOpinionMatchProfile({ entries: [resultEntry], cells: [] }).supported).toBe(false)
+  })
+
+  it('每条腿带上自己的 odds（可空）时也能算：空赔率只影响赔付，不影响命中率', () => {
+    const noOdds = { name: '2-1', odds: undefined, market_type: 'score', parse_detail: { home: 2, away: 1 } }
+    const profile = buildOpinionMatchProfile({ entries: [noOdds], cells: grid() })
+    expect(profile.supported).toBe(true)
+    expect(profile.hitProbability).toBeCloseTo(0.2042, 3)
+    expect(profile.states.find((state) => !state.isMiss).gross).toBeCloseTo(0, 6)
   })
 })

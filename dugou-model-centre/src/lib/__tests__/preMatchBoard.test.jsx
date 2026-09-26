@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
 import PreMatchBoard from '../../components/PreMatchBoard'
-import PreMatchHero from '../../components/PreMatchHero'
+import { buildContourSegments } from '../../components/PreMatchCloud'
+import PreMatchHero, { PreMatchRecords } from '../../components/PreMatchHero'
 import PreScoreSlider from '../../components/PreScoreSlider'
 import { weightsFromSlider } from '../../lib/preMatchOpinion'
 
@@ -112,12 +113,11 @@ describe('两队 PK（PreMatchHero）', () => {
     away: [],
   }
 
-  it('两队各一块面板，记录按最新在前显示备注与复盘', () => {
+  it('两队各一块面板，队名是焦点', () => {
     const html = strip(renderToStaticMarkup(
       <PreMatchHero
         homeTeam="阿森纳"
         awayTeam="埃弗顿"
-        records={records}
         hintFor={() => '12 场 · REP 0.66'}
         suggestions={{ home: [], away: [] }}
       />,
@@ -125,19 +125,82 @@ describe('两队 PK（PreMatchHero）', () => {
     expect(html).toContain('data-testid="pre-match-hero"')
     expect(html).toContain('data-testid="pre-hero-input-home"')
     expect(html).toContain('data-testid="pre-hero-input-away"')
+    expect(html).toContain('12 场 · REP 0.66')
+    expect(html).toContain('VS')
+  })
+
+  it('没填队名时给出空白占位文案，而不是报错', () => {
+    const html = strip(renderToStaticMarkup(<PreMatchHero />))
+    expect(html).toContain('输入球队名或缩写')
+  })
+})
+
+describe('两队过往记录（PreMatchRecords）', () => {
+  const records = {
+    home: [
+      {
+        id: 'a',
+        dateLabel: '26-09-20',
+        venue: 'home',
+        opponent: '埃弗顿',
+        entryText: '主胜',
+        oddsLabel: '1.80',
+        predictedScore: { home: 2, away: 1 },
+        actualScore: { home: 2, away: 1 },
+        resultText: '2-1',
+        isCorrect: true,
+        settled: true,
+        note: '**主场**[red]强势[/red]',
+        postNote: '按预判走完',
+      },
+    ],
+    away: [],
+  }
+
+  it('一整块左右两半（淡红/淡蓝），行里带备注与复盘', () => {
+    const html = strip(renderToStaticMarkup(
+      <PreMatchRecords homeTeam="阿森纳" awayTeam="埃弗顿" records={records} />,
+    ))
+    expect(html).toContain('data-testid="pre-match-records"')
+    expect(html).toContain('data-testid="pre-dossier-home"')
+    expect(html).toContain('data-testid="pre-dossier-away"')
+    expect(html).toContain('阿森纳')
     expect(html).toContain('26-09-20')
-    expect(html).toContain('主胜')
     expect(html).toContain('结果 2-1')
     expect(html).toContain('投前')
     expect(html).toContain('主场强势')
     expect(html).toContain('投后')
     expect(html).toContain('按预判走完')
+    // 客队那半边没有记录
     expect(html).toContain('这支队还没有历史记录')
   })
+})
 
-  it('没填队名时给出空白占位文案，而不是报错', () => {
-    const html = strip(renderToStaticMarkup(<PreMatchHero />))
-    expect(html).toContain('填上队名，这里会出现我在这支队上的过往')
-    expect(html).toContain('输入球队名或缩写')
+describe('云图上的机构虚线（等值线）', () => {
+  const field = () => {
+    const n = 9
+    return Array.from({ length: n }, (_, j) =>
+      Array.from({ length: n }, (_, i) => Math.exp(-(((i - 4) ** 2) + ((j - 4) ** 2)) / 6)))
+  }
+
+  it('在峰值的中间几档能画出闭合的等值线段', () => {
+    const f = field()
+    const peak = Math.max(...f.flat())
+    const segments = buildContourSegments(f, peak * 0.5, 240)
+    expect(segments.length).toBeGreaterThan(6)
+    segments.forEach((segment) => {
+      expect(Number.isFinite(segment.x1)).toBe(true)
+      expect(Number.isFinite(segment.y2)).toBe(true)
+      expect(segment.x1).toBeGreaterThanOrEqual(0)
+      expect(segment.x1).toBeLessThanOrEqual(240)
+    })
+  })
+
+  it('高于峰值 / 低于谷值都不画线', () => {
+    const f = field()
+    const peak = Math.max(...f.flat())
+    expect(buildContourSegments(f, peak * 1.5, 240)).toEqual([])
+    expect(buildContourSegments(f.flat().map(() => 0), 0.1, 240)).toEqual([])
+    expect(buildContourSegments([], 0.1, 240)).toEqual([])
   })
 })

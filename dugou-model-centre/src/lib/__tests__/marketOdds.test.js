@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   OFFICIAL_ODDS_ENDPOINT,
   fetchOfficialMarketOdds,
+  marketOddsForEntry,
   marketOddsForFit,
   marketScorelineProbabilities,
   normalizeOfficialOdds,
@@ -251,5 +252,33 @@ describe('官方比分盘（crs）解析与去水', () => {
     const { matches } = normalizeOfficialOdds({ value: { matchInfoList: [{ subMatchList: [thin] }] } })
     expect(marketScorelineProbabilities(matches[0]).ok).toBe(false)
     expect(marketScorelineProbabilities(matches[0]).reason).toBe('insufficient_scoreline_quotes')
+  })
+})
+
+describe('机构赔率自动回填（marketOddsForEntry）', () => {
+  const fixture = {
+    had: { home: 2.58, draw: 2.8, away: 2.6 },
+    scores: [
+      { home: 2, away: 1, odds: 8.5 },
+      { home: 1, away: 1, odds: 6.2 },
+    ],
+    hhad: { home: 1.9, draw: 3.1, lose: 3.6, goalLine: -1 },
+  }
+
+  it('1X2 腿给对应那个结果的原样赔率', () => {
+    expect(marketOddsForEntry(fixture, { market_type: 'result', parse_detail: { outcome: 'win' } })).toEqual({ odds: 2.58, source: 'had' })
+    expect(marketOddsForEntry(fixture, { market_type: 'result', parse_detail: { outcome: 'draw' } })).toEqual({ odds: 2.8, source: 'had' })
+    expect(marketOddsForEntry(fixture, { market_type: 'result', parse_detail: { outcome: 'lose' } })).toEqual({ odds: 2.6, source: 'had' })
+  })
+
+  it('比分腿只在比分盘真的报了那一格时才回填', () => {
+    expect(marketOddsForEntry(fixture, { market_type: 'score', parse_detail: { home: 2, away: 1 } })).toEqual({ odds: 8.5, source: 'crs' })
+    expect(marketOddsForEntry(fixture, { market_type: 'score', parse_detail: { home: 5, away: 0 } })).toBe(null)
+  })
+
+  it('其它盘口与缺数据的情况一律不回填（宁可不填，不瞎填）', () => {
+    expect(marketOddsForEntry(fixture, { market_type: 'total', parse_detail: { line: 2.5, direction: 'over' } })).toBe(null)
+    expect(marketOddsForEntry(null, { market_type: 'result', parse_detail: { outcome: 'win' } })).toBe(null)
+    expect(marketOddsForEntry({ scores: [] }, { market_type: 'score', parse_detail: { home: 2, away: 1 } })).toBe(null)
   })
 })

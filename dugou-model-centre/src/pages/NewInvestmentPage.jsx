@@ -5,7 +5,7 @@ import { Plus, X, ChevronDown, ChevronRight, Sparkles, Loader2, ShieldCheck, Arc
 import { bumpTeamSamples, findTeamProfile, getInvestments, getSystemConfig, getTeamProfiles, saveInvestment, saveInvestments, searchTeamProfiles } from '../lib/localData'
 import { handleNoteShortcut } from '../lib/noteFormatting'
 import { getPredictionCalibrationContext, getModeKellyRecommendations, getReservoirState } from '../lib/analytics'
-import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryNameWhileTyping, normalizeEntryRecord } from '../lib/entryParsing'
+import { getPrimaryEntryMarket, normalizeEntryName, normalizeEntryNameWhileTyping, normalizeEntryRecord, trimTrailingEmptyEntries } from '../lib/entryParsing'
 import WaxSealStampOverlay, { getWaxSealStampPoint } from '../components/WaxSealStampOverlay'
 import ExplainHover from '../components/ExplainHover'
 import {
@@ -26,7 +26,7 @@ import { buildForecastSnapshot, capRecommendedStake, isValidDecimalOdds, MEAN_LE
 import { getMatchSourceIdentity } from '../lib/investmentIdentity'
 import { parseFinalScore, learnTeamBias, buildReadRecords } from '../lib/readQuality'
 import { buildTeamHistory, findTeamHistory } from '../lib/teamHistory'
-import PreMatchHero from '../components/PreMatchHero'
+import PreMatchHero, { PreMatchRecords } from '../components/PreMatchHero'
 import PreMatchBoard from '../components/PreMatchBoard'
 
 const MODE_OPTIONS = ['常规', '常规-稳', '常规-杠杆', '常规-激进', '半彩票半保险', '保险产品', '赌一把']
@@ -77,10 +77,12 @@ const EXPECTED_RATING_COPY = {
 
 
 
-const createEmptyMatch = () => ({
+const createEmptyMatch = (entryCount = 2) => ({
   homeTeam: '',
   awayTeam: '',
-  entries: [{ name: '', odds: '' }],
+  // 投前默认给两条腿的位置（w/d/l 与比分各一个，odds 都可空）；
+  // 投后导入只看有内容的行，多余的空白行不显示。
+  entries: Array.from({ length: Math.max(1, entryCount) }, () => ({ name: '', odds: '' })),
   conf: 50,
   mode: '常规',
   tys_home: 'M',
@@ -687,11 +689,46 @@ export default function NewInvestmentPage() {
       const oldEntry = entries[entryIdx]
       const normalizedValue =
         field === 'name' ? normalizeEntryNameWhileTyping(value) : sanitizeDecimalInputText(value, { maxDecimals: 2 })
-      entries[entryIdx] = { ...oldEntry, [field]: normalizedValue }
+      entries[entryIdx] = {
+        ...oldEntry,
+        [field]: normalizedValue,
+        // 手改过赔率之后就不再让机构回填覆盖（清空也不回填）。
+        ...(field === 'odds' ? { oddsFromMarket: false } : {}),
+      }
       next[idx] = { ...match, entries }
       return next
     })
   }
+
+  // 机构拉到这一场的赔率后，自动回填还空着的 odds（1X2 与比分盘）。
+  // 只填空位、只填一次：填过之后字段非空就不会再写，也不会覆盖手改过的值。
+  useEffect(() => {
+    if (viewMode !== 'pre') return
+    setMatches((prev) => {
+      let changed = false
+      const next = prev.map((match, index) => {
+        const opinion = preMatchOpinions[index]
+        const marketOdds = opinion?.active ? opinion.marketEntryOdds : null
+        if (!Array.isArray(marketOdds) || marketOdds.length === 0) return match
+        let namedIndex = -1
+        let matchChanged = false
+        const entries = match.entries.map((entry) => {
+          if (!String(entry?.name || '').trim()) return entry
+          namedIndex += 1
+          const odds = marketOdds[namedIndex]
+          if (!Number.isFinite(odds)) return entry
+          if (String(entry.odds || '').trim()) return entry
+          if (entry.oddsFromMarket === false) return entry
+          matchChanged = true
+          return { ...entry, odds: String(odds), oddsFromMarket: true }
+        })
+        if (!matchChanged) return match
+        changed = true
+        return { ...match, entries }
+      })
+      return changed ? next : prev
+    })
+  }, [preMatchOpinions, viewMode])
 
   // 失焦时对 Entry 名称做完整规范化（折叠多余空格、去掉首尾标点/空白）。
   const finalizeEntryName = (idx, entryIdx) => {
@@ -782,15 +819,18 @@ export default function NewInvestmentPage() {
           if (!home || !away || validEntries.length === 0) return null
 
           // 投前：这场 Entry 的概率来自「我的进球分布」（默认按历史平均差修正；
-          // 「我坚持」时为原始输入）。只在单 Entry 场次上覆盖；多 Entry 仍走生产管线。
+          // 「我坚持」时为原始输入）。分布能把同场多条腿逐格判出来，就用我的分布
+          // 直接算这一场的仓位分布；判不了的盘口退回生产管线。
           const opinion = viewMode === 'pre' ? preMatchOpinions[index] : null
           const scoreInfo = scoreOpinionsByMatch[index] || null
-          const override = opinion?.active && scoreInfo && validEntries.length === 1
-            && Number.isFinite(opinion.probability)
+          const opinionApplies = opinion?.active && scoreInfo
             && opinion.registered?.home === scoreInfo.point.home
             && opinion.registered?.away === scoreInfo.point.away
-            ? opinion : null
-          const unionProbability = override ? override.probability : calcAdjustedConf(match)
+          const opinionProfile = opinionApplies && opinion.profile?.supported ? opinion.profile : null
+          if (opinionProfile) {
+            return { ...opinionProfile, unionProbability: opinionProfile.hitProbability }
+          }
+          const unionProbability = calcAdjustedConf(match)
           return {
             ...buildAtomicMatchProfile({
               entries: validEntries,
@@ -1484,21 +1524,27 @@ export default function NewInvestmentPage() {
               : '投后导入 · 录入比赛信息与预测参数 · Record match predictions & calibration parameters'}
           </p>
         </div>
-        <div className="inline-flex rounded-xl border border-stone-200 bg-white/80 p-1 gap-1" role="tablist" aria-label="投资视图切换">
-          {[
-            { key: 'pre', label: '投前研判' },
-            { key: 'post', label: '投后导入' },
-          ].map((tab) => (
-            <button
-              key={tab.key}
-              role="tab"
-              aria-selected={viewMode === tab.key}
-              onClick={() => setViewMode(tab.key)}
-              className={`px-4 py-1.5 rounded-lg text-xs font-medium transition-all ${viewMode === tab.key ? 'bg-stone-800 text-white shadow-sm' : 'text-stone-500 hover:text-stone-700'}`}
-            >
-              {tab.label}
-            </button>
-          ))}
+        <div className="pre-view-switch" role="tablist" aria-label="投资视图切换" data-testid="investment-view-switch">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'pre'}
+            onClick={() => setViewMode('pre')}
+            data-testid="view-switch-pre"
+            className={`pre-view-side pre-view-side--pre${viewMode === 'pre' ? ' is-active' : ''}`}
+          >
+            投前研判
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={viewMode === 'post'}
+            onClick={() => setViewMode('post')}
+            data-testid="view-switch-post"
+            className={`pre-view-side pre-view-side--post${viewMode === 'post' ? ' is-active' : ''}`}
+          >
+            投后导入
+          </button>
         </div>
       </div>
 
@@ -1715,6 +1761,8 @@ export default function NewInvestmentPage() {
             const homeFseHistorySuggestion = homeTeamKey ? (latestTeamFseMap.get(homeTeamKey) ?? null) : null
             const awayFseHistorySuggestion = awayTeamKey ? (latestTeamFseMap.get(awayTeamKey) ?? null) : null
             const excludedEntries = excludedEntriesByMatch[idx] || []
+            // 投后导入只看有内容的行（投前默认留了两条腿的位置）。
+            const displayEntries = viewMode === 'pre' ? match.entries : trimTrailingEmptyEntries(match.entries)
             // 投前：这场的登记比分、两队的过往记录（都只在投前用，投后导入不变）。
             const preEntries = match.entries.map(normalizeEntry).filter((entry) => entry.name)
             const scoreInfo = viewMode === 'pre' ? (scoreOpinionsByMatch[idx] || null) : null
@@ -1831,7 +1879,6 @@ export default function NewInvestmentPage() {
                     activeSide={activeTeamInput?.matchIdx === idx ? activeTeamInput.side : null}
                     suggestions={{ home: homeSuggestions, away: awaySuggestions }}
                     hintFor={getTeamHint}
-                    records={heroRecords}
                   />
                 ) : (
                 <div className="grid grid-cols-11 gap-3 items-center mb-4">
@@ -1923,13 +1970,53 @@ export default function NewInvestmentPage() {
 
                 <div className="mb-4">
                   <div className="flex items-center justify-between mb-2">
-                    <label className="text-xs text-stone-400">Entries 预测结果</label>
+                    <label className="text-xs text-stone-400">
+                      {viewMode === 'pre' ? 'Entries · 结果一条 · 比分一条（odds 都可空）' : 'Entries 预测结果'}
+                    </label>
                     <button onClick={() => addEntry(idx)} className="text-xs text-amber-500 hover:text-amber-600 flex items-center gap-1">
                       <Plus size={12} /> 添加 Entry
                     </button>
                   </div>
+                  {viewMode === 'pre' ? (
+                    <div className="pre-entries" data-testid={`pre-entries-${idx}`}>
+                      {match.entries.map((entry, entryIdx) => (
+                        <div key={`entry-${entryIdx}`} className="pre-entry-pair">
+                          <input
+                            type="text"
+                            placeholder={entryIdx === 0 ? 'w/d/l' : entryIdx === 1 ? '2-1' : '更多 Entry'}
+                            value={entry.name}
+                            onChange={(event) => updateEntry(idx, entryIdx, 'name', event.target.value)}
+                            onBlur={() => finalizeEntryName(idx, entryIdx)}
+                            aria-label={`第 ${entryIdx + 1} 条 Entry`}
+                            data-testid={`pre-entry-name-${idx}-${entryIdx}`}
+                            className="pre-entry-name"
+                          />
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            placeholder="odds（可空）"
+                            value={entry.odds}
+                            onChange={(event) => updateEntry(idx, entryIdx, 'odds', event.target.value)}
+                            aria-label={`第 ${entryIdx + 1} 条 Entry 的赔率`}
+                            data-testid={`pre-entry-odds-${idx}-${entryIdx}`}
+                            className="pre-entry-odds"
+                          />
+                          {match.entries.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => removeEntry(idx, entryIdx)}
+                              aria-label={`删除第 ${entryIdx + 1} 条 Entry`}
+                              className="pre-entry-remove"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
                   <div className="space-y-2">
-                    {match.entries.map((entry, entryIdx) => (
+                    {displayEntries.map((entry, entryIdx) => (
                       <div key={entryIdx} className="grid grid-cols-11 gap-3 items-center">
                         <div className="col-span-5">
                           <input
@@ -1962,10 +2049,11 @@ export default function NewInvestmentPage() {
                       </div>
                     ))}
                   </div>
-                  {match.entries.length > 1 && (
+                  )}
+                  {displayEntries.length > 1 && (
                     <p className="text-xs text-stone-500 mt-2">
                       Overall Odds（原子等效）:{' '}
-                      <span className="font-semibold text-amber-600">{calcMatchOdds(match.entries).toFixed(2)}</span>
+                      <span className="font-semibold text-amber-600">{calcMatchOdds(displayEntries).toFixed(2)}</span>
                     </p>
                   )}
                   {excludedEntries.length > 0 && (
@@ -1973,9 +2061,9 @@ export default function NewInvestmentPage() {
                       {excludedEntries.length} 条 Entry 未计入（{describeExcludedEntries(excludedEntries)}）
                     </p>
                   )}
-                  {getMatchOddsWarnings(match.entries).length > 0 && (
+                  {getMatchOddsWarnings(displayEntries).length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {getMatchOddsWarnings(match.entries).map((warning, warningIdx) => (
+                      {getMatchOddsWarnings(displayEntries).map((warning, warningIdx) => (
                         <p key={warningIdx} className="text-[11px] text-rose-500">
                           ⚠ {maskText(warning)}
                         </p>
@@ -1983,6 +2071,14 @@ export default function NewInvestmentPage() {
                     </div>
                   )}
                 </div>
+
+                {viewMode === 'pre' && (
+                  <PreMatchRecords
+                    homeTeam={match.homeTeam}
+                    awayTeam={match.awayTeam}
+                    records={heroRecords}
+                  />
+                )}
 
                 {viewMode === 'pre' && (
                   <PreMatchBoard

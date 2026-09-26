@@ -12,6 +12,7 @@ import {
   normalizeEntryRecord,
   normalizeEntries,
   getPrimaryEntryMarket,
+  trimTrailingEmptyEntries,
 } from '../entryParsing'
 
 describe('投注项语义解析', () => {
@@ -145,5 +146,29 @@ describe('投注项语义解析', () => {
       const primary = getPrimaryEntryMarket([], '')
       expect(primary.marketType).toBe('other')
     })
+  })
+})
+
+describe('Entry 尾巴空行（投前双槽 / 投后导入）', () => {
+  it('砍掉尾巴上完全空白的行，只留一条', () => {
+    const rows = trimTrailingEmptyEntries([{ name: '', odds: '' }, { name: '', odds: '' }])
+    expect(rows).toHaveLength(1)
+  })
+
+  it('有内容就留着，中间的空白行也原样保留', () => {
+    const rows = trimTrailingEmptyEntries([
+      { name: '主胜', odds: '3.41' },
+      { name: '', odds: '' },
+      { name: '2-1', odds: '' },
+    ])
+    expect(rows).toHaveLength(3)
+    expect(rows.map((row) => row.name)).toEqual(['主胜', '', '2-1'])
+    // 只填空、没填名 也算有内容
+    expect(trimTrailingEmptyEntries([{ name: '', odds: '2' }, { name: '', odds: '' }])).toHaveLength(1)
+  })
+
+  it('空数组与非法输入不会炸', () => {
+    expect(trimTrailingEmptyEntries([])).toEqual([])
+    expect(trimTrailingEmptyEntries(null)).toEqual([])
   })
 })

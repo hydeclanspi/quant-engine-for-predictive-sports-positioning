@@ -1,6 +1,6 @@
-// 投前 · 两队 PK：主队（暖玫瑰）／客队（冷天蓝）两块 hero 面板，
-// 下面各自留着「我在这支队上的过往」——投前登记、投后复盘、预测与结果，最新在前。
-// 记录区即使空着也占位（卡片是液态玻璃，空白本身也是版面的一部分）。
+// 投前 · 两队 PK + 两队过往记录。
+// 队名是焦点（主队暖玫瑰 / 客队冷天蓝，淡色玻璃），下面整块记录区不分栏线，
+// 靠左右两半的背景色区分（左淡红 = 主队，右淡蓝 = 客队）。
 
 const plainNote = (value) =>
   String(value ?? '')
@@ -37,12 +37,8 @@ const RecordRow = ({ row }) => {
         <span className="pre-record-entries">{row.entryText || '未记录 Entry'}</span>
         <span className="pre-record-odds">odds {row.oddsLabel}</span>
         {predicted && <span className="pre-record-pred">预测 {predicted}</span>}
+        {(row.resultText || actual) && <span className="pre-record-actual">结果 {row.resultText || actual}</span>}
       </p>
-      {(row.resultText || actual) && (
-        <p className="pre-record-line">
-          <span className="pre-record-actual">结果 {row.resultText || actual}</span>
-        </p>
-      )}
       {note && (
         <p className="pre-record-note">
           <em>投前</em>
@@ -59,7 +55,7 @@ const RecordRow = ({ row }) => {
   )
 }
 
-const SidePanel = ({ side, team, onTeamChange, onTeamFocus, onTeamBlur, suggestions, onPickSuggestion, hint, records, active }) => (
+const TeamPanel = ({ side, team, onTeamChange, onTeamFocus, onTeamBlur, suggestions, onPickSuggestion, hint, active }) => (
   <div className={`pre-hero-side pre-hero-side--${side}${active ? ' is-active' : ''}`}>
     <div className="pre-hero-head">
       <span className="pre-hero-chip">{side === 'home' ? '主队' : '客队'}</span>
@@ -95,20 +91,6 @@ const SidePanel = ({ side, team, onTeamChange, onTeamFocus, onTeamBlur, suggesti
         </div>
       )}
     </div>
-
-    <div className="pre-hero-records" data-testid={`pre-hero-records-${side}`}>
-      {records.length > 0 ? (
-        <ul className="pre-record-list">
-          {records.map((row) => (
-            <RecordRow key={row.id} row={row} />
-          ))}
-        </ul>
-      ) : (
-        <p className="pre-hero-empty">
-          {team ? '这支队还没有历史记录' : '填上队名，这里会出现我在这支队上的过往'}
-        </p>
-      )}
-    </div>
   </div>
 )
 
@@ -122,11 +104,10 @@ export default function PreMatchHero({
   activeSide = null,
   suggestions = { home: [], away: [] },
   hintFor = () => null,
-  records = { home: [], away: [] },
 }) {
   return (
     <div className="pre-hero" data-testid="pre-match-hero">
-      <SidePanel
+      <TeamPanel
         side="home"
         team={homeTeam}
         onTeamChange={onTeamChange}
@@ -135,13 +116,12 @@ export default function PreMatchHero({
         suggestions={suggestions.home}
         onPickSuggestion={onPickSuggestion}
         hint={hintFor(homeTeam)}
-        records={records.home}
         active={activeSide === 'home'}
       />
       <div className="pre-hero-vs" aria-hidden="true">
         <span>VS</span>
       </div>
-      <SidePanel
+      <TeamPanel
         side="away"
         team={awayTeam}
         onTeamChange={onTeamChange}
@@ -150,9 +130,44 @@ export default function PreMatchHero({
         suggestions={suggestions.away}
         onPickSuggestion={onPickSuggestion}
         hint={hintFor(awayTeam)}
-        records={records.away}
         active={activeSide === 'away'}
       />
+    </div>
+  )
+}
+
+/**
+ * 两队的过往记录：一整块，左半边淡红（主队）、右半边淡蓝（客队），
+ * 中间没有分隔线——颜色本身就是分隔。
+ */
+export function PreMatchRecords({ homeTeam = '', awayTeam = '', records = { home: [], away: [] } }) {
+  const sides = [
+    { side: 'home', team: homeTeam, rows: records.home || [] },
+    { side: 'away', team: awayTeam, rows: records.away || [] },
+  ]
+  return (
+    <div className="pre-dossier" data-testid="pre-match-records">
+      {sides.map(({ side, team, rows }) => (
+        <div key={side} className={`pre-dossier-side pre-dossier-side--${side}`} data-testid={`pre-dossier-${side}`}>
+          <div className="pre-dossier-head">
+            <span className="pre-dossier-team">{team || (side === 'home' ? '主队' : '客队')}</span>
+            <span className="pre-dossier-count">
+              {rows.length > 0 ? `${rows.length} 条过往` : '暂无记录'}
+            </span>
+          </div>
+          {rows.length > 0 ? (
+            <ul className="pre-record-list">
+              {rows.map((row) => (
+                <RecordRow key={`${side}-${row.id}`} row={row} />
+              ))}
+            </ul>
+          ) : (
+            <p className="pre-hero-empty">
+              {team ? '这支队还没有历史记录' : '填上队名，这里会出现我在这支队上的过往'}
+            </p>
+          )}
+        </div>
+      ))}
     </div>
   )
 }

@@ -72,6 +72,22 @@ export const normalizeEntryNameWhileTyping = (value) =>
     .replace(/[／]/g, '/')
     .replace(/　/g, ' ')
 
+/**
+ * 去掉尾巴上整行空白的 Entry（投前默认留两条腿的位置，投后导入不该看到空行）。
+ * 只砍尾巴，中间的空行原样保留——索引不会错位。
+ */
+export const trimTrailingEmptyEntries = (entries) => {
+  const list = Array.isArray(entries) ? [...entries] : []
+  while (
+    list.length > 1
+    && !String(list[list.length - 1]?.name || '').trim()
+    && !String(list[list.length - 1]?.odds || '').trim()
+  ) {
+    list.pop()
+  }
+  return list
+}
+
 export const normalizeEntryName = (value) =>
   normalizeEntryNameWhileTyping(value)
     .replace(/\s*,\s*/g, ', ')

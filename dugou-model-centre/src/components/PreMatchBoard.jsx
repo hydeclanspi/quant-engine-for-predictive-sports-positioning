@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, RefreshCw } from 'lucide-react'
 import PreMatchCloud from './PreMatchCloud'
 import PreScoreSlider from './PreScoreSlider'
-import { fetchOfficialMarketOdds, marketOddsForFit, marketScorelineProbabilities } from '../lib/marketOdds'
+import { fetchOfficialMarketOdds, marketOddsForEntry, marketOddsForFit, marketScorelineProbabilities } from '../lib/marketOdds'
 import {
   applyTeamBias,
   deriveMarketProbabilities,
@@ -13,6 +13,7 @@ import {
 } from '../lib/readQuality'
 import {
   SCORE_GOAL_MAX,
+  buildOpinionMatchProfile,
   defaultWindowForGoals,
   expectedGoals,
   jointScoreCells,
@@ -95,7 +96,6 @@ export default function PreMatchBoard({
     away: sliderDefaultsFor(detectedScore?.away ?? 1),
   }))
   const [insist, setInsist] = useState(false)
-  const [gridSource, setGridSource] = useState('mine')
   const [pickedId, setPickedId] = useState('')
   const [manual, setManual] = useState(emptyManual)
   const [market, setMarket] = useState({ status: 'idle', matches: [], error: '', lastUpdateTime: '' })
@@ -304,7 +304,20 @@ export default function PreMatchBoard({
       .join('；')
   }, [awayTeam, correction, homeTeam])
 
-  // 回传这场的观点（单 Entry 场次会被页面拿来替换这场的仓位输入）。
+  // 这一场在「我的分布」下的仓位分布（同场多条腿也能算：主胜 + 2-1 之类）。
+  // 判不了的腿（半全场、整数让球线）会返回 supported:false，页面自动退回生产管线。
+  const opinionProfile = useMemo(
+    () => buildOpinionMatchProfile({ entries, cells }),
+    [cells, entries],
+  )
+
+  // 机构给这些腿开的赔率（原样含抽水），供页面自动回填空的 odds 框。
+  const marketEntryOdds = useMemo(
+    () => (Array.isArray(entries) ? entries.map((entry) => marketOddsForEntry(fixture, entry)?.odds ?? null) : []),
+    [entries, fixture],
+  )
+
+  // 回传这场的观点：union 概率 + 仓位分布 + 机构赔率。
   const opinionRef = useRef(null)
   useEffect(() => {
     if (typeof onOpinionChange !== 'function') return
@@ -312,19 +325,21 @@ export default function PreMatchBoard({
       ? {
         matchIndex,
         active: true,
-        probability: myEntryProbability,
+        probability: opinionProfile.supported ? opinionProfile.hitProbability : myEntryProbability,
+        profile: opinionProfile.supported ? opinionProfile : null,
+        marketEntryOdds,
         insist,
         registered: { home: detectedScore.home, away: detectedScore.away },
         homeMean,
         awayMean,
         topScores: topRows,
       }
-      : { matchIndex, active: false, probability: Number.NaN }
+      : { matchIndex, active: false, probability: Number.NaN, profile: null, marketEntryOdds: [] }
     const signature = JSON.stringify(payload)
     if (opinionRef.current === signature) return
     opinionRef.current = signature
     onOpinionChange(payload)
-  }, [active, awayMean, detectedScore, homeMean, insist, matchIndex, myEntryProbability, onOpinionChange, topRows])
+  }, [active, awayMean, detectedScore, homeMean, insist, marketEntryOdds, matchIndex, myEntryProbability, onOpinionChange, opinionProfile, topRows])
 
   if (!active) {
     return (
@@ -338,7 +353,6 @@ export default function PreMatchBoard({
   }
 
   const marketReadyForCloud = Boolean(marketScoreProbs?.ok) || marketReady
-  const showMarketCloud = gridSource === 'market' && marketReadyForCloud
 
   return (
     <section className="pre-board" data-testid="pre-match-board">
@@ -484,32 +498,23 @@ export default function PreMatchBoard({
 
       <div className="pre-board-visual">
       <div className="pre-board-cloud">
-        <div className="pre-board-cloud-tabs">
-          <button
-            type="button"
-            onClick={() => setGridSource('mine')}
-            className={`pre-board-tab${!showMarketCloud ? ' is-active' : ''}`}
-          >
-            我的观点
-          </button>
-          <button
-            type="button"
-            onClick={() => marketReadyForCloud && setGridSource('market')}
-            disabled={!marketReadyForCloud}
-            className={`pre-board-tab${showMarketCloud ? ' is-active' : ''}`}
-          >
-            机构市场
-          </button>
-          <span className="pre-board-cloud-axis">↑ 主队进球 · → 客队进球</span>
-        </div>
         <PreMatchCloud
-          cells={showMarketCloud
-            ? (marketScoreProbs?.ok ? marketCells : [])
-            : cells}
-          registeredPoint={showMarketCloud ? null : { home: detectedScore.home, away: detectedScore.away }}
-          marketMode={showMarketCloud}
+          cells={cells}
+          marketCells={marketReadyForCloud ? marketCells : []}
+          registeredPoint={{ home: detectedScore.home, away: detectedScore.away }}
           maxGoals={MAX_GOALS}
         />
+        <p className="pre-board-cloud-legend">
+          <span className="pre-board-legend-swatch is-mine">我的观点</span>
+          {marketReadyForCloud
+            ? (
+              <>
+                <span className="pre-board-legend-swatch is-market">① 机构</span>
+                <span className="pre-board-legend-axis">↑ 主队进球 · → 客队进球</span>
+              </>
+            )
+            : <span className="pre-board-legend-axis">↑ 主队进球 · → 客队进球</span>}
+        </p>
       </div>
 
       <div className="pre-board-readout">
