@@ -6,6 +6,27 @@ import { normalizeTeamToken } from './preMatchOpinion'
 
 export const teamHistoryKey = (name) => normalizeTeamToken(name)
 
+// 账本里的 Entry / 结果都是按「主队视角」写下的（lose = 主队输）。
+// 这条记录挂在客队名下时要翻过来看：win ↔ lose、让球 -1 → +1、比分 0-2 → 2-0。
+const OUTCOME_FLIP = { win: 'lose', lose: 'win', draw: 'draw' }
+
+export const flipRecordText = (value) => {
+  const text = String(value ?? '').trim()
+  if (!text) return text
+  return text
+    .replace(/\b(win|lose|draw)\b/gi, (word) => OUTCOME_FLIP[word.toLowerCase()] || word)
+    // 一次扫描：比分 0-2 → 2-0；让球/大小球 -1 → +1（先认比分，免得把 "-2" 当符号）
+    .replace(
+      /(\d{1,2})\s*[-:]\s*(\d{1,2})|([+-])\s*(\d+(?:\.\d+)?)/g,
+      (match, home, away, sign, number) => {
+        if (home !== undefined) return `${away}-${home}`
+        return `${sign === '+' ? '-' : '+'}${number}`
+      },
+    )
+}
+
+const flipPoint = (point) => (point ? { home: point.away, away: point.home } : null)
+
 const text = (value) => String(value ?? '').trim()
 
 const formatShortDate = (value) => {
@@ -93,7 +114,16 @@ export const buildTeamHistory = (investments, { perTeam = 12 } = {}) => {
         map.get(key).push(row)
       }
       push(homeKey, { ...base, venue: 'home', opponent: text(match?.away_team) })
-      push(awayKey, { ...base, venue: 'away', opponent: text(match?.home_team) })
+      // 挂在客队名下时，Entry / 结果 / 比分都换成这支队的视角
+      push(awayKey, {
+        ...base,
+        venue: 'away',
+        opponent: text(match?.home_team),
+        entryText: flipRecordText(base.entryText),
+        resultText: flipRecordText(base.resultText),
+        predictedScore: flipPoint(base.predictedScore),
+        actualScore: flipPoint(base.actualScore),
+      })
     })
   })
 

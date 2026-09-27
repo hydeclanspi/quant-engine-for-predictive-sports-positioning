@@ -166,6 +166,8 @@
 .pre-hero-input {
   width: 100%;
   padding: 14px 10px;
+  /* 选定的字体：宋体（Songti SC）——试选页里那一版 */
+  font-family: 'Songti SC', 'Songti TC', 'PingFang SC', serif;
   font-size: 34px;
   line-height: 1.2;
   font-weight: 600;

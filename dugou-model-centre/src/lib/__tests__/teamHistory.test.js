@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { buildTeamHistory, findTeamHistory } from '../teamHistory'
+import { buildTeamHistory, findTeamHistory, flipRecordText } from '../teamHistory'
 
 const investments = [
   {
@@ -74,7 +74,8 @@ describe('队伍过往记录（投前 hero 用）', () => {
     const away = arsenal[1]
     expect(away.venue).toBe('away')
     expect(away.opponent).toBe('利物浦')
-    expect(away.predictedScore).toEqual({ home: 2, away: 1 })
+    // 客场视角：比分也翻过来（原 2-1 → 该队 1 球、对手 2 球）
+    expect(away.predictedScore).toEqual({ home: 1, away: 2 })
     expect(away.actualScore).toEqual({ home: 1, away: 1 })
     expect(away.isCorrect).toBe(false)
     expect(away.postNote).toBe('比分差一个球')
@@ -96,5 +97,71 @@ describe('队伍过往记录（投前 hero 用）', () => {
   it('归档的投资不进入记录', () => {
     const map = buildTeamHistory([{ ...investments[0], is_archived: true }])
     expect(findTeamHistory(map, '阿森纳')).toEqual([])
+  })
+})
+
+describe('客场记录自动翻译（主队视角 → 该队视角）', () => {
+  const awayMatch = [
+    {
+      id: 'inv_away',
+      status: 'win',
+      created_at: '2026-09-15T10:00:00.000Z',
+      matches: [
+        {
+          id: 'm1',
+          home_team: '桑德兰',
+          away_team: '阿森纳',
+          entries: [{ name: 'lose', odds: '1.38' }],
+          entry_text: 'lose',
+          results: '0-2',
+          is_correct: true,
+        },
+        {
+          id: 'm2',
+          home_team: '曼城',
+          away_team: '阿森纳',
+          entries: [{ name: '-1 lose', odds: '2.10' }],
+          entry_text: '-1 lose',
+          results: '2-1',
+          is_correct: false,
+        },
+        {
+          id: 'm3',
+          home_team: '曼城',
+          away_team: '阿森纳',
+          entries: [{ name: '2-1', odds: '8.5' }],
+          entry_text: '2-1',
+          results: '2-1',
+          is_correct: true,
+        },
+      ],
+    },
+  ]
+
+  it('挂主队名下照原样；挂客队名下翻过来', () => {
+    const map = buildTeamHistory(awayMatch)
+    const home = findTeamHistory(map, '桑德兰')[0]
+    expect(home.entryText).toBe('lose')
+    expect(home.resultText).toBe('0-2')
+    expect(home.actualScore).toEqual({ home: 0, away: 2 })
+
+    const away = findTeamHistory(map, '阿森纳')
+    expect(away.map((row) => row.entryText)).toEqual(['win', '+1 win', '1-2'])
+    expect(away[0].resultText).toBe('2-0')
+    expect(away[0].actualScore).toEqual({ home: 2, away: 0 })
+    // 中没中是我的判断，不跟着翻
+    expect(away.map((row) => row.isCorrect)).toEqual([true, false, true])
+  })
+
+  it('翻译函数：胜负词、让球加减号、比分一起翻', () => {
+    expect(flipRecordText('lose')).toBe('win')
+    expect(flipRecordText('WIN')).toBe('lose')
+    expect(flipRecordText('draw')).toBe('draw')
+    expect(flipRecordText('-1 lose')).toBe('+1 win')
+    expect(flipRecordText('+2 win')).toBe('-2 lose')
+    expect(flipRecordText('0-2')).toBe('2-0')
+    expect(flipRecordText('3-0/4-0')).toBe('0-3/0-4')
+    expect(flipRecordText('大2.5')).toBe('大2.5')
+    expect(flipRecordText('')).toBe('')
   })
 })

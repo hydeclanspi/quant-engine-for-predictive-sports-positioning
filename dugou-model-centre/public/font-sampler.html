@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>投前 · 队名字体试选</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;600;700&family=Noto+Serif+SC:wght@400;600;700&family=ZCOOL+XiaoWei&family=ZCOOL+QingKe+HuangYou&family=Ma+Shan+Zheng&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/lxgw-wenkai-webfont@1.7.0/style.css" rel="stylesheet">
+<style>
+  :root {
+    --ink: #292524;
+    --muted: #78716c;
+    --line: rgba(214, 211, 209, 0.8);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px clamp(20px, 4vw, 56px) 80px;
+    background: linear-gradient(180deg, #f7f8fa, #eef2f6 40%, #f6f7f9);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  }
+  h1 { font-size: 20px; margin: 0 0 6px; }
+  .lead { font-size: 13px; color: var(--muted); line-height: 1.8; margin: 0 0 22px; max-width: 980px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fill, minmax(430px, 1fr)); }
+  .card {
+    border-radius: 20px;
+    padding: 16px 18px 18px;
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(246, 249, 252, 0.7));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 18px 40px -34px rgba(15, 23, 42, 0.5);
+  }
+  .card-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .name { font-size: 13.5px; font-weight: 600; }
+  .stack { font-size: 11px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .badge { margin-left: auto; font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid transparent; }
+  .badge.ok { color: #047857; background: rgba(236, 253, 245, 0.95); border-color: rgba(16, 185, 129, 0.3); }
+  .badge.miss { color: #b45309; background: rgba(255, 251, 235, 0.95); border-color: rgba(245, 158, 11, 0.35); }
+  .preview {
+    margin-top: 12px;
+    border-radius: 16px;
+    padding: 14px 16px;
+    background: rgba(255, 255, 255, 0.52);
+    border: 1px solid rgba(255, 255, 255, 0.68);
+  }
+  /* 和投前页面里那颗输入框同款：34px / 600 */
+  .team { font-size: 34px; font-weight: 600; text-align: center; letter-spacing: 0.01em; }
+  .teams { display: grid; grid-template-columns: 1fr auto 1fr; gap: 10px; align-items: center; }
+  .vs { font-size: 11px; color: #a8a29e; }
+  .small { margin-top: 10px; font-size: 13px; color: #57534e; text-align: center; }
+  .note { margin-top: 10px; font-size: 11.5px; color: var(--muted); line-height: 1.7; }
+  .pick {
+    margin-top: 12px;
+    font-size: 12px;
+    padding: 6px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--line);
+    background: rgba(255, 255, 255, 0.9);
+    cursor: pointer;
+  }
+  .pick:hover { border-color: rgba(56, 189, 248, 0.8); color: #0284c7; }
+  #picked {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: none;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    border-radius: 14px;
+    background: rgba(224, 242, 254, 0.96);
+    border: 1px solid rgba(125, 211, 252, 0.9);
+    font-size: 13px;
+    color: #075985;
+  }
+  code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+</style>
+</head>
+<body>
+  <h1>投前 · 队名字体试选</h1>
+  <p class="lead">
+    下面每一张卡片是一种字体，用它渲染真实队名（34px / 600，跟投前输入框一模一样）。
+    看好了点卡片里的「就要这个」按钮，页面顶部会给出要写进代码的那一行 —— 复制给我就行。
+    <br />标注「本机可用」的是 macOS 自带字体，不联网也能显示；标「需联网」的是 Google Fonts 上的中文字体（页面打开时会自动下载，之后一直缓存）。
+  </p>
+  <div id="picked"></div>
+  <div class="grid" id="grid"></div>
+
+<script>
+  const CANDIDATES = [
+    { name: '苹方 PingFang SC（现状）', stack: "'PingFang SC', 'Hiragino Sans GB', sans-serif", note: '现在页面用的就是它 —— 干净，但偏"系统默认"的味道。' },
+    { name: '冬青黑体 Hiragino Sans GB', stack: "'Hiragino Sans GB', 'PingFang SC', sans-serif", note: '比苹方更瘦、笔画更利落，中文大字很清楚，macOS 自带。', weight: 600 },
+    { name: '华文细黑 STXihei', stack: "'STXihei', 'PingFang SC', sans-serif", note: '更细更秀气，大字有呼吸感；笔画细，远看略轻。' },
+    { name: '黑体-简 STHeiti', stack: "'STHeiti', 'Heiti SC', 'PingFang SC', sans-serif", note: '老牌黑体，方头方脑，偏"公告牌"气质。' },
+    { name: '圆体 Yuanti SC', stack: "'Yuanti SC', 'PingFang SC', sans-serif", note: '圆润可爱，跟糖果色玻璃很搭，但严肃感弱一点。' },
+    { name: '兰亭黑 Lantinghei SC', stack: "'Lantinghei SC', 'PingFang SC', sans-serif", note: '如果本机装了兰亭黑（多见于装了 Adobe 字体包的机器），字面更宽、很有力量。' },
+    { name: '宋体 Songti SC', stack: "'Songti SC', 'PingFang SC', serif", note: '衬线、正式，像报纸标题；跟梦幻的云图气质有反差。' },
+    { name: '楷体 Kaiti SC', stack: "'Kaiti SC', 'PingFang SC', serif", note: '手写楷书味，适合做签名式的队名，但小字难认。' },
+    { name: '思源黑体 Noto Sans SC（需联网）', stack: "'Noto Sans SC', 'PingFang SC', sans-serif", note: '开源黑体标杆，字面均匀、笔画现代；比苹方更"设计感"。' },
+    { name: '思源宋体 Noto Serif SC（需联网）', stack: "'Noto Serif SC', 'Songti SC', serif", note: '衬线但现代，像杂志标题。' },
+    { name: '霞鹜文楷 LXGW WenKai（需联网）', stack: "'LXGW WenKai', 'Kaiti SC', serif", note: '楷体骨架 + 印刷清晰度，很有手写温度又不失清楚。' },
+    { name: '站酷小薇 ZCOOL XiaoWei（需联网）', stack: "'ZCOOL XiaoWei', 'Songti SC', serif", note: '偏书法感的标题体，辨识度高。' },
+    { name: '站酷庆科黄油体 ZCOOL QingKe HuangYou（需联网）', stack: "'ZCOOL QingKe HuangYou', 'PingFang SC', sans-serif", note: '粗圆润的标题体，很"电子竞技"，醒目但活泼。' },
+    { name: '马善政毛笔楷书 Ma Shan Zheng（需联网）', stack: "'Ma Shan Zheng', 'Kaiti SC', serif", note: '毛笔字，气氛拉满；不适合做正文，做队名可以很炸。' },
+  ]
+
+  const TEAMS = [['阿森纳', '西班牙'], ['曼城', '皇家马德里'], ['拜仁慕尼黑', '国际米兰'], ['英格兰', '克罗地亚']]
+
+  const grid = document.getElementById('grid')
+  const picked = document.getElementById('picked')
+
+  CANDIDATES.forEach((font, index) => {
+    const card = document.createElement('div')
+    card.className = 'card'
+    card.innerHTML = `
+      <div class="card-head">
+        <span class="name">${font.name}</span>
+        <span class="stack">${font.stack}</span>
+        <span class="badge" data-badge>检测中…</span>
+      </div>
+      <div class="preview" style="font-family: ${font.stack};">
+        ${TEAMS.map(([home, away]) => `
+          <div class="teams">
+            <div class="team">${home}</div>
+            <div class="vs">VS</div>
+            <div class="team">${away}</div>
+          </div>
+        `).join('')}
+        <div class="small" style="font-family: ${font.stack};">26-09-15 客 对 桑德兰 win · odds 1.38 · 结果 2-0</div>
+      </div>
+      <div class="note">${font.note}</div>
+      <button class="pick" data-pick="${index}">就要这个（${font.name.split('（')[0]}）</button>
+    `
+    grid.appendChild(card)
+  })
+
+  // 探测这套字体到底能不能显示（CJK 字形宽度都差不多，量宽度不可靠，直接用 FontFaceSet）
+  const primaryFamily = (stack) => stack.split(',')[0].replace(/['"]/g, '').trim()
+  const check = async (font) => {
+    if (!document.fonts || typeof document.fonts.check !== 'function') return true
+    const family = primaryFamily(font.stack)
+    try {
+      await Promise.race([
+        document.fonts.load(`600 34px "${family}"`),
+        new Promise((resolve) => setTimeout(resolve, 2500)),
+      ])
+    } catch (error) { /* 加载失败就当没有 */ }
+    return document.fonts.check(`600 34px "${family}"`)
+  }
+
+  document.querySelectorAll('.card').forEach(async (card, index) => {
+    const badge = card.querySelector('[data-badge]')
+    const ok = await check(CANDIDATES[index])
+    badge.textContent = ok ? '本机可用' : '本机没有 / 没加载上'
+    badge.classList.add(ok ? 'ok' : 'miss')
+  })
+
+  document.querySelectorAll('[data-pick]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const font = CANDIDATES[Number(button.dataset.pick)]
+      picked.style.display = 'block'
+      picked.textContent = `已选：${font.name} —— 写进代码的是：font-family: ${font.stack};`
+      document.querySelectorAll('[data-pick]').forEach((other) => { other.textContent = other.textContent.replace('（已选）', '') })
+      button.textContent = button.textContent + '（已选）'
+    })
+  })
+</script>
+</body>
+</html>
