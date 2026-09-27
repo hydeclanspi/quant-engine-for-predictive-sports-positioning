@@ -55,7 +55,7 @@ const RecordRow = ({ row, foldCount = 0, foldOpen = false, onToggleFold = null, 
             className="pre-record-fold group"
           >
             <span className="pre-record-fold-count">×{foldCount + 1}</span>
-            <span className="inline-flex items-center justify-center w-[18px] h-[18px] rounded-full border border-stone-200 text-stone-400 transition-colors group-hover:text-stone-600">
+            <span className="pre-record-fold-ring">
               {foldOpen ? <ChevronDown size={10} /> : <ChevronRight size={10} />}
             </span>
           </button>

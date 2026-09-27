@@ -397,26 +397,48 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* 相同记录的折叠钮：跟 History 页同一套（小圆钮 + chevron） */
+/* 相同记录的折叠钮：History 同款小圆钮 + 蓝色（sky 那套）——不显眼就等于没做 */
 .pre-record-fold {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   align-self: center;
-  padding: 1px 4px 1px 8px;
+  padding: 1px 5px 1px 9px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  transition: background 160ms ease;
+  border: 1px solid rgba(125, 211, 252, 0.85);
+  background: rgba(224, 242, 254, 0.92);
+  box-shadow: 0 4px 10px -8px rgba(2, 132, 199, 0.6);
+  transition: background 160ms ease, border-color 160ms ease;
 }
 
 .pre-record-fold:hover {
-  background: rgba(255, 255, 255, 0.95);
+  background: rgba(186, 230, 253, 0.95);
+  border-color: rgba(56, 189, 248, 0.95);
 }
 
 .pre-record-fold-count {
-  font-size: 11px;
+  font-size: 11.5px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: #78716c;
+  color: #0284c7;
+}
+
+.pre-record-fold-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(125, 211, 252, 0.9);
+  background: rgba(255, 255, 255, 0.9);
+  color: #0284c7;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+
+.pre-record-fold:hover .pre-record-fold-ring {
+  color: #0369a1;
+  border-color: rgba(56, 189, 248, 0.95);
 }
 
 /* 展开出来的那几条：同一笔下注的另一天，缩进、不重复条目内容 */
